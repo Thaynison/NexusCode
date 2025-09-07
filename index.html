@@ -120,6 +120,29 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
+        
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        .nav-link {
+            position: relative;
+        }
+        
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: #0066ff;
+            transition: width 0.3s ease;
+        }
+        
+        .nav-link:hover::after {
+            width: 100%;
+        }
     </style>
 </head>
 <body class="bg-white text-gray-800">
@@ -133,25 +156,12 @@
                     <span class="text-nexus-blue font-light">CODE</span>
                 </div>
                 <div class="hidden lg:flex items-center space-x-8">
-                    <a href="#home" class="text-white hover:text-nexus-blue transition-all duration-300 font-medium relative group">
-                        Início
-                        <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-nexus-blue transition-all duration-300 group-hover:w-full"></span>
-                    </a>
-                    <a href="#services" class="text-white hover:text-nexus-blue transition-all duration-300 font-medium relative group">
-                        Serviços
-                        <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-nexus-blue transition-all duration-300 group-hover:w-full"></span>
-                    </a>
-                    <a href="#portfolio" class="text-white hover:text-nexus-blue transition-all duration-300 font-medium relative group">
-                        Portfolio
-                        <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-nexus-blue transition-all duration-300 group-hover:w-full"></span>
-                    </a>
-                    <a href="#about" class="text-white hover:text-nexus-blue transition-all duration-300 font-medium relative group">
-                        Sobre
-                        <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-nexus-blue transition-all duration-300 group-hover:w-full"></span>
-                    </a>
-                    <button onclick="scrollToSection('contact')" class="bg-nexus-blue hover:bg-blue-600 text-white px-6 py-2 rounded-full font-medium transition-all duration-300 glow-effect">
-                        Contato
-                    </button>
+                    <a href="#home" class="nav-link text-white hover:text-nexus-blue transition-all duration-300 font-medium">Início</a>
+                    <a href="#services" class="nav-link text-white hover:text-nexus-blue transition-all duration-300 font-medium">Serviços</a>
+                    <a href="#portfolio" class="nav-link text-white hover:text-nexus-blue transition-all duration-300 font-medium">Portfolio</a>
+                    <a href="#about" class="nav-link text-white hover:text-nexus-blue transition-all duration-300 font-medium">Sobre</a>
+                    <a href="#loja" class="nav-link text-white hover:text-nexus-blue transition-all duration-300 font-medium">Loja</a>
+                    <a href="#contact" class="bg-nexus-blue hover:bg-blue-600 text-white px-6 py-2 rounded-full font-medium transition-all duration-300 glow-effect">Contato</a>
                 </div>
                 <button id="mobile-menu-btn" class="lg:hidden text-white">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -164,6 +174,7 @@
                 <a href="#services" class="block text-white hover:text-nexus-blue transition-colors duration-300 font-medium">Serviços</a>
                 <a href="#portfolio" class="block text-white hover:text-nexus-blue transition-colors duration-300 font-medium">Portfolio</a>
                 <a href="#about" class="block text-white hover:text-nexus-blue transition-colors duration-300 font-medium">Sobre</a>
+                <a href="#loja" class="block text-white hover:text-nexus-blue transition-colors duration-300 font-medium">Loja</a>
                 <a href="#contact" class="block text-white hover:text-nexus-blue transition-colors duration-300 font-medium">Contato</a>
             </div>
         </nav>
@@ -198,12 +209,12 @@
                             Desenvolvemos software de classe mundial que impulsiona negócios para o futuro. Nossa expertise combina tecnologia de ponta com design excepcional.
                         </p>
                         <div class="flex flex-col sm:flex-row gap-4 fade-in-up delay-3">
-                            <button onclick="scrollToSection('contact')" class="bg-nexus-blue hover:bg-blue-600 text-white px-8 py-4 rounded-full font-semibold text-lg transition-all duration-300 glow-effect hover-lift">
+                            <a href="#contact" class="bg-nexus-blue hover:bg-blue-600 text-white px-8 py-4 rounded-full font-semibold text-lg transition-all duration-300 glow-effect hover-lift text-center">
                                 Iniciar Projeto
-                            </button>
-                            <button onclick="scrollToSection('portfolio')" class="border-2 border-white border-opacity-30 text-white hover:bg-white hover:text-nexus-dark px-8 py-4 rounded-full font-semibold text-lg transition-all duration-300">
+                            </a>
+                            <a href="#portfolio" class="border-2 border-white border-opacity-30 text-white hover:bg-white hover:text-nexus-dark px-8 py-4 rounded-full font-semibold text-lg transition-all duration-300 text-center">
                                 Ver Portfolio
-                            </button>
+                            </a>
                         </div>
                         
                         <!-- Stats -->
@@ -509,9 +520,9 @@
 
             <!-- CTA -->
             <div class="text-center mt-16">
-                <button onclick="scrollToSection('contact')" class="bg-nexus-blue hover:bg-blue-600 text-white px-8 py-4 rounded-full font-semibold text-lg transition-all duration-300 glow-effect hover-lift">
+                <a href="#contact" class="bg-nexus-blue hover:bg-blue-600 text-white px-8 py-4 rounded-full font-semibold text-lg transition-all duration-300 glow-effect hover-lift">
                     Vamos Criar Seu Projeto
-                </button>
+                </a>
             </div>
         </div>
     </section>
@@ -637,6 +648,177 @@
         </div>
     </section>
 
+    <!-- Loja Section -->
+    <section id="loja" class="py-20 bg-white relative">
+        <div class="container mx-auto px-6">
+            <div class="text-center mb-20">
+                <span class="inline-block bg-nexus-blue bg-opacity-10 text-nexus-blue px-4 py-2 rounded-full text-sm font-medium mb-4">
+                    🛍️ Loja Nexus Code
+                </span>
+                <h2 class="text-5xl font-bold text-nexus-dark mb-6">Produtos <span class="text-gradient">Exclusivos</span></h2>
+                <p class="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+                    Vista a marca que representa inovação e tecnologia. Produtos de alta qualidade com o design exclusivo da Nexus Code
+                </p>
+            </div>
+
+            <div class="grid lg:grid-cols-4 md:grid-cols-2 gap-8">
+                <!-- Blusa -->
+                <div class="group bg-nexus-light rounded-2xl overflow-hidden shadow-lg hover-lift card-hover">
+                    <div class="aspect-square bg-gray-100 relative overflow-hidden">
+                        <img src="img/blusa.png" 
+                             alt="Blusa Nexus Code" 
+                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                             onerror="this.src=''; this.alt='Imagem não disponível'; this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="absolute inset-0 bg-gradient-to-br from-nexus-blue to-blue-600 items-center justify-center hidden">
+                            <!-- Fallback SVG -->
+                            <svg class="w-32 h-32 text-white opacity-90" viewBox="0 0 100 100" fill="currentColor">
+                                <path d="M25 30 L35 25 L40 20 L60 20 L65 25 L75 30 L75 85 L25 85 Z"/>
+                                <circle cx="50" cy="45" r="8" fill="rgba(255,255,255,0.3)"/>
+                                <text x="50" y="50" text-anchor="middle" font-size="6" fill="white" font-weight="bold">NC</text>
+                            </svg>
+                        </div>
+                        <div class="absolute top-4 right-4 bg-nexus-blue bg-opacity-80 backdrop-blur-sm rounded-full px-3 py-1 text-white text-sm font-medium">
+                            Novo
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <h3 class="text-xl font-bold text-nexus-dark mb-2">Blusa Nexus Code</h3>
+                        <p class="text-gray-600 text-sm mb-4">Blusa premium 100% algodão com logo bordada. Conforto e estilo para o dia a dia.</p>
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-2xl font-bold text-nexus-blue">R$ 89,90</div>
+                            <div class="text-sm text-gray-500">Tamanhos: P ao GG</div>
+                        </div>
+                        <button onclick="addToCart('blusa')" class="w-full bg-nexus-blue hover:bg-blue-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 glow-effect">
+                            Adicionar ao Carrinho
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Moletom -->
+                <div class="group bg-nexus-light rounded-2xl overflow-hidden shadow-lg hover-lift card-hover">
+                    <div class="aspect-square bg-gray-100 relative overflow-hidden">
+                       <img src="img/moleton.png" 
+                             alt="Moletom Nexus Code" 
+                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                             onerror="this.src=''; this.alt='Imagem não disponível'; this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="absolute inset-0 bg-gradient-to-br from-nexus-dark to-gray-800 items-center justify-center hidden">
+                            <!-- Fallback SVG -->
+                            <svg class="w-36 h-36 text-white opacity-90" viewBox="0 0 100 100" fill="currentColor">
+                                <path d="M20 35 L30 25 L35 20 L65 20 L70 25 L80 35 L80 90 L20 90 Z"/>
+                                <path d="M15 40 L20 35 L20 55 L15 60 Z" fill="rgba(255,255,255,0.8)"/>
+                                <path d="M80 35 L85 40 L85 60 L80 55 Z" fill="rgba(255,255,255,0.8)"/>
+                                <circle cx="50" cy="50" r="10" fill="rgba(0,102,255,0.8)"/>
+                                <text x="50" y="55" text-anchor="middle" font-size="7" fill="white" font-weight="bold">NC</text>
+                            </svg>
+                        </div>
+                        <div class="absolute top-4 right-4 bg-nexus-blue bg-opacity-80 backdrop-blur-sm rounded-full px-3 py-1 text-white text-sm font-medium">
+                            Popular
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <h3 class="text-xl font-bold text-nexus-dark mb-2">Moletom Nexus Code</h3>
+                        <p class="text-gray-600 text-sm mb-4">Moletom com capuz, tecido premium e logo exclusiva. Perfeito para os dias frios.</p>
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-2xl font-bold text-nexus-blue">R$ 149,90</div>
+                            <div class="text-sm text-gray-500">Tamanhos: P ao GG</div>
+                        </div>
+                        <button onclick="addToCart('moletom')" class="w-full bg-nexus-blue hover:bg-blue-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 glow-effect">
+                            Adicionar ao Carrinho
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Garrafinha -->
+                <div class="group bg-nexus-light rounded-2xl overflow-hidden shadow-lg hover-lift card-hover">
+                    <div class="aspect-square bg-gray-100 relative overflow-hidden">
+                        <img src="img/garrafa.png" 
+                             alt="Garrafinha Nexus Code" 
+                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                             onerror="this.src=''; this.alt='Imagem não disponível'; this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="absolute inset-0 bg-gradient-to-br from-blue-400 to-nexus-blue items-center justify-center hidden">
+                            <!-- Fallback SVG -->
+                            <svg class="w-24 h-40 text-white opacity-90" viewBox="0 0 60 100" fill="currentColor">
+                                <rect x="22" y="5" width="16" height="8" rx="2" fill="rgba(255,255,255,0.8)"/>
+                                <rect x="18" y="13" width="24" height="82" rx="12" fill="rgba(255,255,255,0.9)"/>
+                                <rect x="20" y="15" width="20" height="78" rx="10" fill="currentColor"/>
+                                <circle cx="30" cy="40" r="8" fill="rgba(0,102,255,0.3)"/>
+                                <text x="30" y="45" text-anchor="middle" font-size="6" fill="white" font-weight="bold">NC</text>
+                            </svg>
+                        </div>
+                        <div class="absolute top-4 right-4 bg-nexus-blue bg-opacity-80 backdrop-blur-sm rounded-full px-3 py-1 text-white text-sm font-medium">
+                            Eco
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <h3 class="text-xl font-bold text-nexus-dark mb-2">Garrafinha Nexus Code</h3>
+                        <p class="text-gray-600 text-sm mb-4">Garrafa térmica de aço inox 500ml. Mantém a temperatura por até 12 horas.</p>
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-2xl font-bold text-nexus-blue">R$ 69,90</div>
+                            <div class="text-sm text-gray-500">500ml</div>
+                        </div>
+                        <button onclick="addToCart('garrafinha')" class="w-full bg-nexus-blue hover:bg-blue-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 glow-effect">
+                            Adicionar ao Carrinho
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Mochila -->
+                <div class="group bg-nexus-light rounded-2xl overflow-hidden shadow-lg hover-lift card-hover">
+                    <div class="aspect-square bg-gray-100 relative overflow-hidden">
+                        <img src="img/mochila.png" 
+                             alt="Mochila Nexus Code" 
+                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                             onerror="this.src=''; this.alt='Imagem não disponível'; this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="absolute inset-0 bg-gradient-to-br from-gray-700 to-nexus-dark items-center justify-center hidden">
+                            <!-- Fallback SVG -->
+                            <svg class="w-32 h-36 text-white opacity-90" viewBox="0 0 80 90" fill="currentColor">
+                                <path d="M25 20 L55 20 L60 25 L60 80 L20 80 L20 25 Z" fill="rgba(255,255,255,0.9)"/>
+                                <path d="M22 22 L58 22 L58 78 L22 78 Z" fill="currentColor"/>
+                                <rect x="30" y="15" width="20" height="8" rx="4" fill="rgba(255,255,255,0.7)"/>
+                                <rect x="25" y="30" width="30" height="15" rx="2" fill="rgba(0,102,255,0.3)"/>
+                                <circle cx="40" cy="37" r="6" fill="rgba(0,102,255,0.8)"/>
+                                <text x="40" y="41" text-anchor="middle" font-size="5" fill="white" font-weight="bold">NC</text>
+                            </svg>
+                        </div>
+                        <div class="absolute top-4 right-4 bg-nexus-blue bg-opacity-80 backdrop-blur-sm rounded-full px-3 py-1 text-white text-sm font-medium">
+                            Premium
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <h3 class="text-xl font-bold text-nexus-dark mb-2">Mochila Nexus Code</h3>
+                        <p class="text-gray-600 text-sm mb-4">Mochila executiva com compartimento para notebook e logo bordada. Design moderno.</p>
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-2xl font-bold text-nexus-blue">R$ 199,90</div>
+                            <div class="text-sm text-gray-500">Até 15.6"</div>
+                        </div>
+                        <button onclick="addToCart('mochila')" class="w-full bg-nexus-blue hover:bg-blue-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 glow-effect">
+                            Adicionar ao Carrinho
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Informações de Entrega -->
+            <div class="mt-16 grid md:grid-cols-3 gap-8">
+                <div class="text-center p-6 bg-nexus-light rounded-xl">
+                    <div class="text-3xl mb-3">🚚</div>
+                    <h4 class="font-semibold text-nexus-dark mb-2">Frete Grátis</h4>
+                    <p class="text-sm text-gray-600">Para compras acima de R$ 150,00</p>
+                </div>
+                <div class="text-center p-6 bg-nexus-light rounded-xl">
+                    <div class="text-3xl mb-3">🔄</div>
+                    <h4 class="font-semibold text-nexus-dark mb-2">Troca Garantida</h4>
+                    <p class="text-sm text-gray-600">30 dias para trocas e devoluções</p>
+                </div>
+                <div class="text-center p-6 bg-nexus-light rounded-xl">
+                    <div class="text-3xl mb-3">🔒</div>
+                    <h4 class="font-semibold text-nexus-dark mb-2">Pagamento Seguro</h4>
+                    <p class="text-sm text-gray-600">Seus dados protegidos</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Contact Section -->
     <section id="contact" class="py-20 bg-gradient-to-br from-nexus-dark via-nexus-gray to-nexus-blue text-white relative overflow-hidden">
         <div class="absolute inset-0 tech-grid opacity-20"></div>
@@ -678,7 +860,7 @@
                                 </div>
                                 <div>
                                     <div class="font-semibold">Telefone</div>
-                                    <div class="text-gray-300">(27) 99999-9999</div>
+                                    <div class="text-gray-300">(11) 99999-9999</div>
                                 </div>
                             </div>
 
@@ -690,7 +872,7 @@
                                 </div>
                                 <div>
                                     <div class="font-semibold">Localização</div>
-                                    <div class="text-gray-300">Espirito Santo, ES - Brasil</div>
+                                    <div class="text-gray-300">São Paulo, SP - Brasil</div>
                                 </div>
                             </div>
                         </div>
@@ -742,7 +924,7 @@
                             </div>
                             <div>
                                 <label class="block text-white font-medium mb-2">Telefone</label>
-                                <input type="tel" class="w-full px-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-xl focus:outline-none focus:border-nexus-blue text-white placeholder-gray-300" placeholder="(27) 99999-9999">
+                                <input type="tel" class="w-full px-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-xl focus:outline-none focus:border-nexus-blue text-white placeholder-gray-300" placeholder="(11) 99999-9999">
                             </div>
                         </div>
 
@@ -821,6 +1003,7 @@
                     <ul class="space-y-3 text-gray-400">
                         <li><a href="#about" class="hover:text-nexus-blue transition-colors duration-300">Sobre Nós</a></li>
                         <li><a href="#portfolio" class="hover:text-nexus-blue transition-colors duration-300">Portfolio</a></li>
+                        <li><a href="#loja" class="hover:text-nexus-blue transition-colors duration-300">Loja</a></li>
                         <li><a href="#contact" class="hover:text-nexus-blue transition-colors duration-300">Contato</a></li>
                         <li><a href="#" class="hover:text-nexus-blue transition-colors duration-300">Carreiras</a></li>
                         <li><a href="#" class="hover:text-nexus-blue transition-colors duration-300">Blog</a></li>
@@ -832,7 +1015,7 @@
             <div class="border-t border-gray-700 pt-8">
                 <div class="flex flex-col md:flex-row justify-between items-center">
                     <div class="text-gray-400 text-sm mb-4 md:mb-0">
-                        Nexus Code &copy; Todos os direitos reservados.
+                        &copy; 2024 Nexus Code. Todos os direitos reservados.
                     </div>
                     <div class="flex space-x-6 text-sm text-gray-400">
                         <a href="#" class="hover:text-nexus-blue transition-colors duration-300">Política de Privacidade</a>
@@ -851,25 +1034,9 @@
             mobileMenu.classList.toggle('hidden');
         });
 
-        // Smooth scrolling
-        function scrollToSection(sectionId) {
-            document.getElementById(sectionId).scrollIntoView({
-                behavior: 'smooth'
-            });
-        }
-
-        // Add smooth scrolling to all navigation links
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                const target = document.querySelector(this.getAttribute('href'));
-                if (target) {
-                    target.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'start'
-                    });
-                }
-                // Close mobile menu if open
+        // Close mobile menu when clicking on links
+        document.querySelectorAll('#mobile-menu a').forEach(link => {
+            link.addEventListener('click', () => {
                 document.getElementById('mobile-menu').classList.add('hidden');
             });
         });
@@ -878,6 +1045,563 @@
         function handleSubmit(event) {
             event.preventDefault();
             alert('Obrigado pelo contato! Esta é uma demonstração - em um site real, sua mensagem seria enviada.');
+        }
+
+        // Advanced Shopping Cart System
+        class ShoppingCart {
+            constructor() {
+                this.items = JSON.parse(localStorage.getItem('nexus-cart')) || [];
+                this.isOpen = false;
+                this.discountCode = null;
+                this.discountPercent = 0;
+                this.shippingCost = 0;
+                this.freeShippingThreshold = 150;
+                
+                this.products = {
+                    'blusa': { 
+                        name: 'Blusa Nexus Code', 
+                        price: 89.90, 
+                        image: '👕',
+                        description: 'Blusa premium 100% algodão',
+                        sizes: ['P', 'M', 'G', 'GG'],
+                        colors: ['Azul', 'Preto', 'Branco']
+                    },
+                    'moletom': { 
+                        name: 'Moletom Nexus Code', 
+                        price: 149.90, 
+                        image: '🧥',
+                        description: 'Moletom com capuz premium',
+                        sizes: ['P', 'M', 'G', 'GG'],
+                        colors: ['Azul', 'Preto', 'Cinza']
+                    },
+                    'garrafinha': { 
+                        name: 'Garrafinha Nexus Code', 
+                        price: 69.90, 
+                        image: '🍶',
+                        description: 'Garrafa térmica 500ml',
+                        sizes: ['500ml'],
+                        colors: ['Azul', 'Preto']
+                    },
+                    'mochila': { 
+                        name: 'Mochila Nexus Code', 
+                        price: 199.90, 
+                        image: '🎒',
+                        description: 'Mochila executiva premium',
+                        sizes: ['Único'],
+                        colors: ['Preto', 'Azul']
+                    }
+                };
+                
+                this.discountCodes = {
+                    'NEXUS10': 10,
+                    'PRIMEIRA20': 20,
+                    'CLIENTE15': 15
+                };
+                
+                this.init();
+            }
+            
+            init() {
+                this.createCartModal();
+                this.createCartIcon();
+                this.updateCartIcon();
+                this.bindEvents();
+            }
+            
+            createCartIcon() {
+                const cartIcon = document.createElement('div');
+                cartIcon.id = 'cart-icon';
+                cartIcon.className = 'fixed top-24 right-6 z-50 bg-nexus-blue hover:bg-blue-600 text-white w-14 h-14 rounded-full flex items-center justify-center cursor-pointer shadow-lg transition-all duration-300 hover:scale-110';
+                cartIcon.innerHTML = `
+                    <div class="relative">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.5 6M7 13l-1.5 6m0 0h9m-9 0V19a2 2 0 002 2h7a2 2 0 002-2v-.5"></path>
+                        </svg>
+                        <span id="cart-count" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">0</span>
+                    </div>
+                `;
+                document.body.appendChild(cartIcon);
+                
+                cartIcon.addEventListener('click', () => this.toggleCart());
+            }
+            
+            createCartModal() {
+                const cartModal = document.createElement('div');
+                cartModal.id = 'cart-modal';
+                cartModal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4';
+                cartModal.innerHTML = `
+                    <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                        <!-- Header -->
+                        <div class="bg-nexus-blue text-white p-6 flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="text-2xl">🛒</div>
+                                <div>
+                                    <h2 class="text-2xl font-bold">Carrinho de Compras</h2>
+                                    <p class="text-blue-100 text-sm">Nexus Code Store</p>
+                                </div>
+                            </div>
+                            <button id="close-cart" class="text-white hover:text-blue-200 text-2xl font-bold">×</button>
+                        </div>
+                        
+                        <!-- Content -->
+                        <div class="flex-1 overflow-y-auto">
+                            <div id="cart-content" class="p-6">
+                                <!-- Cart items will be inserted here -->
+                            </div>
+                        </div>
+                        
+                        <!-- Footer -->
+                        <div id="cart-footer" class="border-t bg-gray-50 p-6">
+                            <!-- Footer content will be inserted here -->
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(cartModal);
+            }
+            
+            bindEvents() {
+                document.getElementById('close-cart').addEventListener('click', () => this.closeCart());
+                document.getElementById('cart-modal').addEventListener('click', (e) => {
+                    if (e.target.id === 'cart-modal') this.closeCart();
+                });
+            }
+            
+            addItem(productId, size = null, color = null) {
+                const product = this.products[productId];
+                if (!product) return;
+                
+                const itemKey = `${productId}-${size || 'default'}-${color || 'default'}`;
+                const existingItem = this.items.find(item => item.key === itemKey);
+                
+                if (existingItem) {
+                    existingItem.quantity += 1;
+                } else {
+                    this.items.push({
+                        key: itemKey,
+                        id: productId,
+                        name: product.name,
+                        price: product.price,
+                        image: product.image,
+                        description: product.description,
+                        size: size || product.sizes[0],
+                        color: color || product.colors[0],
+                        quantity: 1
+                    });
+                }
+                
+                this.saveCart();
+                this.updateCartIcon();
+                this.showAddedNotification(product.name);
+                
+                return true;
+            }
+            
+            removeItem(itemKey) {
+                this.items = this.items.filter(item => item.key !== itemKey);
+                this.saveCart();
+                this.updateCartIcon();
+                this.updateCartDisplay();
+            }
+            
+            updateQuantity(itemKey, newQuantity) {
+                const item = this.items.find(item => item.key === itemKey);
+                if (item) {
+                    if (newQuantity <= 0) {
+                        this.removeItem(itemKey);
+                    } else {
+                        item.quantity = newQuantity;
+                        this.saveCart();
+                        this.updateCartDisplay();
+                    }
+                }
+            }
+            
+            applyDiscount(code) {
+                if (this.discountCodes[code]) {
+                    this.discountCode = code;
+                    this.discountPercent = this.discountCodes[code];
+                    this.updateCartDisplay();
+                    return true;
+                }
+                return false;
+            }
+            
+            removeDiscount() {
+                this.discountCode = null;
+                this.discountPercent = 0;
+                this.updateCartDisplay();
+            }
+            
+            calculateTotals() {
+                const subtotal = this.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                const discount = subtotal * (this.discountPercent / 100);
+                const subtotalAfterDiscount = subtotal - discount;
+                const shipping = subtotalAfterDiscount >= this.freeShippingThreshold ? 0 : 15.90;
+                const total = subtotalAfterDiscount + shipping;
+                
+                return {
+                    subtotal,
+                    discount,
+                    shipping,
+                    total,
+                    itemCount: this.items.reduce((sum, item) => sum + item.quantity, 0)
+                };
+            }
+            
+            updateCartIcon() {
+                const cartCount = document.getElementById('cart-count');
+                const totals = this.calculateTotals();
+                cartCount.textContent = totals.itemCount;
+                cartCount.style.display = totals.itemCount > 0 ? 'flex' : 'none';
+            }
+            
+            updateCartDisplay() {
+                if (!this.isOpen) return;
+                
+                const cartContent = document.getElementById('cart-content');
+                const cartFooter = document.getElementById('cart-footer');
+                const totals = this.calculateTotals();
+                
+                if (this.items.length === 0) {
+                    cartContent.innerHTML = `
+                        <div class="text-center py-12">
+                            <div class="text-6xl mb-4">🛒</div>
+                            <h3 class="text-xl font-bold text-gray-600 mb-2">Carrinho Vazio</h3>
+                            <p class="text-gray-500 mb-6">Adicione alguns produtos incríveis da Nexus Code!</p>
+                            <button onclick="cart.closeCart(); document.getElementById('loja').scrollIntoView({behavior: 'smooth'})" class="bg-nexus-blue hover:bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300">
+                                Ir às Compras
+                            </button>
+                        </div>
+                    `;
+                    cartFooter.innerHTML = '';
+                    return;
+                }
+                
+                // Cart Items
+                cartContent.innerHTML = `
+                    <div class="space-y-4">
+                        ${this.items.map(item => `
+                            <div class="flex items-center space-x-4 bg-gray-50 p-4 rounded-xl">
+                                <div class="text-3xl">${item.image}</div>
+                                <div class="flex-1">
+                                    <h4 class="font-bold text-nexus-dark">${item.name}</h4>
+                                    <p class="text-sm text-gray-600">${item.description}</p>
+                                    <div class="flex items-center space-x-4 mt-2">
+                                        <span class="text-xs bg-nexus-blue bg-opacity-10 text-nexus-blue px-2 py-1 rounded">
+                                            ${item.size}
+                                        </span>
+                                        <span class="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded">
+                                            ${item.color}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="font-bold text-nexus-blue mb-2">
+                                        R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <button onclick="cart.updateQuantity('${item.key}', ${item.quantity - 1})" 
+                                                class="w-8 h-8 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center text-gray-600 font-bold transition-colors">
+                                            -
+                                        </button>
+                                        <span class="font-semibold min-w-[2rem] text-center">${item.quantity}</span>
+                                        <button onclick="cart.updateQuantity('${item.key}', ${item.quantity + 1})" 
+                                                class="w-8 h-8 bg-nexus-blue hover:bg-blue-600 rounded-full flex items-center justify-center text-white font-bold transition-colors">
+                                            +
+                                        </button>
+                                        <button onclick="cart.removeItem('${item.key}')" 
+                                                class="ml-2 text-red-500 hover:text-red-600 font-bold text-lg">
+                                            🗑️
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <!-- Discount Code Section -->
+                    <div class="mt-6 p-4 bg-blue-50 rounded-xl">
+                        <h4 class="font-semibold text-nexus-dark mb-3">Cupom de Desconto</h4>
+                        ${this.discountCode ? `
+                            <div class="flex items-center justify-between bg-green-100 p-3 rounded-lg">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-green-600">✓</span>
+                                    <span class="font-medium text-green-800">${this.discountCode}</span>
+                                    <span class="text-green-600">(${this.discountPercent}% OFF)</span>
+                                </div>
+                                <button onclick="cart.removeDiscount()" class="text-red-500 hover:text-red-600 font-bold">×</button>
+                            </div>
+                        ` : `
+                            <div class="flex space-x-2">
+                                <input type="text" id="discount-input" placeholder="Digite seu cupom" 
+                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-nexus-blue">
+                                <button onclick="cart.applyDiscountCode()" 
+                                        class="bg-nexus-blue hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                                    Aplicar
+                                </button>
+                            </div>
+                            <div class="mt-2 text-xs text-gray-500">
+                                Cupons disponíveis: NEXUS10, PRIMEIRA20, CLIENTE15
+                            </div>
+                        `}
+                    </div>
+                `;
+                
+                // Cart Footer
+                cartFooter.innerHTML = `
+                    <div class="space-y-4">
+                        <!-- Totals -->
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-gray-600">
+                                <span>Subtotal (${totals.itemCount} ${totals.itemCount === 1 ? 'item' : 'itens'})</span>
+                                <span>R$ ${totals.subtotal.toFixed(2).replace('.', ',')}</span>
+                            </div>
+                            ${totals.discount > 0 ? `
+                                <div class="flex justify-between text-green-600">
+                                    <span>Desconto (${this.discountPercent}%)</span>
+                                    <span>-R$ ${totals.discount.toFixed(2).replace('.', ',')}</span>
+                                </div>
+                            ` : ''}
+                            <div class="flex justify-between text-gray-600">
+                                <span>Frete ${totals.shipping === 0 ? '(Grátis!)' : ''}</span>
+                                <span>${totals.shipping === 0 ? 'Grátis' : 'R$ ' + totals.shipping.toFixed(2).replace('.', ',')}</span>
+                            </div>
+                            ${totals.shipping > 0 ? `
+                                <div class="text-xs text-nexus-blue">
+                                    Frete grátis para compras acima de R$ ${this.freeShippingThreshold.toFixed(2).replace('.', ',')}
+                                </div>
+                            ` : ''}
+                            <div class="border-t pt-2 flex justify-between text-xl font-bold text-nexus-dark">
+                                <span>Total</span>
+                                <span class="text-nexus-blue">R$ ${totals.total.toFixed(2).replace('.', ',')}</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <button onclick="cart.clearCart()" 
+                                    class="border-2 border-gray-300 text-gray-600 hover:border-red-500 hover:text-red-500 px-6 py-3 rounded-xl font-semibold transition-all duration-300">
+                                Limpar Carrinho
+                            </button>
+                            <button onclick="cart.checkout()" 
+                                    class="bg-nexus-blue hover:bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 glow-effect">
+                                Finalizar Compra
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            applyDiscountCode() {
+                const input = document.getElementById('discount-input');
+                const code = input.value.toUpperCase().trim();
+                
+                if (this.applyDiscount(code)) {
+                    this.showNotification('Cupom aplicado com sucesso!', 'success');
+                } else {
+                    this.showNotification('Cupom inválido!', 'error');
+                    input.value = '';
+                }
+            }
+            
+            toggleCart() {
+                if (this.isOpen) {
+                    this.closeCart();
+                } else {
+                    this.openCart();
+                }
+            }
+            
+            openCart() {
+                this.isOpen = true;
+                document.getElementById('cart-modal').classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+                this.updateCartDisplay();
+            }
+            
+            closeCart() {
+                this.isOpen = false;
+                document.getElementById('cart-modal').classList.add('hidden');
+                document.body.style.overflow = 'auto';
+            }
+            
+            clearCart() {
+                if (confirm('Tem certeza que deseja limpar o carrinho?')) {
+                    this.items = [];
+                    this.discountCode = null;
+                    this.discountPercent = 0;
+                    this.saveCart();
+                    this.updateCartIcon();
+                    this.updateCartDisplay();
+                    this.showNotification('Carrinho limpo!', 'info');
+                }
+            }
+            
+            checkout() {
+                if (this.items.length === 0) {
+                    this.showNotification('Seu carrinho está vazio!', 'error');
+                    return;
+                }
+                
+                const totals = this.calculateTotals();
+                const orderSummary = `
+Resumo do Pedido:
+${this.items.map(item => `• ${item.name} (${item.size}, ${item.color}) - Qtd: ${item.quantity} - R$ ${(item.price * item.quantity).toFixed(2)}`).join('\n')}
+
+Subtotal: R$ ${totals.subtotal.toFixed(2)}
+${totals.discount > 0 ? `Desconto: -R$ ${totals.discount.toFixed(2)}\n` : ''}Frete: ${totals.shipping === 0 ? 'Grátis' : 'R$ ' + totals.shipping.toFixed(2)}
+Total: R$ ${totals.total.toFixed(2)}
+
+Esta é uma demonstração - em um site real, você seria redirecionado para o pagamento.
+                `;
+                
+                alert(orderSummary);
+                
+                // Simulate successful order
+                this.items = [];
+                this.discountCode = null;
+                this.discountPercent = 0;
+                this.saveCart();
+                this.updateCartIcon();
+                this.closeCart();
+                this.showNotification('Pedido realizado com sucesso!', 'success');
+            }
+            
+            saveCart() {
+                localStorage.setItem('nexus-cart', JSON.stringify(this.items));
+            }
+            
+            showAddedNotification(productName) {
+                this.showNotification(`${productName} adicionado ao carrinho!`, 'success');
+            }
+            
+            showNotification(message, type = 'info') {
+                const notification = document.createElement('div');
+                notification.className = `fixed top-24 right-20 z-50 px-6 py-3 rounded-xl text-white font-medium transform translate-x-full transition-all duration-300 ${
+                    type === 'success' ? 'bg-green-500' : 
+                    type === 'error' ? 'bg-red-500' : 
+                    'bg-nexus-blue'
+                }`;
+                notification.textContent = message;
+                
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.transform = 'translateX(0)';
+                }, 100);
+                
+                setTimeout(() => {
+                    notification.style.transform = 'translateX(100%)';
+                    setTimeout(() => {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 3000);
+            }
+        }
+        
+        // Initialize cart system
+        const cart = new ShoppingCart();
+        
+        // Updated product functions
+        function addToCart(productId) {
+            // Show size/color selection modal for clothing items
+            if (productId === 'blusa' || productId === 'moletom') {
+                showProductModal(productId);
+            } else {
+                cart.addItem(productId);
+            }
+        }
+        
+        function showProductModal(productId) {
+            const product = cart.products[productId];
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl max-w-md w-full p-6">
+                    <div class="text-center mb-6">
+                        <div class="text-4xl mb-3">${product.image}</div>
+                        <h3 class="text-2xl font-bold text-nexus-dark">${product.name}</h3>
+                        <p class="text-gray-600">${product.description}</p>
+                        <div class="text-xl font-bold text-nexus-blue mt-2">R$ ${product.price.toFixed(2).replace('.', ',')}</div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block font-semibold text-nexus-dark mb-2">Tamanho:</label>
+                            <div class="grid grid-cols-4 gap-2">
+                                ${product.sizes.map(size => `
+                                    <button class="size-btn border-2 border-gray-300 hover:border-nexus-blue px-3 py-2 rounded-lg font-medium transition-colors" data-size="${size}">
+                                        ${size}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block font-semibold text-nexus-dark mb-2">Cor:</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                ${product.colors.map(color => `
+                                    <button class="color-btn border-2 border-gray-300 hover:border-nexus-blue px-3 py-2 rounded-lg font-medium transition-colors" data-color="${color}">
+                                        ${color}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex space-x-3 mt-6">
+                        <button onclick="this.closest('.fixed').remove()" class="flex-1 border-2 border-gray-300 text-gray-600 hover:border-red-500 hover:text-red-500 py-3 rounded-xl font-semibold transition-colors">
+                            Cancelar
+                        </button>
+                        <button id="add-to-cart-btn" class="flex-1 bg-nexus-blue hover:bg-blue-600 text-white py-3 rounded-xl font-semibold transition-colors" disabled>
+                            Adicionar ao Carrinho
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            let selectedSize = null;
+            let selectedColor = null;
+            
+            // Size selection
+            modal.querySelectorAll('.size-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    modal.querySelectorAll('.size-btn').forEach(b => b.classList.remove('border-nexus-blue', 'bg-nexus-blue', 'text-white'));
+                    btn.classList.add('border-nexus-blue', 'bg-nexus-blue', 'text-white');
+                    selectedSize = btn.dataset.size;
+                    updateAddButton();
+                });
+            });
+            
+            // Color selection
+            modal.querySelectorAll('.color-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    modal.querySelectorAll('.color-btn').forEach(b => b.classList.remove('border-nexus-blue', 'bg-nexus-blue', 'text-white'));
+                    btn.classList.add('border-nexus-blue', 'bg-nexus-blue', 'text-white');
+                    selectedColor = btn.dataset.color;
+                    updateAddButton();
+                });
+            });
+            
+            function updateAddButton() {
+                const addBtn = modal.querySelector('#add-to-cart-btn');
+                if (selectedSize && selectedColor) {
+                    addBtn.disabled = false;
+                    addBtn.onclick = () => {
+                        cart.addItem(productId, selectedSize, selectedColor);
+                        modal.remove();
+                    };
+                } else {
+                    addBtn.disabled = true;
+                }
+            }
+            
+            // Close modal when clicking outside
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.remove();
+            });
         }
 
         // Add scroll effect to header
@@ -890,5 +1614,5 @@
             }
         });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'97a760519454c1b6',t:'MTc1NzA5MjYwNS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'97b9df07b2d202ff',t:'MTc1NzI4NjUzOS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
