@@ -1,4 +1,4 @@
-import { API_URL } from './config.js';
+const API_URL = 'https://api.nexuscodebrasil.com.br/api/v1';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const request=async(path,options={})=>{const isForm=options.body instanceof FormData;const r=await fetch(API_URL+path,{credentials:'include',...options,headers:isForm?options.headers:{'Content-Type':'application/json',...options.headers}});const d=r.status===204?null:await r.json().catch(()=>({}));if(!r.ok)throw Error(d.message||'Não foi possível concluir.');return d};
 const auth=$('#auth-dialog'), app=$('#enterprise-app'), view=$('#app-view');let page='dashboard',user=null;
