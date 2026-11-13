@@ -1,1 +1,99 @@
-import {CONFIG} from './config.js';const v=document.querySelector('#view');const api=async(p,o={})=>{const r=await fetch(CONFIG.API_URL+p,{credentials:'include',headers:{'Content-Type':'application/json'},...o});if(!r.ok)throw Error();return r.status===204?null:r.json()};const labels={cart:'Carrinho',requests:'Minhas Solicitações',proposals:'Minhas Propostas',contracts:'Meus Contratos',documents:'Documentos',profile:'Meu Perfil',notifications:'Notificações'};async function render(p){let d=await api('/portal/'+p);v.innerHTML=`<div class="toolbar"><div><h1>${labels[p]}</h1><span class="muted">Área exclusiva do cliente</span></div></div><div class="card">${p==='profile'?`<div class="formgrid"><label>Nome<input value="${d.user?.displayName||''}"></label><label>E-mail<input value="${d.user?.email||''}"></label><label>Telefone<input></label><label>Documento<input></label></div><br><button class="btn">Salvar perfil</button>`:`<div class="table-wrap"><table class="table"><thead><tr><th>Referência</th><th>Status</th><th>Data</th></tr></thead><tbody>${(d.items||[]).map(x=>`<tr><td>${x.name||x.reference}</td><td><span class="badge">${x.status}</span></td><td>${x.created_at||'-'}</td></tr>`).join('')||'<tr><td colspan="3">Nenhum registro.</td></tr>'}</tbody></table></div>`}</div>`}document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>render(b.dataset.page));document.querySelector('#theme').onclick=()=>document.body.classList.toggle('light');document.querySelector('#logout').onclick=async()=>{await api('/auth/logout',{method:'POST'});location.href='/'};api('/auth/me').then(()=>render('requests')).catch(()=>location.href='/');
+import { apiRequest, clearSession, getToken } from './config.js';
+
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const view = $('#view');
+const shell = $('#app-shell');
+const side = $('#app-side');
+const backdrop = $('#sidebar-backdrop');
+
+let user = null;
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const formatMoney = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+$('#app-menu')?.addEventListener('click', () => {
+  if (window.innerWidth <= 900) {
+    side.classList.toggle('open');
+    backdrop.classList.toggle('open');
+  } else {
+    shell.classList.toggle('sidebar-collapsed');
+  }
+});
+backdrop?.addEventListener('click', () => { side.classList.remove('open'); backdrop.classList.remove('open'); });
+$('#theme')?.addEventListener('click', () => shell.classList.toggle('app-dark'));
+$('#logout')?.addEventListener('click', () => { clearSession(); window.location.href = '../index.html'; });
+
+async function render(page) {
+  $$('[data-page]').forEach((b) => b.classList.toggle('active', b.dataset.page === page));
+  if (page === 'quotes') {
+    const items = await apiRequest('/portal/orcamentos');
+    view.innerHTML = `
+      <div class="toolbar">
+        <div><h1>Minhas Solicitações</h1><span class="muted">Histórico de solicitações enviadas e retornos da equipe comercial</span></div>
+        <a href="../index.html#contact" class="btn" style="text-decoration:none;">+ Nova Solicitação</a>
+      </div>
+      ${items.map((q) => `
+        <div class="card" style="margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px;">
+            <div>
+              <b>${esc(q.tipo_projeto || 'Orçamento')}</b>
+              <span class="muted" style="font-size:12px;"> • Enviado em ${new Date(q.criado_em).toLocaleDateString('pt-BR')}</span>
+            </div>
+            <span class="badge ${esc(q.status)}">${esc(q.status).replace('_', ' ')}</span>
+          </div>
+          <div class="quote-box">${esc(q.mensagem)}</div>
+          ${q.resposta ? `
+            <div class="quote-reply-box" style="margin-bottom:0;">
+              <div style="font-size:12px; font-weight:700; color:var(--primary); margin-bottom:4px;">
+                Resposta de ${esc(q.respondido_por || 'Equipe Nexus Code')}:
+              </div>
+              ${esc(q.resposta)}
+            </div>
+          ` : '<p class="muted" style="margin:0; font-size:13px;">Em análise pela equipe comercial.</p>'}
+        </div>
+      `).join('') || '<div class="card"><p class="muted">Nenhuma solicitação registrada para esta conta.</p></div>'}`;
+  } else if (page === 'projects') {
+    const items = await apiRequest('/projetos');
+    view.innerHTML = `
+      <div class="toolbar"><div><h1>Meus Projetos</h1><span class="muted">Acompanhamento de escopo, cronograma e status das entregas</span></div></div>
+      <div class="card table-wrap">
+        <table class="table">
+          <thead><tr><th>Projeto</th><th>Status</th><th>Progresso</th><th>Valor</th></tr></thead>
+          <tbody>${items.map((p) => `<tr><td><b>${esc(p.titulo)}</b></td><td><span class="badge ${esc(p.status)}">${esc(p.status).replace('_', ' ')}</span></td><td>${p.progresso}%</td><td>${formatMoney(p.valor_total)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Nenhum projeto ativo vinculado a esta conta.</td></tr>'}</tbody>
+        </table>
+      </div>`;
+  } else if (page === 'invoices') {
+    const items = await apiRequest('/faturas');
+    view.innerHTML = `
+      <div class="toolbar"><div><h1>Minhas Faturas</h1><span class="muted">Demonstrativo financeiro, faturas e vencimentos</span></div></div>
+      <div class="card table-wrap">
+        <table class="table">
+          <thead><tr><th>Descrição</th><th>Valor</th><th>Status</th><th>Vencimento</th></tr></thead>
+          <tbody>${items.map((f) => `<tr><td><b>${esc(f.descricao)}</b></td><td>${formatMoney(f.valor)}</td><td><span class="badge ${esc(f.status)}">${esc(f.status)}</span></td><td>${esc(f.vencimento)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Nenhuma fatura emitida para esta conta.</td></tr>'}</tbody>
+        </table>
+      </div>`;
+  } else {
+    view.innerHTML = `
+      <div class="toolbar"><div><h1>Meu Perfil</h1><span class="muted">Informações cadastrais da conta</span></div></div>
+      <div class="card" style="max-width:480px;">
+        <p><b>Nome:</b> ${esc(user.nome)}</p>
+        <p><b>E-mail:</b> ${esc(user.email)}</p>
+        <p><b>Perfil:</b> <span class="badge ativo">Cliente</span></p>
+      </div>`;
+  }
+}
+
+$$('[data-page]').forEach((b) => (b.onclick = () => render(b.dataset.page)));
+
+if (!getToken()) {
+  window.location.href = '../login.html';
+} else {
+  apiRequest('/auth/me')
+    .then((u) => {
+      user = u;
+      $('#portal-user').textContent = u.nome;
+      $('#portal-initials').textContent = u.nome.slice(0, 2).toUpperCase();
+      render('quotes');
+    })
+    .catch(() => { clearSession(); window.location.href = '../login.html'; });
+}

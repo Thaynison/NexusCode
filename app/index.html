@@ -1,1 +1,135 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NexusCodeBrasil | Gestão</title><link rel="stylesheet" href="../assets/css/app.css"></head><body><div class="shell"><aside class="side" id="side"><div class="brand">◆ NEXUS<b>CODE</b></div><nav class="nav"><button data-page="dashboard">Dashboard</button><button data-page="customers">Clientes e empresas</button><button data-page="contacts">Contatos</button><button data-page="leads">Leads</button><button data-page="pipeline">Funil de vendas</button><button data-page="opportunities">Oportunidades</button><button data-page="proposals">Propostas comerciais</button><button data-page="contracts">Contratos</button><button data-page="tasks">Atividades e tarefas</button><button data-page="kanban">Kanban</button><button data-page="calendar">Agenda</button><button data-page="catalog">Produtos e serviços</button><button data-page="users">Usuários</button><button data-page="roles">Cargos e perfis</button><button data-page="permissions">Permissões por página</button><button data-page="reports">Relatórios</button><button data-page="settings">Configuração da empresa</button><button data-page="audit">Logs de auditoria</button><button data-page="notifications">Notificações</button></nav><hr style="border-color:var(--border)"><button class="btn secondary" id="logout">Sair</button></aside><main class="main"><header class="top"><button class="btn secondary" id="menu">☰</button><div><b id="pageTitle">Dashboard</b></div><div><button class="btn secondary" id="theme">◐ Tema</button> <span id="userName"></span></div></header><section class="content" id="view"></section></main></div><dialog id="editor" class="dialog"><form method="dialog" class="modal" id="entityForm"><div class="toolbar"><h2 id="modalTitle">Novo registro</h2><button class="btn secondary" value="cancel">×</button></div><div class="formgrid"><label>Nome<input name="name" required maxlength="160"></label><label>E-mail<input name="email" type="email"></label><label>Telefone<input name="phone"></label><label>Status<select name="status"><option>active</option><option>pending</option><option>won</option><option>lost</option></select></label></div><label>Descrição<textarea name="description" rows="4"></textarea></label><br><button class="btn" value="default" id="save">Salvar</button></form></dialog><script type="module" src="../assets/js/app.js"></script></body></html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Nexus Code | Gestão Empresarial</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/x-icon" href="../img/nexus.png">
+  <link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body class="crm-app">
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+  <div class="shell" id="app-shell">
+    <aside class="side" id="app-side">
+      <div class="brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+        <span>NEXUS<b>CODE</b></span>
+      </div>
+
+      <nav class="nav" aria-label="Menu principal">
+        <div class="nav-group">Visão Geral</div>
+        <button data-app-page="dashboard" title="Dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg>
+          <span class="nav-label">Dashboard</span>
+        </button>
+        <button data-app-page="projects" title="Projetos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>
+          <span class="nav-label">Projetos</span>
+        </button>
+        <button data-app-page="tasks" title="Tarefas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+          <span class="nav-label">Tarefas</span>
+        </button>
+        <button data-app-page="kanban" title="Quadro Kanban">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M8 7v7"></path><path d="M12 7v4"></path><path d="M16 7v9"></path></svg>
+          <span class="nav-label">Quadro Kanban</span>
+        </button>
+
+        <div class="nav-group">Comercial &amp; CRM</div>
+        <button data-app-page="quotes" title="Solicitações e Orçamentos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          <span class="nav-label">Solicitações &amp; Orçamentos</span>
+          <span class="nav-badge" id="quotes-nav-badge" style="display:none;">0</span>
+        </button>
+        <button data-app-page="customers" title="Clientes e Empresas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"></path><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"></path><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"></path><path d="M10 6h4"></path><path d="M10 10h4"></path><path d="M10 14h4"></path><path d="M10 18h4"></path></svg>
+          <span class="nav-label">Clientes e Empresas</span>
+        </button>
+        <button data-app-page="leads" title="Leads">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+          <span class="nav-label">Leads</span>
+        </button>
+        <button data-app-page="pipeline" title="Funil de Vendas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>
+          <span class="nav-label">Funil de Vendas</span>
+        </button>
+
+        <div class="nav-group">Financeiro</div>
+        <button data-app-page="invoices" title="Faturas e Cobranças">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+          <span class="nav-label">Faturas &amp; Cobranças</span>
+        </button>
+
+        <div class="nav-group">Sistema</div>
+        <button data-app-page="users" title="Usuários e Perfis">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          <span class="nav-label">Usuários e Perfis</span>
+        </button>
+        <button data-app-page="audit" title="Logs de Auditoria">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+          <span class="nav-label">Logs de Auditoria</span>
+        </button>
+        <button data-app-page="profile" title="Meu Perfil">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="10" r="3"></circle><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"></path></svg>
+          <span class="nav-label">Meu Perfil</span>
+        </button>
+      </nav>
+
+      <div class="side-footer">
+        <button id="app-logout" class="btn-logout" title="Sair do Sistema">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          <span class="nav-label">Encerrar Sessão</span>
+        </button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="top">
+        <div class="top-left">
+          <button class="btn secondary icon-only" id="app-menu" title="Recolher ou expandir menu lateral" aria-label="Alternar menu lateral">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+          </button>
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="search" id="global-search" placeholder="Pesquisar clientes, projetos ou solicitações...">
+          </div>
+        </div>
+
+        <div class="top-actions">
+          <span id="app-title" class="top-breadcrumb">Dashboard</span>
+          <div class="user-chip">
+            <div class="user-avatar" id="user-avatar-initials">NC</div>
+            <span id="app-user-name">Nexus Code</span>
+          </div>
+          <button id="app-theme" class="btn secondary icon-only" title="Alternar tema claro ou escuro" aria-label="Alternar tema">
+            <svg id="theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="content" id="app-view"></div>
+    </main>
+  </div>
+
+  <!-- Modal de Cadastro / Edição -->
+  <dialog id="record-dialog" class="dialog">
+    <form id="record-form" class="modal">
+      <div class="modal-header">
+        <h2 id="record-modal-title">Novo registro</h2>
+        <button type="button" class="btn secondary icon-only" data-close-record aria-label="Fechar janela">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div id="dynamic-record-fields"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn secondary" data-close-record>Cancelar</button>
+        <button type="submit" class="btn" id="record-save-btn">Salvar Registro</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="../assets/js/app.js"></script>
+</body>
+</html>

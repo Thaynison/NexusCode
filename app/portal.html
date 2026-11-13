@@ -1,1 +1,68 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Portal do Cliente</title><link rel="stylesheet" href="../assets/css/app.css"></head><body><div class="shell"><aside class="side"><div class="brand">◆ NEXUS<b>CODE</b></div><nav class="nav"><button data-page="cart">Carrinho</button><button data-page="requests">Minhas Solicitações</button><button data-page="proposals">Minhas Propostas</button><button data-page="contracts">Meus Contratos</button><button data-page="documents">Documentos</button><button data-page="profile">Meu Perfil</button><button data-page="notifications">Notificações</button></nav><hr style="border-color:var(--border)"><button class="btn secondary" id="logout">Sair</button></aside><main class="main"><header class="top"><b>Portal do Cliente</b><button class="btn secondary" id="theme">◐ Tema</button></header><section class="content" id="view"></section></main></div><script type="module" src="../assets/js/portal.js"></script></body></html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Portal do Cliente | Nexus Code</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/x-icon" href="../img/nexus.png">
+  <link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body class="crm-app">
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+  <div class="shell" id="app-shell">
+    <aside class="side" id="app-side">
+      <div class="brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+        <span>NEXUS<b>CODE</b></span>
+      </div>
+      <nav class="nav">
+        <div class="nav-group">Área do Cliente</div>
+        <button data-page="quotes" class="active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          <span class="nav-label">Minhas Solicitações</span>
+        </button>
+        <button data-page="projects">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>
+          <span class="nav-label">Meus Projetos</span>
+        </button>
+        <button data-page="invoices">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+          <span class="nav-label">Minhas Faturas</span>
+        </button>
+        <button data-page="profile">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="10" r="3"></circle><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"></path></svg>
+          <span class="nav-label">Meu Perfil</span>
+        </button>
+      </nav>
+      <div class="side-footer">
+        <button id="logout" class="btn-logout">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          <span class="nav-label">Encerrar Sessão</span>
+        </button>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="top">
+        <div class="top-left">
+          <button class="btn secondary icon-only" id="app-menu" title="Alternar menu">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+          </button>
+          <b id="portal-title" style="font-size:16px;">Portal do Cliente</b>
+        </div>
+        <div class="top-actions">
+          <div class="user-chip">
+            <div class="user-avatar" id="portal-initials">CL</div>
+            <span id="portal-user">Cliente</span>
+          </div>
+          <button class="btn secondary icon-only" id="theme" title="Alternar tema">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>
+          </button>
+        </div>
+      </header>
+      <section class="content" id="view"></section>
+    </main>
+  </div>
+  <script type="module" src="../assets/js/portal.js"></script>
+</body>
+</html>
