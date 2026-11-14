@@ -372,7 +372,7 @@ def mp_criar_order_pix(
 
     qr_code = pm_obj.get("qr_code") or poi_tx.get("qr_code") or ""
     qr_code_base64 = pm_obj.get("qr_code_base64") or poi_tx.get("qr_code_base64") or ""
-    ticket_url = pm_obj.get("ticket_url") or poi_tx.get("ticket_url") or ""
+    ticket_url = pm_obj.get("ticket_url") or pay0.get("ticket_url") or poi_tx.get("ticket_url") or ""
 
     return {
         "order_id": order_id,

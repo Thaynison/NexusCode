@@ -636,6 +636,170 @@ window.portalOpenTicketThread = (ticketId) => {
   portalDialog.showModal();
 };
 
+let portalMpPollTimer = null;
+
+function stopPortalMpPolling() {
+  if (portalMpPollTimer) {
+    clearInterval(portalMpPollTimer);
+    portalMpPollTimer = null;
+  }
+}
+
+portalDialog?.addEventListener('close', stopPortalMpPolling);
+
+window.portalPayInvoiceMP = async (faturaId, metodo = 'pix') => {
+  stopPortalMpPolling();
+  const baseFat = (portalData.faturas || []).find((f) => f.id === faturaId);
+
+  portalModalContainer.innerHTML = `
+    <div class="modal-header">
+      <div class="modal-header-main">
+        <div class="modal-header-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="20" height="14" x="2" y="5" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+        </div>
+        <div>
+          <h2>Pagamento Online — Mercado Pago</h2>
+          <p class="modal-subtitle">${esc(baseFat?.descricao || 'Fatura #' + faturaId)} • ${formatMoney(baseFat?.valor || 0)}</p>
+        </div>
+      </div>
+      <button type="button" class="modal-close-btn" onclick="document.getElementById('portal-dialog').close()">&times;</button>
+    </div>
+    <div class="modal-body" id="mp-pay-modal-body" style="text-align:center; padding:28px 20px;">
+      <div style="font-weight:700; font-size:15px; margin-bottom:6px;">Conectando ao Mercado Pago...</div>
+      <div class="muted" style="font-size:13px;">Gerando cobrança segura com baixa automática.</div>
+    </div>
+  `;
+  if (!portalDialog.open) portalDialog.showModal();
+
+  const bodyEl = document.getElementById('mp-pay-modal-body');
+
+  try {
+    const fat = await apiRequest(`/faturas/${faturaId}/mercadopago`, {
+      method: 'POST',
+      body: JSON.stringify({ metodo })
+    });
+
+    if (fat.status === 'pago') {
+      portalDialog.close();
+      showToast('Esta fatura já consta como paga!', 'success');
+      render('invoices');
+      return;
+    }
+
+    const tabsHtml = `
+      <div style="display:flex; gap:8px; justify-content:center; margin-bottom:18px;">
+        <button type="button" class="btn ${metodo === 'pix' ? '' : 'secondary'}" style="padding:7px 14px; font-size:12.5px; ${metodo === 'pix' ? 'background:#00B4D8; color:#0A1D37; font-weight:800;' : ''}" onclick="window.portalPayInvoiceMP(${faturaId}, 'pix')">
+          PIX Instantâneo (QR Code)
+        </button>
+        <button type="button" class="btn ${metodo === 'checkout_pro' ? '' : 'secondary'}" style="padding:7px 14px; font-size:12.5px; ${metodo === 'checkout_pro' ? 'background:#00B4D8; color:#0A1D37; font-weight:800;' : ''}" onclick="window.portalPayInvoiceMP(${faturaId}, 'checkout_pro')">
+          Cartão de Crédito / Débito
+        </button>
+      </div>
+    `;
+
+    if (metodo === 'pix') {
+      const qrImgHtml = fat.mp_qr_code_base64
+        ? `<img src="data:image/png;base64,${fat.mp_qr_code_base64}" alt="QR Code PIX Mercado Pago" style="width:210px; height:210px; border-radius:12px; border:2px solid var(--border); padding:8px; background:#fff; margin:0 auto 14px; display:block;">`
+        : (fat.mp_qr_code
+          ? `<img src="https://api.qrserver.com/v1/create-qr-code/?size=210x210&data=${encodeURIComponent(fat.mp_qr_code)}" alt="QR Code PIX" style="width:210px; height:210px; border-radius:12px; border:2px solid var(--border); padding:8px; background:#fff; margin:0 auto 14px; display:block;">`
+          : '');
+
+      bodyEl.innerHTML = `
+        ${tabsHtml}
+        <div style="margin-bottom:14px;">
+          <div style="font-size:26px; font-weight:900; color:var(--primary);">${formatMoney(fat.valor)}</div>
+          <div class="muted" style="font-size:13px;">${esc(fat.descricao)}</div>
+          ${fat.mp_order_id ? `<div style="font-size:11px; color:var(--muted); margin-top:3px;">Order MP: <code>${esc(fat.mp_order_id)}</code></div>` : ''}
+        </div>
+
+        ${qrImgHtml}
+
+        ${fat.mp_qr_code ? `
+          <div style="text-align:left; margin:12px 0;">
+            <label style="display:block; font-size:12px; font-weight:700; margin-bottom:6px;">Código PIX Copia e Cola:</label>
+            <div style="display:flex; gap:8px;">
+              <input type="text" readonly value="${esc(fat.mp_qr_code)}" class="nc-input" id="mp-pix-copy-input" style="font-family:monospace; font-size:11.5px;">
+              <button type="button" class="btn" id="mp-pix-copy-btn">Copiar</button>
+            </div>
+          </div>
+        ` : `
+          <div class="modal-section-card" style="text-align:center; margin:12px 0;">
+            <div style="font-size:13px; font-weight:700; margin-bottom:6px;">Order PIX registrada no Mercado Pago</div>
+            <div class="muted" style="font-size:12px; margin-bottom:10px;">
+              ${fat.mp_checkout_url ? 'Clique abaixo para abrir o comprovante/QR Code no ambiente Mercado Pago.' : 'Em modo Sandbox Orders, utilize a aba "Cartão de Crédito / Débito" ao lado para simular uma aprovação imediata.'}
+            </div>
+            ${fat.mp_checkout_url ? `<a href="${esc(fat.mp_checkout_url)}" target="_blank" rel="noopener" class="btn" style="text-decoration:none; background:#00B4D8; color:#0A1D37; font-weight:800;">Abrir Pagamento Mercado Pago ↗</a>` : ''}
+          </div>
+        `}
+
+        <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-top:14px; font-size:12px; color:var(--primary); font-weight:600;">
+          <span>● Aguardando confirmação automática do pagamento...</span>
+        </div>
+        <div style="margin-top:14px; display:flex; justify-content:center; gap:10px;">
+          <button type="button" class="btn secondary" id="mp-check-now-btn">Já paguei — Verificar agora</button>
+          <button type="button" class="btn secondary" onclick="document.getElementById('portal-dialog').close()">Fechar</button>
+        </div>
+      `;
+
+      document.getElementById('mp-pix-copy-btn')?.addEventListener('click', () => {
+        const inp = document.getElementById('mp-pix-copy-input');
+        navigator.clipboard?.writeText(inp?.value || '');
+        showToast('Código PIX Copia e Cola copiado!', 'success');
+      });
+    } else {
+      bodyEl.innerHTML = `
+        ${tabsHtml}
+        <div style="margin-bottom:16px;">
+          <div style="font-size:26px; font-weight:900; color:var(--primary);">${formatMoney(fat.valor)}</div>
+          <div class="muted" style="font-size:13px;">${esc(fat.descricao)}</div>
+        </div>
+        <div class="modal-section-card" style="text-align:center;">
+          <p style="margin:0 0 14px; font-size:13.5px;">Finalize o pagamento com <b>Cartão de Crédito (em até 12x)</b>, <b>Débito</b> ou <b>Saldo Mercado Pago</b> no ambiente seguro:</p>
+          ${fat.mp_checkout_url
+            ? `<a href="${esc(fat.mp_checkout_url)}" target="_blank" rel="noopener" class="btn" style="text-decoration:none; background:#00B4D8; color:#0A1D37; font-weight:800; padding:11px 20px;">Pagar Agora no Mercado Pago ↗</a>`
+            : '<div class="muted">Link de checkout indisponível.</div>'}
+        </div>
+        <div style="margin-top:14px; display:flex; justify-content:center; gap:10px;">
+          <button type="button" class="btn secondary" id="mp-check-now-btn">Verificar Confirmação</button>
+          <button type="button" class="btn secondary" onclick="document.getElementById('portal-dialog').close()">Fechar</button>
+        </div>
+      `;
+    }
+
+    const checkPaymentStatus = async (manual = false) => {
+      try {
+        const st = await apiRequest(`/faturas/${faturaId}/mercadopago/status`);
+        if (st && st.status === 'pago') {
+          stopPortalMpPolling();
+          portalDialog.close();
+          showToast('Pagamento confirmado automaticamente via Mercado Pago!', 'success');
+          render('invoices');
+          return true;
+        }
+        if (manual) {
+          showToast('Pagamento ainda pendente de compensação. Aguarde alguns segundos.', 'info');
+        }
+      } catch (_) {}
+      return false;
+    };
+
+    document.getElementById('mp-check-now-btn')?.addEventListener('click', () => checkPaymentStatus(true));
+    portalMpPollTimer = setInterval(() => {
+      if (!portalDialog.open) {
+        stopPortalMpPolling();
+        return;
+      }
+      checkPaymentStatus(false);
+    }, 4500);
+  } catch (err) {
+    bodyEl.innerHTML = `
+      <div style="color:var(--danger); font-weight:700; margin-bottom:8px;">Não foi possível iniciar o pagamento</div>
+      <div class="muted" style="font-size:13px; margin-bottom:16px;">${esc(err.message)}</div>
+      <button type="button" class="btn secondary" onclick="document.getElementById('portal-dialog').close()">Fechar</button>
+    `;
+  }
+};
+
 window.portalOpenInvoiceReceiptModal = (fatId) => {
   const fat = (portalData.faturas || []).find((f) => f.id === fatId);
   if (!fat) return;
@@ -657,15 +821,6 @@ window.portalOpenInvoiceReceiptModal = (fatId) => {
       </div>
 
       <div class="modal-body">
-        <div class="pix-box">
-          <div>
-            <div style="font-size:11.5px; font-weight:700; text-transform:uppercase; color:var(--primary);">Dados para Pagamento via PIX</div>
-            <div style="font-size:15px; font-weight:800; margin:3px 0;">${esc(pix.chave_pix || 'contato@nexuscodebrasil.com.br')}</div>
-            <div class="muted" style="font-size:12px;">${esc(pix.titular_pix || 'Nexus Code Brasil')} • ${esc(pix.banco || '')}</div>
-          </div>
-          <button type="button" class="btn secondary" id="copy-pix-modal-btn">Copiar Chave PIX</button>
-        </div>
-
         <div class="modal-section-card">
           <div class="modal-section-title">Enviar Comprovante de Pagamento</div>
           <label class="field-full">Selecione o Arquivo (PDF, PNG ou JPG, máx. 2,5 MB) *
@@ -683,11 +838,6 @@ window.portalOpenInvoiceReceiptModal = (fatId) => {
       </div>
     </form>
   `;
-
-  $('#copy-pix-modal-btn').onclick = () => {
-    navigator.clipboard?.writeText(pix.chave_pix || '');
-    showToast('Chave PIX copiada para a área de transferência!', 'success');
-  };
 
   $('#portal-receipt-form').onsubmit = async (e) => {
     e.preventDefault();
@@ -946,18 +1096,8 @@ async function render(page) {
     `;
   } else if (page === 'invoices') {
     const items = portalData.faturas || [];
-    const pix = portalData.pagamento_info || {};
     view.innerHTML = `
-      <div class="toolbar"><div><h1>Minhas Faturas &amp; Pagamentos</h1><span class="muted">Demonstrativo financeiro, dados PIX e envio de comprovantes</span></div></div>
-
-      <div class="pix-box" style="margin-bottom:18px;">
-        <div>
-          <div style="font-size:11.5px; font-weight:700; text-transform:uppercase; color:var(--primary);">Chave PIX Oficial para Pagamentos</div>
-          <div style="font-size:16px; font-weight:800; margin:3px 0;">${esc(pix.chave_pix || 'contato@nexuscodebrasil.com.br')}</div>
-          <div class="muted" style="font-size:12px;">Favorecido: ${esc(pix.titular_pix || 'Nexus Code Brasil')} • CNPJ: ${esc(pix.cnpj || '-')} • ${esc(pix.banco || '')}</div>
-        </div>
-        <button type="button" class="btn" id="copy-pix-main-btn">Copiar Chave PIX</button>
-      </div>
+      <div class="toolbar"><div><h1>Minhas Faturas &amp; Pagamentos</h1><span class="muted">Pagamento online automatizado via Mercado Pago (PIX ou Cartão) e histórico de faturas</span></div></div>
 
       <div class="card table-wrap">
         <table class="table">
@@ -988,10 +1128,6 @@ async function render(page) {
         </table>
       </div>`;
 
-    $('#copy-pix-main-btn')?.addEventListener('click', () => {
-      navigator.clipboard?.writeText(pix.chave_pix || '');
-      showToast('Chave PIX copiada!', 'success');
-    });
   } else if (page === 'profile') {
     const me = await apiRequest('/auth/me');
     const consentInfo = me.termos_aceitos_em
