@@ -274,6 +274,12 @@ class ProjetoBase(BaseModel):
     url_homologacao: Optional[str] = None
     url_producao: Optional[str] = None
     repositorio_url: Optional[str] = None
+    github_repo_full_name: Optional[str] = None
+    github_default_branch: Optional[str] = "main"
+    github_visibilidade: Optional[str] = "private"
+    vercel_project_id: Optional[str] = None
+    ultimo_deploy_status: Optional[str] = None
+    ultimo_deploy_em: Optional[datetime] = None
     aprovacao_cliente_status: Optional[str] = "pendente"
     aprovacao_cliente_obs: Optional[str] = None
     data_inicio: Optional[date] = None
@@ -291,7 +297,9 @@ class ProjetoBase(BaseModel):
 
 
 class ProjetoCreate(ProjetoBase):
-    pass
+    criar_no_github: bool = False
+    github_repo_nome: Optional[str] = None
+    github_template: Optional[str] = "fullstack"
 
 
 class ProjetoUpdate(BaseModel):
@@ -306,6 +314,10 @@ class ProjetoUpdate(BaseModel):
     url_homologacao: Optional[str] = None
     url_producao: Optional[str] = None
     repositorio_url: Optional[str] = None
+    github_repo_full_name: Optional[str] = None
+    github_default_branch: Optional[str] = None
+    github_visibilidade: Optional[str] = None
+    vercel_project_id: Optional[str] = None
     aprovacao_cliente_status: Optional[str] = None
     aprovacao_cliente_obs: Optional[str] = None
     data_inicio: Optional[date] = None
@@ -671,6 +683,10 @@ class ConfiguracaoEmpresaUpdate(BaseModel):
     registrar_api_user: Optional[str] = None
     registrar_api_key: Optional[str] = None
     registrar_client_ip: Optional[str] = None
+    github_ativo: Optional[bool] = None
+    github_org: Optional[str] = None
+    github_token: Optional[str] = None
+    github_visibilidade_padrao: Optional[str] = None
     vercel_token: Optional[str] = None
     vercel_project_id: Optional[str] = None
     vercel_team_id: Optional[str] = None
@@ -1210,3 +1226,28 @@ class MercadoPagoCobrarRequest(BaseModel):
 class MercadoPagoPayoutLoteRequest(BaseModel):
     competencia: str = Field(..., max_length=20)
     holerite_ids: Optional[List[int]] = None
+
+
+class IdeFileWriteRequest(BaseModel):
+    path: str = Field(..., min_length=1, max_length=400)
+    content: str = ""
+    message: Optional[str] = None
+    branch: Optional[str] = "main"
+    sha: Optional[str] = None
+
+
+class IdeFileDeleteRequest(BaseModel):
+    path: str = Field(..., min_length=1, max_length=400)
+    sha: str
+    message: Optional[str] = None
+    branch: Optional[str] = "main"
+
+
+class IdeBranchCreateRequest(BaseModel):
+    new_branch: str = Field(..., min_length=1, max_length=100)
+    from_branch: Optional[str] = "main"
+
+
+class ProjetoDeployRequest(BaseModel):
+    target: Literal["production", "preview"] = "production"
+    branch: Optional[str] = None

@@ -1673,6 +1673,21 @@ export async function renderEmpresaView(ctx) {
     if (btn) btn.classList.add('active');
   };
 
+  
+  window.nexusTestarGithubConexao = async () => {
+    const token = document.getElementById('cfg-gh-token')?.value || '';
+    const orgName = document.getElementById('cfg-gh-org')?.value || '';
+    try {
+      const res = await apiRequest('/integracoes/github/testar', {
+        method: 'POST',
+        body: JSON.stringify({ github_token: token, github_org: orgName })
+      });
+      showToast(`Conectado ao GitHub: ${res.organizacao} (${res.tipo_conta} • @${res.usuario_github})`, 'success');
+    } catch (err) {
+      showNoticeModal({ title: 'Falha na Conexão GitHub', message: err.message, variant: 'error' });
+    }
+  };
+
   window.nexusSaveIntegracoesApi = async () => {
     const frm = document.getElementById('empresa-integracoes-form');
     const btn = document.getElementById('save-integrations-btn');
@@ -1709,6 +1724,10 @@ export async function renderEmpresaView(ctx) {
           registrar_api_user: (raw.registrar_api_user || '').trim() || null,
           registrar_api_key: (raw.registrar_api_key || '').trim() || null,
           registrar_client_ip: (raw.registrar_client_ip || '').trim() || null,
+          github_ativo: raw.github_ativo === 'true',
+          github_org: (raw.github_org || '').trim() || 'Nexus-Code-Brasil',
+          github_token: (raw.github_token || '').trim() || null,
+          github_visibilidade_padrao: raw.github_visibilidade_padrao || 'private',
           vercel_token: (raw.vercel_token || '').trim() || null,
           vercel_project_id: (raw.vercel_project_id || '').trim() || null,
           vercel_team_id: (raw.vercel_team_id || '').trim() || null,
@@ -2012,6 +2031,37 @@ export async function renderEmpresaView(ctx) {
                   <input type="text" name="vercel_team_id" value="${esc(cfg?.vercel_team_id || '')}" placeholder="team_..." class="nc-input">
                 </label>
               </div>
+            </div>
+          </div>
+        </div>
+
+                <div class="card profile-col-card" style="border-left: 4px solid #00B4D8;">
+          <div>
+            <h4 class="profile-section-title">GitHub Enterprise &amp; Automação de Repositórios</h4>
+            <p class="profile-section-sub">Cria repositórios automaticamente na organização GitHub da empresa ao criar projetos e habilita a IDE VS Code / Codespaces integrada.</p>
+            <div class="profile-grid">
+              <label class="field-full">Status Integração GitHub *
+                <select name="github_ativo" class="nc-input">
+                  <option value="false" ${!cfg?.github_ativo ? 'selected' : ''}>Desativado</option>
+                  <option value="true" ${cfg?.github_ativo ? 'selected' : ''}>Ativo (Criar Repos &amp; IDE Automáticos)</option>
+                </select>
+              </label>
+              <label class="field-full">Organização / Usuário GitHub da Empresa *
+                <input type="text" name="github_org" id="cfg-gh-org" value="${esc(cfg?.github_org || 'Nexus-Code-Brasil')}" placeholder="Ex.: Nexus-Code-Brasil" class="nc-input">
+              </label>
+              <label class="field-full">GitHub Personal Access Token (PAT) *
+                <input type="password" name="github_token" id="cfg-gh-token" value="${esc(cfg?.github_token || '')}" placeholder="ghp_... ou github_pat_..." class="nc-input">
+              </label>
+              <label class="field-full">Visibilidade Padrão dos Novos Projetos
+                <select name="github_visibilidade_padrao" class="nc-input">
+                  <option value="private" ${(cfg?.github_visibilidade_padrao || 'private') === 'private' ? 'selected' : ''}>Privado (Recomendado para Clientes)</option>
+                  <option value="public" ${cfg?.github_visibilidade_padrao === 'public' ? 'selected' : ''}>Público</option>
+                </select>
+              </label>
+            </div>
+            <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+              <span class="muted" style="font-size:11.5px;">Escopos necessários no token: <code>repo</code> e <code>workflow</code>.</span>
+              <button type="button" class="btn secondary" style="padding:6px 12px; font-size:12px;" onclick="window.nexusTestarGithubConexao()">Testar Conexão GitHub</button>
             </div>
           </div>
         </div>

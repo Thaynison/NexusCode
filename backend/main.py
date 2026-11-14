@@ -782,6 +782,8 @@ def ensure_db_initialized(force_sync: bool = False):
                 conn.execute(text("SELECT mp_payout_id FROM holerites LIMIT 1"))
                 conn.execute(text("SELECT mp_payout_id FROM reembolsos_despesas LIMIT 1"))
                 conn.execute(text("SELECT mp_order_id FROM pedidos_dominios LIMIT 1"))
+                conn.execute(text("SELECT github_ativo, github_org, github_token, github_visibilidade_padrao FROM configuracoes_empresa LIMIT 1"))
+                conn.execute(text("SELECT github_repo_full_name, github_default_branch, github_visibilidade, vercel_project_id, ultimo_deploy_status, ultimo_deploy_em FROM projetos LIMIT 1"))
             _db_ready = True
             return
         except Exception:
@@ -1108,7 +1110,7 @@ def raiz(db: int = 0):
     return {
         "status": "online" if db_status != "error" else "degraded",
         "sistema": "Nexus Code Enterprise SaaS ERP & CRM API",
-        "versao": "2.4.2-prod",
+        "versao": "2.4.4-prod",
         "regiao": os.getenv("VERCEL_REGION", "local"),
         "database_url_configurada": bool(os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")),
         "db_status": db_status,
@@ -2081,11 +2083,7 @@ def remover_solicitacao(
 
 
 # ==================== BOOTSTRAP CONSOLIDADO MULTI-TENANT ====================
-@router.get("/bootstrap", tags=["Dashboard"])
-def bootstrap_painel(
-    db: Session = Depends(get_db),
-    usuario: Usuario = Depends(exigir_equipe),
-):
+def _executar_bootstrap_painel(db: Session, usuario: Usuario) -> dict:
     org_id = usuario.organizacao_id
     org = _get_org_or_404(db, org_id)
 
@@ -2227,6 +2225,22 @@ def bootstrap_painel(
         "pedidos_loja": [PedidoLojaOut.model_validate(ped) for ped in pedidos_loja],
         "reembolsos": [ReembolsoOut.model_validate(rb) for rb in reembolsos],
     }
+
+
+@router.get("/bootstrap", tags=["Dashboard"])
+def bootstrap_painel(
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(exigir_equipe),
+):
+    try:
+        return _executar_bootstrap_painel(db, usuario)
+    except HTTPException:
+        raise
+    except Exception as boot_err:
+        print(f"[Bootstrap Auto-Heal Retry] {boot_err}")
+        db.rollback()
+        ensure_db_initialized(force_sync=True)
+        return _executar_bootstrap_painel(db, usuario)
 
 
 @router.get("/dashboard/resumo", tags=["Dashboard"])
@@ -3800,8 +3814,40 @@ def criar_projeto(
     cliente = db.query(Cliente).filter(Cliente.id == dados.cliente_id, Cliente.organizacao_id == org.id).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente informado não existe.")
-    projeto = Projeto(**dados.model_dump(), organizacao_id=org.id)
+
+    raw_payload = dados.model_dump()
+    criar_no_github = bool(raw_payload.pop("criar_no_github", False))
+    github_repo_nome = raw_payload.pop("github_repo_nome", None)
+    github_template = raw_payload.pop("github_template", "fullstack")
+
+    projeto = Projeto(**raw_payload, organizacao_id=org.id)
     db.add(projeto)
+    db.flush()
+
+    cfg = _aplicar_env_fallback_integracoes(db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first())
+    if criar_no_github and cfg and cfg.github_ativo and cfg.github_token:
+        try:
+            repo_res = github_criar_repositorio_empresa(
+                token=cfg.github_token,
+                org=cfg.github_org,
+                repo_nome=github_repo_nome or projeto.titulo,
+                descricao=projeto.descricao or f"Projeto {projeto.titulo} — Cliente {cliente.nome_empresa}",
+                visibilidade=projeto.github_visibilidade or cfg.github_visibilidade_padrao or "private",
+                template=github_template or "fullstack",
+                empresa_nome=org.nome,
+            )
+            projeto.repositorio_url = repo_res["html_url"]
+            projeto.github_repo_full_name = repo_res["full_name"]
+            projeto.github_default_branch = repo_res["default_branch"]
+            projeto.github_visibilidade = repo_res["visibilidade"]
+            registrar_log(db, equipe.nome, "GITHUB_REPO_CRIADO", f"Repositório '{repo_res['full_name']}' criado no GitHub.", org_id=org.id)
+        except Exception as gh_err:
+            raise HTTPException(status_code=502, detail=f"Falha ao criar repositório no GitHub: {gh_err}")
+    elif projeto.repositorio_url and not projeto.github_repo_full_name:
+        extracted = extrair_repo_full_name(projeto.repositorio_url, cfg.github_org if cfg else None)
+        if extracted:
+            projeto.github_repo_full_name = extracted
+
     if cliente.usuario_portal_id:
         criar_notificacao(
             db,
@@ -4693,6 +4739,8 @@ def listar_auditoria(
 from schemas import (
     PedidoDominioCreate, PedidoDominioOut,
     MercadoPagoCobrarRequest, MercadoPagoPayoutLoteRequest,
+    IdeFileWriteRequest, IdeFileDeleteRequest, IdeBranchCreateRequest,
+    ProjetoDeployRequest,
 )
 from integrations import (
     DEFAULT_TLD_PRICING,
@@ -4710,6 +4758,16 @@ from integrations import (
     registrar_dominio_no_provedor,
     provisionar_dominio_vercel,
     verificar_status_dns_vercel,
+    extrair_repo_full_name,
+    github_testar_conexao,
+    github_criar_repositorio_empresa,
+    github_listar_arvore_repositorio,
+    github_ler_arquivo,
+    github_salvar_arquivo,
+    github_excluir_arquivo,
+    github_criar_branch,
+    vercel_disparar_deploy_projeto,
+    vercel_listar_deploys_projeto,
 )
 
 
@@ -4742,6 +4800,11 @@ def _aplicar_env_fallback_integracoes(cfg: Optional[ConfiguracaoEmpresa]) -> Opt
         cfg.registrar_api_key = os.getenv("REGISTRAR_API_KEY").strip()
     if not cfg.vercel_token and os.getenv("VERCEL_TOKEN"):
         cfg.vercel_token = os.getenv("VERCEL_TOKEN").strip()
+    if not cfg.github_token and os.getenv("GITHUB_TOKEN"):
+        cfg.github_token = os.getenv("GITHUB_TOKEN").strip()
+        cfg.github_ativo = True
+    if not cfg.github_org and os.getenv("GITHUB_ORG"):
+        cfg.github_org = os.getenv("GITHUB_ORG").strip()
     if not cfg.vercel_project_id and os.getenv("VERCEL_PROJECT_ID"):
         cfg.vercel_project_id = os.getenv("VERCEL_PROJECT_ID").strip()
     return cfg
@@ -5305,6 +5368,244 @@ def pagar_holerite_via_mercadopago(
     db.commit()
     db.refresh(hol)
     return hol
+
+
+
+# ==================== GITHUB ENTERPRISE, DEPLOYS VERCEL & CLOUD IDE (CODESPACES) ====================
+@router.post("/integracoes/github/testar", tags=["DevOps & IDE"])
+def testar_conexao_github_endpoint(
+    payload: dict,
+    equipe: Usuario = Depends(exigir_equipe),
+):
+    try:
+        return github_testar_conexao(payload.get("github_token", ""), payload.get("github_org", ""))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/projetos/{projeto_id}/github/provisionar", response_model=ProjetoOut, tags=["DevOps & IDE"])
+def provisionar_github_projeto_existente(
+    projeto_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    equipe: Usuario = Depends(exigir_equipe),
+):
+    projeto = db.query(Projeto).filter(Projeto.id == projeto_id, Projeto.organizacao_id == equipe.organizacao_id).first()
+    if not projeto:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado.")
+    cfg = _aplicar_env_fallback_integracoes(db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == equipe.organizacao_id).first())
+    if not cfg or not cfg.github_token:
+        raise HTTPException(status_code=400, detail="Configure o Token do GitHub em Empresa & Permissões > Integrações.")
+
+    modo = (payload.get("modo") or "criar").strip()
+    if modo == "vincular":
+        full_name = extrair_repo_full_name(payload.get("repo_url_ou_slug"), cfg.github_org)
+        if not full_name:
+            raise HTTPException(status_code=400, detail="Informe um repositório válido (ex.: Nexus-Code-Brasil/meu-projeto).")
+        projeto.github_repo_full_name = full_name
+        projeto.repositorio_url = f"https://github.com/{full_name}"
+        projeto.github_default_branch = (payload.get("branch") or "main").strip()
+    else:
+        org_obj = db.query(Organizacao).filter(Organizacao.id == equipe.organizacao_id).first()
+        repo_res = github_criar_repositorio_empresa(
+            token=cfg.github_token,
+            org=cfg.github_org,
+            repo_nome=payload.get("repo_nome") or projeto.titulo,
+            descricao=projeto.descricao or "",
+            visibilidade=payload.get("visibilidade") or cfg.github_visibilidade_padrao or "private",
+            template=payload.get("template") or "fullstack",
+            empresa_nome=org_obj.nome if org_obj else "Nexus Code Brasil",
+        )
+        projeto.repositorio_url = repo_res["html_url"]
+        projeto.github_repo_full_name = repo_res["full_name"]
+        projeto.github_default_branch = repo_res["default_branch"]
+        projeto.github_visibilidade = repo_res["visibilidade"]
+
+    registrar_log(db, equipe.nome, "GITHUB_VINCULADO", f"Repositório {projeto.github_repo_full_name} vinculado ao Projeto #{projeto.id}", org_id=equipe.organizacao_id)
+    db.commit()
+    db.refresh(projeto)
+    return projeto
+
+
+@router.post("/projetos/{projeto_id}/deploy", tags=["DevOps & IDE"])
+def disparar_deploy_projeto_endpoint(
+    projeto_id: int,
+    dados: ProjetoDeployRequest,
+    db: Session = Depends(get_db),
+    equipe: Usuario = Depends(exigir_equipe),
+):
+    projeto = db.query(Projeto).filter(Projeto.id == projeto_id, Projeto.organizacao_id == equipe.organizacao_id).first()
+    if not projeto:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado.")
+    cfg = _aplicar_env_fallback_integracoes(db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == equipe.organizacao_id).first())
+    if not cfg or not cfg.vercel_token:
+        raise HTTPException(status_code=400, detail="Configure o Vercel API Token em Empresa & Permissões > Integrações.")
+
+    full_name = projeto.github_repo_full_name or extrair_repo_full_name(projeto.repositorio_url, cfg.github_org)
+    if not full_name:
+        raise HTTPException(status_code=400, detail="Este projeto ainda não possui um repositório GitHub vinculado.")
+
+    branch = dados.branch or projeto.github_default_branch or "main"
+    try:
+        dep = vercel_disparar_deploy_projeto(
+            vercel_token=cfg.vercel_token,
+            team_id=cfg.vercel_team_id,
+            project_slug=full_name.split("/")[-1],
+            github_repo_full_name=full_name,
+            github_token=cfg.github_token,
+            branch=branch,
+            target=dados.target,
+            existing_vercel_project_id=projeto.vercel_project_id,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    projeto.github_repo_full_name = full_name
+    projeto.vercel_project_id = dep.get("vercel_project_id") or projeto.vercel_project_id
+    projeto.ultimo_deploy_status = dep.get("status", "BUILDING")
+    projeto.ultimo_deploy_em = datetime.utcnow()
+    if dep.get("url"):
+        if dados.target == "production":
+            projeto.url_producao = dep["url"]
+        else:
+            projeto.url_homologacao = dep["url"]
+
+    registrar_log(db, equipe.nome, "DEPLOY_VERCEL", f"Disparou deploy ({dados.target}) de {full_name}@{branch}", org_id=equipe.organizacao_id)
+    db.commit()
+    return {"ok": True, "deploy": dep, "projeto_id": projeto.id}
+
+
+@router.get("/projetos/{projeto_id}/deploys", tags=["DevOps & IDE"])
+def listar_deploys_projeto_endpoint(
+    projeto_id: int,
+    db: Session = Depends(get_db),
+    equipe: Usuario = Depends(exigir_equipe),
+):
+    projeto = db.query(Projeto).filter(Projeto.id == projeto_id, Projeto.organizacao_id == equipe.organizacao_id).first()
+    if not projeto:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado.")
+    cfg = _aplicar_env_fallback_integracoes(db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == equipe.organizacao_id).first())
+    full_name = projeto.github_repo_full_name or extrair_repo_full_name(projeto.repositorio_url, cfg.github_org if cfg else None)
+    return vercel_listar_deploys_projeto(
+        vercel_token=cfg.vercel_token if cfg else None,
+        team_id=cfg.vercel_team_id if cfg else None,
+        vercel_project_id=projeto.vercel_project_id,
+        github_token=cfg.github_token if cfg else None,
+        github_repo_full_name=full_name,
+    )
+
+
+def _obter_contexto_ide_projeto(db: Session, projeto_id: int, org_id: int):
+    projeto = db.query(Projeto).filter(Projeto.id == projeto_id, Projeto.organizacao_id == org_id).first()
+    if not projeto:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado.")
+    cfg = _aplicar_env_fallback_integracoes(db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org_id).first())
+    if not cfg or not cfg.github_token:
+        raise HTTPException(status_code=400, detail="Token do GitHub não configurado em Empresa & Permissões > Integrações.")
+    full_name = projeto.github_repo_full_name or extrair_repo_full_name(projeto.repositorio_url, cfg.github_org)
+    if not full_name:
+        raise HTTPException(status_code=400, detail="Repositório GitHub não vinculado a este projeto.")
+    return projeto, cfg, full_name
+
+
+@router.get("/projetos/{projeto_id}/ide/tree", tags=["DevOps & IDE"])
+def ide_obter_arvore_projeto(
+    projeto_id: int,
+    branch: Optional[str] = None,
+    db: Session = Depends(get_db),
+    equipe: Usuario = Depends(exigir_equipe),
+):
+    projeto, cfg, full_name = _obter_contexto_ide_projeto(db, projeto_id, equipe.organizacao_id)
+    try:
+        tree_info = github_listar_arvore_repositorio(cfg.github_token, full_name, branch or projeto.github_default_branch or "main")
+        return {
+            "projeto": {
+                "id": projeto.id,
+                "titulo": projeto.titulo,
+                "status": projeto.status,
+                "url_producao": projeto.url_producao,
+                "url_homologacao": projeto.url_homologacao,
+                "ultimo_deploy_status": projeto.ultimo_deploy_status,
+            },
+            **tree_info,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.get("/projetos/{projeto_id}/ide/file", tags=["DevOps & IDE"])
+def ide_ler_arquivo_projeto(
+    projeto_id: int,
+    path: str,
+    branch: str = "main",
+    db: Session = Depends(get_db),
+    equipe: Usuario = Depends(exigir_equipe),
+):
+    _, cfg, full_name = _obter_contexto_ide_projeto(db, projeto_id, equipe.organizacao_id)
+    try:
+        return github_ler_arquivo(cfg.github_token, full_name, path, branch)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.put("/projetos/{projeto_id}/ide/file", tags=["DevOps & IDE"])
+@router.post("/projetos/{projeto_id}/ide/file", tags=["DevOps & IDE"])
+def ide_salvar_arquivo_projeto(
+    projeto_id: int,
+    dados: IdeFileWriteRequest,
+    db: Session = Depends(get_db),
+    equipe: Usuario = Depends(exigir_equipe),
+):
+    _, cfg, full_name = _obter_contexto_ide_projeto(db, projeto_id, equipe.organizacao_id)
+    try:
+        res = github_salvar_arquivo(
+            token=cfg.github_token,
+            full_name=full_name,
+            path=dados.path,
+            content=dados.content,
+            message=dados.message or f"feat({dados.path}): commit via Nexus Code Studio por {equipe.nome}",
+            branch=dados.branch or "main",
+            sha=dados.sha,
+        )
+        registrar_log(db, equipe.nome, "IDE_COMMIT", f"Commit em {full_name}/{dados.path} ({res.get('commit_sha')})", org_id=equipe.organizacao_id)
+        db.commit()
+        return res
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.delete("/projetos/{projeto_id}/ide/file", tags=["DevOps & IDE"])
+def ide_excluir_arquivo_projeto(
+    projeto_id: int,
+    dados: IdeFileDeleteRequest,
+    db: Session = Depends(get_db),
+    equipe: Usuario = Depends(exigir_equipe),
+):
+    _, cfg, full_name = _obter_contexto_ide_projeto(db, projeto_id, equipe.organizacao_id)
+    try:
+        res = github_excluir_arquivo(cfg.github_token, full_name, dados.path, dados.sha, dados.message, dados.branch or "main")
+        registrar_log(db, equipe.nome, "IDE_DELETE_FILE", f"Removeu {full_name}/{dados.path}", org_id=equipe.organizacao_id)
+        db.commit()
+        return res
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.post("/projetos/{projeto_id}/ide/branch", tags=["DevOps & IDE"])
+def ide_criar_branch_projeto(
+    projeto_id: int,
+    dados: IdeBranchCreateRequest,
+    db: Session = Depends(get_db),
+    equipe: Usuario = Depends(exigir_equipe),
+):
+    _, cfg, full_name = _obter_contexto_ide_projeto(db, projeto_id, equipe.organizacao_id)
+    try:
+        res = github_criar_branch(cfg.github_token, full_name, dados.new_branch, dados.from_branch or "main")
+        registrar_log(db, equipe.nome, "IDE_NEW_BRANCH", f"Criou branch '{res['branch']}' em {full_name}", org_id=equipe.organizacao_id)
+        db.commit()
+        return res
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
 
 # ==================== END NEW ROUTES ====================
 

@@ -819,7 +819,9 @@ async function renderProjects(useCache = false) {
     return okStatus && okSearch;
   });
 
-  const rows = items.map((p) => `
+  const rows = items.map((p) => {
+    const repoSlug = p.github_repo_full_name || (p.repositorio_url ? p.repositorio_url.replace(/^https?:\/\/github\.com\//i, '') : '');
+    return `
     <tr>
       <td>
         <div class="row-entity">
@@ -827,6 +829,10 @@ async function renderProjects(useCache = false) {
           <div>
             <b>${esc(p.titulo)}</b>
             <div class="muted" style="font-size:12px;">${esc(p.descricao || 'Sem descrição adicional')}</div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:4px;">
+              ${repoSlug ? `<a href="${esc(p.repositorio_url || 'https://github.com/' + repoSlug)}" target="_blank" rel="noopener" style="font-size:11px; font-weight:700; color:var(--primary); text-decoration:none;">&#9741; ${esc(repoSlug)}</a>` : ''}
+              ${p.ultimo_deploy_status ? `<span class="badge ${p.ultimo_deploy_status === 'READY' ? 'ativo' : 'pendente'}" style="font-size:10px;">Deploy: ${esc(p.ultimo_deploy_status)}</span>` : ''}
+            </div>
           </div>
         </div>
       </td>
@@ -844,10 +850,13 @@ async function renderProjects(useCache = false) {
       <td style="font-weight:700;">${formatMoney(p.valor_total)}</td>
       <td>${formatDate(p.data_entrega)}</td>
       ${isStaff ? `<td style="white-space:nowrap;">
+        <button type="button" class="btn" style="padding:6px 12px; font-size:12px; background:#00B4D8; color:#0A1D37; font-weight:800;" onclick="window.nexusOpenProjectIde(${p.id})">Abrir IDE</button>
+        <button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--primary); font-weight:700;" onclick="window.nexusOpenProjectDeployModal(${p.id})">Deploy</button>
         <button class="btn secondary" style="padding:6px 10px; font-size:12px;" data-edit='${JSON.stringify(p).replace(/'/g, "&apos;")}'>Editar</button>
         <button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/projetos/${p.id}" data-label="${esc(p.titulo)}">Excluir</button>
       </td>` : ''}
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   return `
     <div class="toolbar">
@@ -874,6 +883,115 @@ async function renderProjects(useCache = false) {
       </table>
     </div>`;
 }
+
+
+window.nexusOpenProjectIde = (projetoId) => {
+  const proj = (cache.projetos || []).find((p) => p.id === projetoId);
+  if (!proj) return;
+  if (!proj.github_repo_full_name && !proj.repositorio_url) {
+    showConfirmModal({
+      title: 'Vincular Repositório GitHub ao Projeto',
+      message: `O projeto "${proj.titulo}" ainda não possui um repositório GitHub vinculado. Deseja criar um repositório automaticamente na organização GitHub da empresa agora?`,
+      detail: 'Após criar o repositório, o Nexus Code Studio (VS Code Web) será aberto imediatamente.',
+      confirmText: 'Criar Repositório & Abrir IDE',
+      variant: 'primary',
+      onConfirm: async () => {
+        await apiRequest(`/projetos/${projetoId}/github/provisionar`, {
+          method: 'POST',
+          body: JSON.stringify({ modo: 'criar', template: 'fullstack' })
+        });
+        invalidateCache();
+        window.open(`./ide.html?projeto_id=${projetoId}`, '_blank', 'noopener');
+        await render();
+      }
+    });
+    return;
+  }
+  window.open(`./ide.html?projeto_id=${projetoId}`, '_blank', 'noopener');
+};
+
+window.nexusOpenProjectDeployModal = async (projetoId) => {
+  const proj = (cache.projetos || []).find((p) => p.id === projetoId);
+  if (!proj) return;
+
+  holeriteContainer.innerHTML = `
+    <div class="modal-header">
+      <div class="modal-header-main">
+        <div class="modal-header-icon">${ICONS.sparkles}</div>
+        <div>
+          <h2>Central de Deploys &amp; CI/CD — ${esc(proj.titulo)}</h2>
+          <p class="modal-subtitle">Repositório: ${esc(proj.github_repo_full_name || proj.repositorio_url || 'Não vinculado')}</p>
+        </div>
+      </div>
+      <button type="button" class="modal-close-btn" onclick="document.getElementById('holerite-dialog').close()">&times;</button>
+    </div>
+    <div class="modal-body" id="project-deploy-modal-body">
+      <div class="modal-section-card">
+        <div class="modal-section-title">Disparar Novo Deploy pelo Portal Nexus</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+          <button type="button" class="btn" style="background:#00B4D8; color:#0A1D37; font-weight:800;" id="btn-deploy-prod">Deploy em Produção (main) &#8599;</button>
+          <button type="button" class="btn secondary" id="btn-deploy-preview">Deploy Homologação (Preview)</button>
+          <button type="button" class="btn secondary" onclick="window.open('./ide.html?projeto_id=${proj.id}', '_blank')">Abrir VS Code IDE &#8599;</button>
+        </div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; margin-top:6px;">
+          ${proj.url_producao ? `<a href="${esc(proj.url_producao)}" target="_blank" rel="noopener" style="color:var(--ok); font-weight:700;">URL Produção: ${esc(proj.url_producao)} &#8599;</a>` : ''}
+          ${proj.url_homologacao ? `<a href="${esc(proj.url_homologacao)}" target="_blank" rel="noopener" style="color:var(--primary); font-weight:700;">URL Homologação: ${esc(proj.url_homologacao)} &#8599;</a>` : ''}
+        </div>
+      </div>
+      <div class="modal-section-card" id="project-deploy-history">
+        <div class="muted">Carregando histórico de deploys e pipelines...</div>
+      </div>
+    </div>
+  `;
+  holeriteDialog.showModal();
+
+  const triggerDeploy = async (target) => {
+    const bProd = document.getElementById('btn-deploy-prod');
+    const bPrev = document.getElementById('btn-deploy-preview');
+    bProd.disabled = true;
+    bPrev.disabled = true;
+    try {
+      const res = await apiRequest(`/projetos/${proj.id}/deploy`, {
+        method: 'POST',
+        body: JSON.stringify({ target, branch: proj.github_default_branch || 'main' })
+      });
+      invalidateCache();
+      showToast(`Deploy (${target}) disparado com sucesso!`, 'success');
+      if (res?.deploy?.url) {
+        window.open(res.deploy.url, '_blank', 'noopener');
+      }
+      window.nexusOpenProjectDeployModal(proj.id);
+      render();
+    } catch (err) {
+      showNoticeModal({ title: 'Falha ao disparar deploy', message: err.message, variant: 'error' });
+      bProd.disabled = false;
+      bPrev.disabled = false;
+    }
+  };
+
+  document.getElementById('btn-deploy-prod').onclick = () => triggerDeploy('production');
+  document.getElementById('btn-deploy-preview').onclick = () => triggerDeploy('preview');
+
+  try {
+    const hist = await apiRequest(`/projetos/${proj.id}/deploys`);
+    const deps = hist.deployments || [];
+    document.getElementById('project-deploy-history').innerHTML = `
+      <div class="modal-section-title">Histórico de Builds &amp; Deploys Vercel (${deps.length})</div>
+      ${deps.length ? deps.map((d) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 12px; background:var(--surface); border:1px solid var(--border); border-radius:8px; font-size:12.5px;">
+          <div>
+            <b>${esc(d.commit_msg)}</b>
+            <div class="muted" style="font-size:11px;">Ambiente: ${esc(d.target).toUpperCase()} • ${d.created ? new Date(d.created).toLocaleString('pt-BR') : ''}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="badge ${d.state === 'READY' ? 'ativo' : 'pendente'}">${esc(d.state)}</span>
+            ${d.url ? `<a href="${esc(d.url)}" target="_blank" rel="noopener" class="btn secondary" style="padding:4px 8px; font-size:11px; text-decoration:none;">Abrir &#8599;</a>` : ''}
+          </div>
+        </div>
+      `).join('') : '<div class="muted" style="font-size:12.5px;">Nenhum deploy registrado ainda para este projeto. Clique acima para publicar.</div>'}
+    `;
+  } catch (_) {}
+};
 
 async function renderClients(onlyLeads = false, useCache = false) {
   if (!useCache || !cache.clientes.length) {
@@ -3555,7 +3673,28 @@ async function openRecordModal(editObj = null) {
         </div>
         <label class="field-full">Repositório Git / Observações Técnicas<input name="repositorio_url" placeholder="https://github.com/..." value="${esc(editObj?.repositorio_url || '')}"></label>
         <label class="field-full">Descrição Detalhada<textarea name="descricao" rows="3">${esc(editObj?.descricao || '')}</textarea></label>
-      </div>`;
+      </div>
+      ${!editObj ? `
+      <div class="modal-section-card" style="border-left: 4px solid #00B4D8;">
+        <div class="modal-section-title"><span class="modal-section-step">3</span> GitHub Enterprise &amp; Cloud IDE Automática</div>
+        <label style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; cursor:pointer;">
+          <input type="checkbox" name="criar_no_github" id="proj-criar-gh" checked style="width:16px; height:16px; accent-color:#00B4D8;">
+          <span>Criar repositório automaticamente no GitHub da empresa (habilita o botão "Abrir IDE")</span>
+        </label>
+        <div class="formgrid">
+          <label>Nome do Repositório GitHub
+            <input name="github_repo_nome" id="proj-gh-repo-nome" placeholder="ex.: portal-cliente-api">
+          </label>
+          <label>Template Inicial do Código
+            <select name="github_template">
+              <option value="fullstack">Full Stack (Node.js + HTML/JS + CI)</option>
+              <option value="python">Python / FastAPI Backend</option>
+              <option value="nodejs">Node.js / Express Microservice</option>
+              <option value="web">Web Front-End (HTML5 + CSS3 + JS)</option>
+            </select>
+          </label>
+        </div>
+      </div>` : ''}`;
   } else if (['customers', 'leads', 'pipeline'].includes(page)) {
     setRecordModalHeader(
       editObj ? 'Editar Cliente / Lead' : 'Novo Cliente / Lead',
@@ -3813,7 +3952,12 @@ recordForm.onsubmit = async (e) => {
           repositorio_url: raw.repositorio_url || null,
           data_inicio: raw.data_inicio || null,
           data_entrega: raw.data_entrega || null,
-          descricao: raw.descricao || null
+          descricao: raw.descricao || null,
+          ...(!editingId ? {
+            criar_no_github: Boolean(recordForm.querySelector('[name="criar_no_github"]')?.checked),
+            github_repo_nome: raw.github_repo_nome ? raw.github_repo_nome.trim() : null,
+            github_template: raw.github_template || 'fullstack'
+          } : {})
         })
       });
     } else if (['customers', 'leads', 'pipeline'].includes(page)) {
