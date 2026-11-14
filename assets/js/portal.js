@@ -976,7 +976,10 @@ async function render(page) {
                 </td>
                 <td>
                   ${f.status !== 'pago'
-                    ? `<button type="button" class="btn secondary" style="padding:6px 12px; font-size:12px;" onclick="window.portalOpenInvoiceReceiptModal(${f.id})">Pagar / Anexar Comprovante</button>`
+                    ? `
+                      <button type="button" class="btn secondary" style="padding:6px 12px; font-size:12px;" onclick="window.portalOpenInvoiceReceiptModal(${f.id})">Anexar Comprovante (Manual)</button>
+                      <button type="button" class="btn" style="padding:6px 12px; font-size:12px; background:#00B4D8; color:#0A1D37; font-weight:800;" onclick="window.portalPayInvoiceMP(${f.id})">Pagar com PIX/Cartão</button>
+                    `
                     : '<span style="color:var(--ok); font-weight:700; font-size:12px;">Quitado</span>'}
                 </td>
               </tr>

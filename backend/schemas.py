@@ -49,6 +49,8 @@ class UsuarioBase(BaseModel):
     vale_transporte: Optional[bool] = False
     valor_vt_mensal: Optional[Decimal] = Decimal("0.00")
     salario_base: Optional[Decimal] = Decimal("0.00")
+    pix_tipo: Optional[str] = "cpf"
+    pix_chave: Optional[str] = None
     telefone: Optional[str] = None
     cargo: Optional[str] = None
 
@@ -125,6 +127,8 @@ class UsuarioUpdate(BaseModel):
     vale_transporte: Optional[bool] = None
     valor_vt_mensal: Optional[Decimal] = None
     salario_base: Optional[Decimal] = None
+    pix_tipo: Optional[str] = None
+    pix_chave: Optional[str] = None
     telefone: Optional[str] = None
     cargo: Optional[str] = None
     area_atuacao: Optional[str] = None
@@ -411,6 +415,12 @@ class FaturaOut(FaturaCreate):
     id: int
     comprovante_nome: Optional[str] = None
     comprovante_data: Optional[str] = None
+    mp_payment_id: Optional[str] = None
+    mp_preference_id: Optional[str] = None
+    mp_qr_code: Optional[str] = None
+    mp_qr_code_base64: Optional[str] = None
+    mp_checkout_url: Optional[str] = None
+    mp_status_detalhe: Optional[str] = None
     pago_em: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
@@ -418,6 +428,10 @@ class FaturaOut(FaturaCreate):
 class FaturaListOut(FaturaCreate):
     id: int
     comprovante_nome: Optional[str] = None
+    mp_payment_id: Optional[str] = None
+    mp_qr_code: Optional[str] = None
+    mp_qr_code_base64: Optional[str] = None
+    mp_checkout_url: Optional[str] = None
     pago_em: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
@@ -473,6 +487,9 @@ class HoleriteUpdate(BaseModel):
 
 class HoleriteOut(HoleriteBase):
     id: int
+    mp_payout_id: Optional[str] = None
+    mp_payout_status: Optional[str] = None
+    mp_payout_comprovante: Optional[str] = None
     publicado_por: Optional[str] = None
     criado_em: datetime
     model_config = ConfigDict(from_attributes=True)
@@ -492,6 +509,8 @@ class HoleriteListOut(BaseModel):
     fgts_valor: Decimal
     data_pagamento: Optional[date] = None
     status: str
+    mp_payout_id: Optional[str] = None
+    mp_payout_status: Optional[str] = None
     observacoes: Optional[str] = None
     anexo_nome: Optional[str] = None
     publicado_por: Optional[str] = None
@@ -639,6 +658,19 @@ class ConfiguracaoEmpresaUpdate(BaseModel):
     multa_atraso_percent: Optional[Decimal] = None
     juros_mensal_percent: Optional[Decimal] = None
     permissoes_json: Optional[str] = None
+    mp_ativo: Optional[bool] = None
+    mp_ambiente: Optional[str] = None
+    mp_public_key: Optional[str] = None
+    mp_access_token: Optional[str] = None
+    mp_webhook_secret: Optional[str] = None
+    registrar_provedor: Optional[str] = None
+    registrar_api_user: Optional[str] = None
+    registrar_api_key: Optional[str] = None
+    registrar_client_ip: Optional[str] = None
+    vercel_token: Optional[str] = None
+    vercel_project_id: Optional[str] = None
+    vercel_team_id: Optional[str] = None
+    dominio_precos_json: Optional[str] = None
 
 
 class ConfiguracaoEmpresaOut(ConfiguracaoEmpresaUpdate):
@@ -1122,3 +1154,54 @@ class BrandingUpdate(BaseModel):
     cor_sidebar: Optional[str] = None
     tema_padrao: Optional[Literal["light", "dark"]] = "light"
     ocultar_powered_by: Optional[bool] = False
+
+
+# ==================== DOMÍNIOS AUTOMÁTICOS & MERCADO PAGO ====================
+class PedidoDominioCreate(BaseModel):
+    dominio: str = Field(..., min_length=4, max_length=180)
+    anos: int = Field(default=1, ge=1, le=5)
+    titular_nome: str = Field(..., min_length=2, max_length=150)
+    titular_documento: Optional[str] = None
+    titular_email: EmailStr
+    titular_telefone: Optional[str] = None
+    vincular_portal_saas: bool = False
+    metodo_pagamento: Literal["pix", "checkout_pro"] = "pix"
+
+
+class PedidoDominioOut(BaseModel):
+    id: int
+    codigo: str
+    cliente_id: Optional[int] = None
+    usuario_id: Optional[int] = None
+    dominio: str
+    extensao: str
+    anos: int
+    titular_nome: str
+    titular_documento: Optional[str] = None
+    titular_email: str
+    titular_telefone: Optional[str] = None
+    preco_custo: Decimal
+    valor_venda: Decimal
+    status: str
+    dns_status: str
+    vincular_portal_saas: bool
+    fatura_id: Optional[int] = None
+    ativo_id: Optional[int] = None
+    contrato_id: Optional[int] = None
+    mp_payment_id: Optional[str] = None
+    mp_qr_code: Optional[str] = None
+    mp_qr_code_base64: Optional[str] = None
+    mp_checkout_url: Optional[str] = None
+    registrar_order_id: Optional[str] = None
+    expira_em: Optional[date] = None
+    criado_em: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MercadoPagoCobrarRequest(BaseModel):
+    metodo: Literal["pix", "checkout_pro"] = "pix"
+
+
+class MercadoPagoPayoutLoteRequest(BaseModel):
+    competencia: str = Field(..., max_length=20)
+    holerite_ids: Optional[List[int]] = None

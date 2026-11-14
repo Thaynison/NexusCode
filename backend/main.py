@@ -495,6 +495,7 @@ def ensure_db_initialized(force_sync: bool = False):
                 conn.execute(text("SELECT 1 FROM organizacoes LIMIT 1"))
                 conn.execute(text("SELECT 1 FROM planos_saas LIMIT 1"))
                 conn.execute(text("SELECT 1 FROM produtos_loja LIMIT 1"))
+                conn.execute(text("SELECT 1 FROM pedidos_dominios LIMIT 1"))
                 conn.execute(text("SELECT organizacao_id FROM usuarios LIMIT 1"))
             _db_ready = True
             return
@@ -4318,5 +4319,477 @@ def listar_auditoria(
 ):
     return db.query(LogAuditoria).filter(LogAuditoria.organizacao_id == equipe.organizacao_id).order_by(LogAuditoria.criado_em.desc()).limit(100).all()
 
+
+
+from models import PedidoDominio
+from schemas import (
+    PedidoDominioCreate, PedidoDominioOut,
+    MercadoPagoCobrarRequest, MercadoPagoPayoutLoteRequest,
+)
+from integrations import (
+    DEFAULT_TLD_PRICING,
+    get_tld_pricing,
+    normalizar_dominio_busca,
+    pesquisar_dominios_com_sugestoes,
+    mp_criar_pagamento_pix,
+    mp_criar_checkout_pro,
+    mp_consultar_pagamento,
+    mp_validar_assinatura_webhook,
+    mp_enviar_pix_colaborador,
+    registrar_dominio_no_provedor,
+    provisionar_dominio_vercel,
+    verificar_status_dns_vercel,
+)
+
+
+def _executar_ativacao_dominio_pago(db: Session, pedido: PedidoDominio, cfg: ConfiguracaoEmpresa):
+    """Registra o domínio no provedor, aponta DNS/SSL na Vercel, cria Ativo + Contrato Anual e notifica."""
+    if pedido.status == "ativo":
+        return pedido
+
+    pedido.status = "registrando"
+    db.flush()
+
+    try:
+        reg_res = registrar_dominio_no_provedor(
+            provedor=cfg.registrar_provedor if cfg else "sandbox",
+            api_user=cfg.registrar_api_user if cfg else None,
+            api_key=cfg.registrar_api_key if cfg else None,
+            client_ip=cfg.registrar_client_ip if cfg else None,
+            dominio=pedido.dominio,
+            anos=pedido.anos,
+            titular_nome=pedido.titular_nome,
+            titular_email=pedido.titular_email,
+            titular_telefone=pedido.titular_telefone,
+        )
+        pedido.registrar_order_id = reg_res.get("order_id")
+        pedido.registrar_resposta_json = json.dumps(reg_res, ensure_ascii=False)
+
+        vercel_res = provisionar_dominio_vercel(
+            vercel_token=cfg.vercel_token if cfg else os.getenv("VERCEL_TOKEN"),
+            project_id=cfg.vercel_project_id if cfg else os.getenv("VERCEL_PROJECT_ID"),
+            team_id=cfg.vercel_team_id if cfg else os.getenv("VERCEL_TEAM_ID"),
+            dominio=pedido.dominio,
+        )
+        pedido.dns_status = vercel_res.get("dns_status", "aguardando_propagacao")
+        pedido.expira_em = date.today() + timedelta(days=365 * max(1, pedido.anos))
+        pedido.status = "ativo"
+
+        # 1. Registra no Cofre de Ativos & Domínios
+        ativo = AtivoInfra(
+            organizacao_id=pedido.organizacao_id,
+            cliente_id=pedido.cliente_id,
+            tipo="dominio",
+            nome=pedido.dominio,
+            provedor=(cfg.registrar_provedor or "Nexus Domains").upper(),
+            url_acesso=f"https://{pedido.dominio}",
+            valor_renovacao=pedido.valor_venda,
+            data_vencimento=pedido.expira_em,
+            status="ativo",
+            observacoes=f"Pedido {pedido.codigo} | Ordem Registrador: {pedido.registrar_order_id}",
+        )
+        db.add(ativo)
+        db.flush()
+        pedido.ativo_id = ativo.id
+
+        # 2. Cria Contrato Recorrente para controle de renovação anual
+        if pedido.cliente_id:
+            contrato = ContratoRecorrente(
+                organizacao_id=pedido.organizacao_id,
+                cliente_id=pedido.cliente_id,
+                titulo=f"Renovação Anual Domínio — {pedido.dominio}",
+                valor_mensal=round(float(pedido.valor_venda) / 12.0, 2),
+                dia_vencimento=min(28, date.today().day),
+                data_inicio=date.today(),
+                status="ativo",
+                descricao=f"Renovação automática anual ({pedido.valor_venda}/ano) - Pedido {pedido.codigo}",
+            )
+            db.add(contrato)
+            db.flush()
+            pedido.contrato_id = contrato.id
+
+        # 3. Vincula automaticamente ao Portal SaaS Enterprise se solicitado
+        if pedido.vincular_portal_saas and pedido.usuario_id:
+            usr = db.query(Usuario).filter(Usuario.id == pedido.usuario_id).first()
+            if usr:
+                org_usr = db.query(Organizacao).filter(Organizacao.id == usr.organizacao_id).first()
+                if org_usr and (org_usr.is_master or (org_usr.plano or "").lower() == "enterprise"):
+                    org_usr.dominio_customizado = pedido.dominio
+
+        criar_notificacao(
+            db,
+            f"Domínio Ativado: {pedido.dominio}",
+            f"O domínio {pedido.dominio} foi registrado automaticamente ({pedido.registrar_order_id}) e enviado para emissão SSL.",
+            "ativos",
+            pedido.usuario_id,
+            "equipe",
+            org_id=pedido.organizacao_id,
+        )
+    except Exception as exc:
+        pedido.status = "erro_registro"
+        pedido.registrar_resposta_json = json.dumps({"erro": str(exc)}, ensure_ascii=False)
+        criar_notificacao(
+            db,
+            f"Falha no Registro Automático: {pedido.dominio}",
+            f"Pagamento confirmado, mas houve falha na API do registrador: {exc}",
+            "ativos",
+            None,
+            "admin",
+            org_id=pedido.organizacao_id,
+        )
+    return pedido
+
+
+# ==================== PESQUISA & VENDA AUTOMÁTICA DE DOMÍNIOS ====================
+@router.get("/public/dominios/pesquisar", tags=["Domínios"])
+def pesquisar_dominio_publico(q: str, req: Request, db: Session = Depends(get_db)):
+    org = _resolver_org_por_request(req, db)
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first()
+    pricing = get_tld_pricing(cfg.dominio_precos_json if cfg else None)
+    try:
+        return pesquisar_dominios_com_sugestoes(q, pricing)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/public/dominios/checkout", response_model=PedidoDominioOut, status_code=201, tags=["Domínios"])
+def checkout_dominio_automatico(
+    dados: PedidoDominioCreate,
+    req: Request,
+    db: Session = Depends(get_db),
+):
+    org = _resolver_org_por_request(req, db)
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first()
+    if not cfg or not cfg.mp_ativo or not cfg.mp_access_token:
+        raise HTTPException(status_code=400, detail="Gateway Mercado Pago não habilitado no painel administrativo.")
+
+    try:
+        dominio_norm, _, ext = normalizar_dominio_busca(dados.dominio)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    pricing = get_tld_pricing(cfg.dominio_precos_json)
+    tld_info = pricing.get(ext, {"custo": 50.0, "venda": 99.90})
+    valor_total = round(float(tld_info["venda"]) * dados.anos, 2)
+    custo_total = round(float(tld_info["custo"]) * dados.anos, 2)
+
+    cliente = db.query(Cliente).filter(Cliente.organizacao_id == org.id, Cliente.email == dados.titular_email).first()
+    if not cliente:
+        cliente = Cliente(
+            organizacao_id=org.id,
+            nome_empresa=dados.titular_nome.strip(),
+            contato_nome=dados.titular_nome.strip(),
+            email=dados.titular_email,
+            telefone=dados.titular_telefone,
+            cpf_cnpj=dados.titular_documento,
+            status_funil="cliente_ativo",
+            origem="Registro de Domínios",
+        )
+        db.add(cliente)
+        db.flush()
+
+    seq = (db.query(func.count(PedidoDominio.id)).scalar() or 0) + 1
+    codigo = f"DOM-{date.today().year}-{seq:05d}"
+
+    fatura = Fatura(
+        organizacao_id=org.id,
+        cliente_id=cliente.id,
+        descricao=f"Registro de Domínio {dominio_norm} ({dados.anos} ano(s))",
+        valor=valor_total,
+        status="pendente",
+        forma_pagamento="Mercado Pago PIX" if dados.metodo_pagamento == "pix" else "Mercado Pago Checkout",
+        vencimento=date.today() + timedelta(days=1),
+    )
+    db.add(fatura)
+    db.flush()
+
+    pedido = PedidoDominio(
+        organizacao_id=org.id,
+        codigo=codigo,
+        cliente_id=cliente.id,
+        dominio=dominio_norm,
+        extensao=ext,
+        anos=dados.anos,
+        titular_nome=dados.titular_nome.strip(),
+        titular_documento=dados.titular_documento,
+        titular_email=dados.titular_email,
+        titular_telefone=dados.titular_telefone,
+        preco_custo=custo_total,
+        valor_venda=valor_total,
+        status="aguardando_pagamento",
+        dns_status="pendente",
+        vincular_portal_saas=dados.vincular_portal_saas,
+        fatura_id=fatura.id,
+    )
+    db.add(pedido)
+    db.flush()
+
+    base_url = str(req.base_url).rstrip("/")
+    webhook_url = f"{base_url}/api/webhooks/mercadopago?org_id={org.id}"
+    ext_ref = f"DOMINIO:{pedido.id}"
+
+    try:
+        if dados.metodo_pagamento == "pix":
+            mp_res = mp_criar_pagamento_pix(
+                access_token=cfg.mp_access_token,
+                valor=valor_total,
+                descricao=f"Domínio {dominio_norm} ({dados.anos} ano) - {codigo}",
+                external_reference=ext_ref,
+                pagador_email=dados.titular_email,
+                pagador_nome=dados.titular_nome,
+                notification_url=webhook_url,
+            )
+            pedido.mp_payment_id = mp_res["payment_id"]
+            pedido.mp_qr_code = mp_res["qr_code"]
+            pedido.mp_qr_code_base64 = mp_res["qr_code_base64"]
+            pedido.mp_checkout_url = mp_res["ticket_url"]
+            fatura.mp_payment_id = mp_res["payment_id"]
+            fatura.mp_qr_code = mp_res["qr_code"]
+            fatura.mp_qr_code_base64 = mp_res["qr_code_base64"]
+        else:
+            mp_res = mp_criar_checkout_pro(
+                access_token=cfg.mp_access_token,
+                titulo=f"Registro de Domínio {dominio_norm} ({dados.anos} ano)",
+                valor=valor_total,
+                external_reference=ext_ref,
+                pagador_email=dados.titular_email,
+                back_url_base=f"{base_url}/index.html",
+                notification_url=webhook_url,
+            )
+            pedido.mp_checkout_url = mp_res["init_point"]
+            fatura.mp_preference_id = mp_res["preference_id"]
+            fatura.mp_checkout_url = mp_res["init_point"]
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    db.commit()
+    db.refresh(pedido)
+    return pedido
+
+
+@router.get("/public/dominios/pedidos/{codigo}/status", response_model=PedidoDominioOut, tags=["Domínios"])
+def verificar_status_pedido_dominio(codigo: str, db: Session = Depends(get_db)):
+    pedido = db.query(PedidoDominio).filter(PedidoDominio.codigo == codigo).first()
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido de domínio não encontrado.")
+
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == pedido.organizacao_id).first()
+    if pedido.status == "aguardando_pagamento" and pedido.mp_payment_id and cfg and cfg.mp_access_token:
+        info = mp_consultar_pagamento(cfg.mp_access_token, pedido.mp_payment_id)
+        if info.get("status") == "approved":
+            if pedido.fatura_id:
+                fat = db.query(Fatura).filter(Fatura.id == pedido.fatura_id).first()
+                if fat and fat.status != "pago":
+                    fat.status = "pago"
+                    fat.pago_em = datetime.utcnow()
+            _executar_ativacao_dominio_pago(db, pedido, cfg)
+            db.commit()
+            db.refresh(pedido)
+
+    return pedido
+
+
+@router.get("/dominios/pedidos", response_model=List[PedidoDominioOut], tags=["Domínios"])
+def listar_pedidos_dominios(db: Session = Depends(get_db), usuario: Usuario = Depends(get_usuario_atual)):
+    q = db.query(PedidoDominio).filter(PedidoDominio.organizacao_id == usuario.organizacao_id)
+    if usuario.perfil == "cliente":
+        cli = _obter_cliente_do_usuario(db, usuario)
+        q = q.filter(or_(PedidoDominio.usuario_id == usuario.id, PedidoDominio.cliente_id == (cli.id if cli else -1)))
+    return q.order_by(PedidoDominio.criado_em.desc()).all()
+
+
+@router.post("/dominios/pedidos/{pedido_id}/verificar-dns", tags=["Domínios"])
+def verificar_dns_pedido_dominio(pedido_id: int, db: Session = Depends(get_db), usuario: Usuario = Depends(get_usuario_atual)):
+    pedido = db.query(PedidoDominio).filter(PedidoDominio.id == pedido_id, PedidoDominio.organizacao_id == usuario.organizacao_id).first()
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Domínio não encontrado.")
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == usuario.organizacao_id).first()
+    res = verificar_status_dns_vercel(
+        vercel_token=cfg.vercel_token if cfg else os.getenv("VERCEL_TOKEN"),
+        project_id=cfg.vercel_project_id if cfg else os.getenv("VERCEL_PROJECT_ID"),
+        team_id=cfg.vercel_team_id if cfg else os.getenv("VERCEL_TEAM_ID"),
+        dominio=pedido.dominio,
+    )
+    pedido.dns_status = res["dns_status"]
+    db.commit()
+    return {"dominio": pedido.dominio, **res}
+
+
+# ==================== MERCADO PAGO: FATURAS, WEBHOOK & PAYOUTS RH ====================
+@router.post("/faturas/{fatura_id}/mercadopago", response_model=FaturaOut, tags=["Mercado Pago"])
+def gerar_cobranca_mercadopago_fatura(
+    fatura_id: int,
+    dados: MercadoPagoCobrarRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_atual),
+):
+    fat = db.query(Fatura).filter(Fatura.id == fatura_id, Fatura.organizacao_id == usuario.organizacao_id).first()
+    if not fat:
+        raise HTTPException(status_code=404, detail="Fatura não encontrada.")
+    if fat.status == "pago":
+        return fat
+
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == usuario.organizacao_id).first()
+    if not cfg or not cfg.mp_ativo or not cfg.mp_access_token:
+        raise HTTPException(status_code=400, detail="Configure e ative o Mercado Pago em Empresa & Permissões > Integrações.")
+
+    cli = db.query(Cliente).filter(Cliente.id == fat.cliente_id).first()
+    pagador_email = cli.email if cli else usuario.email
+    pagador_nome = cli.nome_empresa if cli else usuario.nome
+    base_url = str(req.base_url).rstrip("/")
+    webhook_url = f"{base_url}/api/webhooks/mercadopago?org_id={usuario.organizacao_id}"
+    ext_ref = f"FATURA:{fat.id}"
+
+    try:
+        if dados.metodo == "pix":
+            mp_res = mp_criar_pagamento_pix(
+                access_token=cfg.mp_access_token,
+                valor=float(fat.valor),
+                descricao=fat.descricao,
+                external_reference=ext_ref,
+                pagador_email=pagador_email,
+                pagador_nome=pagador_nome,
+                notification_url=webhook_url,
+            )
+            fat.forma_pagamento = "Mercado Pago PIX"
+            fat.mp_payment_id = mp_res["payment_id"]
+            fat.mp_qr_code = mp_res["qr_code"]
+            fat.mp_qr_code_base64 = mp_res["qr_code_base64"]
+            fat.mp_checkout_url = mp_res["ticket_url"]
+        else:
+            mp_res = mp_criar_checkout_pro(
+                access_token=cfg.mp_access_token,
+                titulo=fat.descricao,
+                valor=float(fat.valor),
+                external_reference=ext_ref,
+                pagador_email=pagador_email,
+                back_url_base=f"{base_url}/app/portal.html",
+                notification_url=webhook_url,
+            )
+            fat.forma_pagamento = "Mercado Pago Checkout"
+            fat.mp_preference_id = mp_res["preference_id"]
+            fat.mp_checkout_url = mp_res["init_point"]
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    db.commit()
+    db.refresh(fat)
+    return fat
+
+
+@router.post("/webhooks/mercadopago", tags=["Mercado Pago"])
+async def webhook_mercadopago(req: Request, org_id: int = 1, db: Session = Depends(get_db)):
+    body = await req.json() if req.headers.get("content-type", "").startswith("application/json") else {}
+    data_id = str((body.get("data") or {}).get("id") or req.query_params.get("data.id") or req.query_params.get("id") or "")
+    topic = str(body.get("type") or req.query_params.get("topic") or "")
+
+    if not data_id or (topic and topic not in ("payment", "merchant_order")):
+        return {"received": True}
+
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org_id).first()
+    if not cfg or not cfg.mp_access_token:
+        return {"received": False, "reason": "mp_not_configured"}
+
+    if not mp_validar_assinatura_webhook(
+        req.headers.get("x-signature"),
+        req.headers.get("x-request-id"),
+        data_id,
+        cfg.mp_webhook_secret,
+    ):
+        raise HTTPException(status_code=401, detail="Assinatura HMAC Mercado Pago inválida.")
+
+    info = mp_consultar_pagamento(cfg.mp_access_token, data_id)
+    if info.get("status") != "approved":
+        return {"received": True, "status": info.get("status")}
+
+    ext_ref = str(info.get("external_reference") or "")
+    if ext_ref.startswith("DOMINIO:"):
+        dom_id = int(ext_ref.split(":", 1)[1])
+        pedido = db.query(PedidoDominio).filter(PedidoDominio.id == dom_id).first()
+        if pedido:
+            if pedido.fatura_id:
+                fat = db.query(Fatura).filter(Fatura.id == pedido.fatura_id).first()
+                if fat and fat.status != "pago":
+                    fat.status = "pago"
+                    fat.pago_em = datetime.utcnow()
+            _executar_ativacao_dominio_pago(db, pedido, cfg)
+            db.commit()
+    elif ext_ref.startswith("FATURA:"):
+        fat_id = int(ext_ref.split(":", 1)[1])
+        fat = db.query(Fatura).filter(Fatura.id == fat_id).first()
+        if fat and fat.status != "pago":
+            fat.status = "pago"
+            fat.mp_payment_id = str(data_id)
+            fat.mp_status_detalhe = info.get("status_detail")
+            fat.pago_em = datetime.utcnow()
+            ped_loja = db.query(PedidoLoja).filter(PedidoLoja.fatura_gerada_id == fat.id).first()
+            if ped_loja:
+                ped_loja.status = "pago"
+            criar_notificacao(
+                db,
+                f"Pagamento Recebido: {fat.descricao}",
+                f"Fatura #{fat.id} ({fat.valor}) liquidada automaticamente via Mercado Pago.",
+                "faturas",
+                None,
+                "equipe",
+                org_id=fat.organizacao_id,
+            )
+            db.commit()
+
+    return {"received": True, "processed": ext_ref}
+
+
+@router.post("/holerites/{holerite_id}/pagar-mercadopago", response_model=HoleriteOut, tags=["Mercado Pago"])
+def pagar_holerite_via_mercadopago(
+    holerite_id: int,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(exigir_admin),
+):
+    hol = db.query(Holerite).filter(Holerite.id == holerite_id, Holerite.organizacao_id == admin.organizacao_id).first()
+    if not hol:
+        raise HTTPException(status_code=404, detail="Holerite não encontrado.")
+    if hol.mp_payout_status == "approved":
+        return hol
+
+    colab = db.query(Usuario).filter(Usuario.id == hol.usuario_id).first()
+    if not colab or not colab.pix_chave:
+        raise HTTPException(status_code=400, detail=f"Cadastre a Chave PIX de {colab.nome if colab else 'colaborador'} antes de disparar o pagamento.")
+
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == admin.organizacao_id).first()
+    if not cfg or not cfg.mp_ativo or not cfg.mp_access_token:
+        raise HTTPException(status_code=400, detail="Configure e ative o Mercado Pago em Empresa & Permissões > Integrações.")
+
+    try:
+        res = mp_enviar_pix_colaborador(
+            access_token=cfg.mp_access_token,
+            valor=float(hol.valor_liquido),
+            pix_tipo=colab.pix_tipo or "cpf",
+            pix_chave=colab.pix_chave,
+            favorecido_nome=colab.nome,
+            favorecido_cpf=colab.cpf,
+            descricao=f"Folha {hol.competencia} - {hol.tipo} ({colab.nome})",
+            external_reference=f"HOLERITE-{hol.id}-{hol.competencia.replace('/', '')}",
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    hol.status = "pago"
+    hol.data_pagamento = date.today()
+    hol.mp_payout_id = res["payout_id"]
+    hol.mp_payout_status = res["status"]
+    registrar_log(
+        db,
+        admin.nome,
+        "PAGAMENTO_FOLHA_MP",
+        f"Pagou holerite #{hol.id} ({colab.nome} - R$ {hol.valor_liquido}) via PIX Mercado Pago ({res['payout_id']})",
+        org_id=admin.organizacao_id,
+    )
+    db.commit()
+    db.refresh(hol)
+    return hol
+
+# ==================== END NEW ROUTES ====================
 
 app.include_router(router)
