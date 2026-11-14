@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     habilidades VARCHAR(255) NULL,
     linkedin_url VARCHAR(255) NULL,
     resumo_profissional TEXT NULL,
+    foto_url TEXT NULL,
     cep VARCHAR(20) NULL,
     endereco VARCHAR(255) NULL,
     bairro VARCHAR(120) NULL,

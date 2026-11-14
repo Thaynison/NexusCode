@@ -109,6 +109,41 @@ function readFileAsDataUrl(file) {
   });
 }
 
+function renderAvatarContent(u) {
+  if (u?.foto_url) {
+    return `<img src="${esc(u.foto_url)}" alt="${esc(u.nome || '')}">`;
+  }
+  return initials(u?.nome);
+}
+
+function resizeImageFileToDataUrl(file, maxSize = 256) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width;
+        let h = img.height;
+        if (w > h) {
+          if (w > maxSize) { h = Math.round((h * maxSize) / w); w = maxSize; }
+        } else {
+          if (h > maxSize) { w = Math.round((w * maxSize) / h); h = maxSize; }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = () => reject(new Error('Imagem inválida.'));
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error('Falha ao carregar imagem.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 const ICONS = {
   plus: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
   users: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
@@ -120,7 +155,8 @@ const ICONS = {
   reply: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"></polyline><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path></svg>',
   paperclip: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>',
   calendar: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>',
-  cake: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"></path><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"></path><path d="M2 21h20"></path><path d="M7 8v3"></path><path d="M12 8v3"></path><path d="M17 8v3"></path><path d="M7 4h.01"></path><path d="M12 4h.01"></path><path d="M17 4h.01"></path></svg>',
+  building: '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16h-6v-4h-4v4H4zm4-14v2h2V7H8zm4 0v2h2V7h-2zm-4 4v2h2v-2H8zm4 0v2h2v-2h-2z"/></svg>',
+  cake: '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"></path><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"></path><path d="M2 21h20"></path><path d="M7 8v3"></path><path d="M12 8v3"></path><path d="M17 8v3"></path><path d="M7 4h.01"></path><path d="M12 4h.01"></path><path d="M17 4h.01"></path></svg>',
   award: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"></circle><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"></path></svg>',
   fileText: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>',
   sun: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>',
@@ -296,42 +332,54 @@ async function renderDashboard() {
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
-  const monthNames = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  const shortMonths = [
+    'jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.',
+    'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'
   ];
 
-  // Identificar usuários fazendo aniversário no mês OU contratação/criação de conta no mês
-  const teamMilestones = (usuarios || [])
-    .filter((u) => u.ativo && u.perfil !== 'cliente')
+  const staffList = (usuarios || []).filter((u) => u.ativo && u.perfil !== 'cliente');
+
+  // 1. Próximos aniversariantes de empresa (data_contratacao ou criado_em)
+  const companyAnniversaries = staffList
     .map((u) => {
-      let isBdayMonth = false;
-      let bdayLabel = '';
-      if (u.data_nascimento) {
-        const parts = String(u.data_nascimento).slice(0, 10).split('-');
-        if (parts.length === 3 && Number(parts[1]) === currentMonth) {
-          isBdayMonth = true;
-          bdayLabel = `${parts[2]}/${parts[1]}`;
-        }
-      }
+      const src = u.data_contratacao || u.criado_em;
+      if (!src) return null;
+      const parts = String(src).slice(0, 10).split('-');
+      if (parts.length !== 3) return null;
+      const year = Number(parts[0]);
+      const month = Number(parts[1]);
+      const day = Number(parts[2]);
+      if (month !== currentMonth) return null;
 
-      let isHireMonth = false;
-      let hireLabel = '';
-      let yearsCount = 0;
-      const hireSource = u.data_contratacao || u.criado_em;
-      if (hireSource) {
-        const s = String(hireSource).slice(0, 10);
-        const parts = s.split('-');
-        if (parts.length === 3 && Number(parts[1]) === currentMonth) {
-          isHireMonth = true;
-          hireLabel = `${parts[2]}/${parts[1]}/${parts[0]}`;
-          yearsCount = Math.max(0, currentYear - Number(parts[0]));
-        }
-      }
-
-      return { ...u, isBdayMonth, bdayLabel, isHireMonth, hireLabel, yearsCount };
+      const yearsCount = Math.max(0, currentYear - year);
+      const tenureLabel = yearsCount === 1
+        ? '1 ano'
+        : yearsCount > 1
+          ? `${yearsCount} anos`
+          : 'Novo na empresa';
+      const dateLabel = `${day} de ${shortMonths[month - 1]}`;
+      const firstName = String(u.nome || '').trim().split(/\s+/)[0].toUpperCase();
+      return { ...u, day, tenureLabel, dateLabel, firstName };
     })
-    .filter((u) => u.isBdayMonth || u.isHireMonth);
+    .filter(Boolean)
+    .sort((a, b) => a.day - b.day);
+
+  // 2. Aniversariantes pessoais do mês (data_nascimento)
+  const personalBirthdays = staffList
+    .map((u) => {
+      if (!u.data_nascimento) return null;
+      const parts = String(u.data_nascimento).slice(0, 10).split('-');
+      if (parts.length !== 3) return null;
+      const month = Number(parts[1]);
+      const day = Number(parts[2]);
+      if (month !== currentMonth) return null;
+
+      const dateLabel = `${day} de ${shortMonths[month - 1]}`;
+      const firstName = String(u.nome || '').trim().split(/\s+/)[0].toUpperCase();
+      return { ...u, day, subLabel: u.cargo || 'Aniversário', dateLabel, firstName };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.day - b.day);
 
   return `
     <div class="dashboard-layout">
@@ -417,32 +465,46 @@ async function renderDashboard() {
         </div>
       </div>
 
-      <div class="card milestones-card">
-        <div class="milestones-header">
-          <div>
-            <h3 style="margin:0; font-size:15.5px;">Aniversariantes &amp; Tempo de Casa — ${monthNames[now.getMonth()]}</h3>
-            <span class="muted" style="font-size:12px;">Colaboradores celebrando aniversário pessoal ou aniversário de contratação neste mês</span>
+      <div class="anniv-sections-grid">
+        <!-- Próximos aniversariantes de empresa -->
+        <div class="anniv-section-block">
+          <div class="anniv-section-header">
+            ${ICONS.building}
+            <h3>Próximos aniversariantes de empresa</h3>
           </div>
-          <span class="filter-count">${teamMilestones.length} destaque(s) no mês</span>
+          ${companyAnniversaries.length ? `
+            <div class="anniv-cards-row">
+              ${companyAnniversaries.map((u) => `
+                <div class="anniv-person-card" title="${esc(u.nome)} — ${esc(u.cargo || 'Colaborador')}">
+                  <div class="anniv-photo-circle">${renderAvatarContent(u)}</div>
+                  <div class="anniv-person-name">${esc(u.firstName)}</div>
+                  <div class="anniv-person-tenure">${esc(u.tenureLabel)}</div>
+                  <div class="anniv-person-date">${esc(u.dateLabel)}</div>
+                </div>
+              `).join('')}
+            </div>
+          ` : '<div class="anniv-empty-card">Nenhum aniversário de empresa registrado para este mês.</div>'}
         </div>
 
-        ${teamMilestones.length ? `
-          <div class="milestones-grid">
-            ${teamMilestones.map((u) => `
-              <div class="milestone-user-card">
-                <div class="milestone-avatar ${u.isBdayMonth ? 'bday' : 'hire'}">${initials(u.nome)}</div>
-                <div style="min-width:0; flex:1;">
-                  <div style="font-weight:700; font-size:14px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(u.nome)}</div>
-                  <div class="muted" style="font-size:12px;">${esc(u.cargo || (u.perfil === 'admin' ? 'Administrador' : 'Colaborador Nexus'))}</div>
-                  <div class="milestone-badges">
-                    ${u.isBdayMonth ? `<span class="milestone-pill bday">${ICONS.cake} Aniversário • ${esc(u.bdayLabel)}</span>` : ''}
-                    ${u.isHireMonth ? `<span class="milestone-pill hire">${ICONS.award} ${u.yearsCount > 0 ? `${u.yearsCount} ano(s) de casa` : 'Contratação no mês'} • ${esc(u.hireLabel)}</span>` : ''}
-                  </div>
-                </div>
-              </div>
-            `).join('')}
+        <!-- Aniversariantes do mês -->
+        <div class="anniv-section-block">
+          <div class="anniv-section-header">
+            ${ICONS.cake}
+            <h3>Aniversariantes do mês</h3>
           </div>
-        ` : '<p class="muted" style="margin:0; font-size:13px;">Nenhum aniversariante ou marco de contratação registrado para este mês.</p>'}
+          ${personalBirthdays.length ? `
+            <div class="anniv-cards-row">
+              ${personalBirthdays.map((u) => `
+                <div class="anniv-person-card" title="${esc(u.nome)} — ${esc(u.cargo || 'Colaborador')}">
+                  <div class="anniv-photo-circle">${renderAvatarContent(u)}</div>
+                  <div class="anniv-person-name">${esc(u.firstName)}</div>
+                  <div class="anniv-person-tenure">${esc(u.subLabel)}</div>
+                  <div class="anniv-person-date">${esc(u.dateLabel)}</div>
+                </div>
+              `).join('')}
+            </div>
+          ` : '<div class="anniv-empty-card">Nenhum aniversariante pessoal registrado para este mês.</div>'}
+        </div>
       </div>
     </div>`;
 }
@@ -1941,8 +2003,8 @@ async function renderProfile() {
     ${renderGlobalSearchBanner()}
     <form id="profile-form" class="profile-shell">
       <div class="card profile-header-card">
-        <div class="row-entity">
-          <div class="row-avatar" style="width:48px; height:48px; font-size:17px;">${initials(me.nome)}</div>
+        <div class="row-entity" style="gap:14px;">
+          <div class="row-avatar" id="prof-avatar-preview" style="width:56px; height:56px; font-size:18px;">${renderAvatarContent(me)}</div>
           <div>
             <h3 style="margin:0 0 3px; font-size:18px;">${esc(me.nome)}</h3>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -1952,8 +2014,15 @@ async function renderProfile() {
             </div>
           </div>
         </div>
-        <div style="font-size:12px; color:var(--text-light);">
-          Contratação / Cadastro: <b>${formatDate(me.data_contratacao || me.criado_em)}</b>
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <label class="btn secondary" style="padding:7px 12px; font-size:12.5px; cursor:pointer; margin:0;">
+            Alterar Foto de Perfil
+            <input type="file" id="prof-photo-input" accept="image/*" style="display:none;">
+          </label>
+          <input type="hidden" name="foto_url" id="prof-foto-url" value="${esc(me.foto_url || '')}">
+          <div style="font-size:12px; color:var(--text-light);">
+            Contratação: <b>${formatDate(me.data_contratacao || me.criado_em)}</b>
+          </div>
         </div>
       </div>
 
@@ -2081,6 +2150,20 @@ window.bindProfileForm = () => {
   const form = document.getElementById('profile-form');
   if (!form) return;
 
+  const photoInput = document.getElementById('prof-photo-input');
+  photoInput?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await resizeImageFileToDataUrl(file, 256);
+      document.getElementById('prof-foto-url').value = dataUrl;
+      document.getElementById('prof-avatar-preview').innerHTML = `<img src="${dataUrl}" alt="Foto">`;
+      showToast('Foto carregada! Clique em "Salvar Alterações do Perfil" para confirmar.', 'info');
+    } catch (err) {
+      showNoticeModal({ title: 'Erro na imagem', message: err.message, variant: 'error' });
+    }
+  });
+
   const cpfInput = document.getElementById('prof-cpf');
   cpfInput?.addEventListener('input', (e) => {
     let v = e.target.value.replace(/\D/g, '').slice(0, 11);
@@ -2143,7 +2226,7 @@ window.bindProfileForm = () => {
     const optionalFields = [
       'cpf', 'data_nascimento', 'telefone', 'cargo', 'area_atuacao',
       'formacao', 'habilidades', 'linkedin_url', 'resumo_profissional',
-      'cep', 'endereco', 'bairro', 'cidade', 'estado'
+      'cep', 'endereco', 'bairro', 'cidade', 'estado', 'foto_url'
     ];
 
     const payload = { nome: raw.nome.trim() };
@@ -2165,7 +2248,7 @@ window.bindProfileForm = () => {
       user = updatedUser;
       localStorage.setItem('nexus_user', JSON.stringify(user));
       $('#app-user-name').textContent = user.nome;
-      $('#user-avatar-initials').textContent = initials(user.nome);
+      $('#user-avatar-initials').innerHTML = renderAvatarContent(user);
       invalidateCache();
       showToast('Perfil atualizado com sucesso.', 'success');
       render();
@@ -2617,7 +2700,7 @@ if (!getToken()) {
     } else {
       user = savedUser;
       $('#app-user-name').textContent = savedUser.nome;
-      $('#user-avatar-initials').textContent = initials(savedUser.nome);
+      $('#user-avatar-initials').innerHTML = renderAvatarContent(savedUser);
       render();
     }
   }
@@ -2632,7 +2715,7 @@ if (!getToken()) {
         return;
       }
       $('#app-user-name').textContent = u.nome;
-      $('#user-avatar-initials').textContent = initials(u.nome);
+      $('#user-avatar-initials').innerHTML = renderAvatarContent(u);
       if (firstPaint) render();
     })
     .catch(() => {

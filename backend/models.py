@@ -32,6 +32,7 @@ class Usuario(Base):
     habilidades = Column(String(255), nullable=True)
     linkedin_url = Column(String(255), nullable=True)
     resumo_profissional = Column(Text, nullable=True)
+    foto_url = Column(Text, nullable=True)
     cep = Column(String(20), nullable=True)
     endereco = Column(String(255), nullable=True)
     bairro = Column(String(120), nullable=True)

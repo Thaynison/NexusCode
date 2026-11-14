@@ -41,6 +41,7 @@ class UsuarioBase(BaseModel):
     habilidades: Optional[str] = None
     linkedin_url: Optional[str] = None
     resumo_profissional: Optional[str] = None
+    foto_url: Optional[str] = None
     cep: Optional[str] = None
     endereco: Optional[str] = None
     bairro: Optional[str] = None
@@ -70,6 +71,7 @@ class UsuarioUpdate(BaseModel):
     habilidades: Optional[str] = None
     linkedin_url: Optional[str] = None
     resumo_profissional: Optional[str] = None
+    foto_url: Optional[str] = None
     cep: Optional[str] = None
     endereco: Optional[str] = None
     bairro: Optional[str] = None

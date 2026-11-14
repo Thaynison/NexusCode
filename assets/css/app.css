@@ -1446,7 +1446,7 @@ body.crm-app {
   transform: translateY(-1px);
 }
 
-/* ==================== DASHBOARD: MARCOS DA EQUIPE & ANIVERSARIANTES ==================== */
+/* ==================== DASHBOARD: PRÓXIMOS ANIVERSARIANTES DE EMPRESA & DO MÊS ==================== */
 .dashboard-layout {
   display: flex;
   flex-direction: column;
@@ -1460,7 +1460,7 @@ body.crm-app {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
   flex: 1;
-  min-height: 220px;
+  min-height: 190px;
   align-items: stretch;
 }
 @media (max-width: 960px) {
@@ -1474,86 +1474,136 @@ body.crm-app {
   overflow-y: auto;
 }
 
-.milestones-card {
-  padding: 18px 22px;
+.anniv-sections-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 18px;
   flex-shrink: 0;
 }
-.milestones-header {
+@media (max-width: 1180px) {
+  .anniv-sections-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.anniv-section-block {
+  background: transparent;
+  padding: 4px 0 2px;
+}
+
+.anniv-section-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 14px;
-  flex-wrap: wrap;
 }
-.milestones-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
+.anniv-section-header svg {
+  color: #64748b;
+  flex-shrink: 0;
 }
-.milestone-user-card {
+.anniv-section-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.015em;
+}
+
+.anniv-cards-row {
   display: flex;
-  align-items: center;
   gap: 14px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: var(--surface2);
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.anniv-person-card {
+  flex: 0 0 176px;
+  min-width: 168px;
+  background: var(--surface);
   border: 1px solid var(--border);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  border-radius: 16px;
+  padding: 22px 14px 20px;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
-.milestone-user-card:hover {
-  border-color: var(--primary);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+.anniv-person-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(37, 99, 235, 0.35);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.09);
 }
-.milestone-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+
+.anniv-photo-circle {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin: 0 auto 14px;
+  background: #0f172a;
   color: #ffffff;
   font-weight: 800;
-  font-size: 16px;
+  font-size: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  border: 2px solid var(--border);
   flex-shrink: 0;
 }
-.milestone-avatar.bday {
-  background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+.anniv-photo-circle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
-.milestone-avatar.hire {
-  background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+
+.anniv-person-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.milestone-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
+
+.anniv-person-tenure {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-light);
+  margin-bottom: 3px;
 }
-.milestone-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 999px;
+
+.anniv-person-date {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-light);
 }
-.milestone-pill.bday {
-  background: #fce7f3;
-  color: #be185d;
+
+.anniv-empty-card {
+  width: 100%;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  padding: 22px 18px;
+  font-size: 13px;
+  color: var(--text-light);
 }
-.milestone-pill.hire {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-.app-dark .milestone-pill.bday {
-  background: rgba(236, 72, 153, 0.18);
-  color: #f472b6;
-}
-.app-dark .milestone-pill.hire {
-  background: rgba(59, 130, 246, 0.18);
-  color: #60a5fa;
+
+.user-avatar img,
+.row-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
 
 /* ==================== QUADRO KANBAN ESTILO MICROSOFT PLANNER (MS365) ==================== */
