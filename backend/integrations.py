@@ -961,19 +961,34 @@ def _build_starter_repo_files(repo_name: str, descricao: str, template: str, org
 def github_testar_conexao(token: str, org: Optional[str] = None) -> Dict[str, Any]:
     if not token or not token.strip():
         raise ValueError("Informe o Personal Access Token do GitHub.")
-    st, user_data = _http_json_request("https://api.github.com/user", method="GET", headers=_github_headers(token), timeout=12)
+    clean_tok = token.strip()
+    st, user_data = _http_json_request("https://api.github.com/user", method="GET", headers=_github_headers(clean_tok), timeout=12)
     if st != 200:
         raise RuntimeError(f"GitHub Auth ({st}): {user_data.get('message') or 'Token inválido ou expirado.'}")
     login = user_data.get("login", "")
     target_org = (org or login).strip()
     is_org = False
     if target_org and target_org.lower() != login.lower():
-        st_o, org_data = _http_json_request(f"https://api.github.com/orgs/{urllib.parse.quote(target_org)}", method="GET", headers=_github_headers(token), timeout=10)
+        st_o, org_data = _http_json_request(f"https://api.github.com/orgs/{urllib.parse.quote(target_org)}", method="GET", headers=_github_headers(clean_tok), timeout=10)
         if st_o == 200:
             is_org = True
         else:
             raise RuntimeError(f"Organização '{target_org}' não encontrada ou sem permissão no token (HTTP {st_o}).")
-    return {"ok": True, "usuario_github": login, "organizacao": target_org, "tipo_conta": "Organização" if is_org else "Conta Pessoal"}
+
+    tipo_token = "Fine-grained PAT" if clean_tok.startswith("github_pat_") else "Classic PAT"
+    aviso_permissoes = (
+        "Fine-grained PAT detetado: garanta que 'Administration: Read and write' e 'Contents: Read and write' estão ativos em Repository permissions."
+        if clean_tok.startswith("github_pat_")
+        else "Classic PAT detetado: garanta que o escopo 'repo' está selecionado."
+    )
+    return {
+        "ok": True,
+        "usuario_github": login,
+        "organizacao": target_org,
+        "tipo_conta": "Organização" if is_org else "Conta Pessoal",
+        "tipo_token": tipo_token,
+        "aviso_permissoes": aviso_permissoes,
+    }
 
 
 def github_criar_repositorio_empresa(
@@ -988,6 +1003,7 @@ def github_criar_repositorio_empresa(
     if not token or not token.strip():
         raise ValueError("Token do GitHub não configurado em Empresa & Permissões > Integrações.")
 
+    clean_tok = token.strip()
     clean_repo = slugify_repo_name(repo_nome)
     is_private = (visibilidade or "private").strip().lower() != "public"
     payload = {
@@ -999,11 +1015,19 @@ def github_criar_repositorio_empresa(
         "has_projects": True,
     }
 
-    headers = _github_headers(token)
+    headers = _github_headers(clean_tok)
     clean_org = (org or "").strip()
-    status, data = (0, {})
 
-    if clean_org:
+    # Identifica o utilizador autenticado para saber se clean_org é conta pessoal ou organização
+    st_u, user_data = _http_json_request("https://api.github.com/user", method="GET", headers=headers, timeout=12)
+    if st_u != 200:
+        raise RuntimeError(f"GitHub Auth ({st_u}): {user_data.get('message') or 'Token do GitHub inválido ou expirado.'}")
+    auth_login = (user_data.get("login") or "").strip()
+
+    status, data = (0, {})
+    is_personal_target = not clean_org or (auth_login and clean_org.lower() == auth_login.lower())
+
+    if not is_personal_target:
         status, data = _http_json_request(
             f"https://api.github.com/orgs/{urllib.parse.quote(clean_org)}/repos",
             method="POST",
@@ -1011,7 +1035,8 @@ def github_criar_repositorio_empresa(
             payload=payload,
             timeout=15,
         )
-    if status not in (200, 201):
+
+    if is_personal_target or status == 404:
         status, data = _http_json_request(
             "https://api.github.com/user/repos",
             method="POST",
@@ -1024,6 +1049,16 @@ def github_criar_repositorio_empresa(
         errs = data.get("errors") if isinstance(data.get("errors"), list) else []
         extra = errs[0].get("message") if errs and isinstance(errs[0], dict) else ""
         msg = data.get("message") or "Falha ao criar repositório no GitHub."
+        if status == 403 and "personal access token" in msg.lower():
+            raise RuntimeError(
+                "GitHub (403): O Personal Access Token não possui permissão para criar repositórios. "
+                "No Fine-grained Token (github_pat_), ative 'Administration: Read and write' e 'Contents: Read and write' em Repository permissions (ou utilize um Classic Token com o escopo 'repo')."
+            )
+        if status == 422 and "already exists" in f"{msg} {extra}".lower():
+            owner_slug = clean_org or auth_login
+            raise RuntimeError(
+                f"GitHub (422): Já existe um repositório chamado '{owner_slug}/{clean_repo}' na sua conta GitHub."
+            )
         raise RuntimeError(f"GitHub ({status}): {msg} {extra}".strip())
 
     full_name = data.get("full_name")
@@ -1032,7 +1067,7 @@ def github_criar_repositorio_empresa(
     starter_files = _build_starter_repo_files(clean_repo, descricao, template, empresa_nome)
     for idx, f_item in enumerate(starter_files):
         b64 = base64.b64encode(f_item["content"].encode("utf-8")).decode("ascii")
-        _http_json_request(
+        put_st, put_data = _http_json_request(
             f"https://api.github.com/repos/{full_name}/contents/{urllib.parse.quote(f_item['path'])}",
             method="PUT",
             headers=headers,
@@ -1043,6 +1078,12 @@ def github_criar_repositorio_empresa(
             },
             timeout=15,
         )
+        if put_st not in (200, 201):
+            put_msg = put_data.get("message") or "Erro ao enviar ficheiros iniciais."
+            raise RuntimeError(
+                f"Repositório '{full_name}' criado, mas falhou o envio dos ficheiros ({put_st}: {put_msg}). "
+                "Ative 'Contents: Read and write' nas permissões do token."
+            )
 
     return {
         "repo_id": data.get("id"),

@@ -1277,7 +1277,7 @@ def raiz(db: int = 0):
     return {
         "status": "online" if db_status != "error" else "degraded",
         "sistema": "Nexus Code Enterprise SaaS ERP & CRM API",
-        "versao": "2.4.7-prod",
+        "versao": "2.4.8-prod",
         "regiao": os.getenv("VERCEL_REGION", "local"),
         "database_url_configurada": bool(os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")),
         "db_status": db_status,
@@ -5883,15 +5883,18 @@ def provisionar_github_projeto_existente(
         projeto.github_default_branch = (payload.get("branch") or "main").strip()
     else:
         org_obj = db.query(Organizacao).filter(Organizacao.id == equipe.organizacao_id).first()
-        repo_res = github_criar_repositorio_empresa(
-            token=cfg.github_token,
-            org=cfg.github_org,
-            repo_nome=payload.get("repo_nome") or projeto.titulo,
-            descricao=projeto.descricao or "",
-            visibilidade=payload.get("visibilidade") or cfg.github_visibilidade_padrao or "private",
-            template=payload.get("template") or "fullstack",
-            empresa_nome=org_obj.nome if org_obj else "Nexus Code Brasil",
-        )
+        try:
+            repo_res = github_criar_repositorio_empresa(
+                token=cfg.github_token,
+                org=cfg.github_org,
+                repo_nome=payload.get("repo_nome") or projeto.titulo,
+                descricao=projeto.descricao or "",
+                visibilidade=payload.get("visibilidade") or cfg.github_visibilidade_padrao or "private",
+                template=payload.get("template") or "fullstack",
+                empresa_nome=org_obj.nome if org_obj else "Nexus Code Brasil",
+            )
+        except Exception as gh_err:
+            raise HTTPException(status_code=502, detail=f"Falha ao criar repositório no GitHub: {gh_err}")
         projeto.repositorio_url = repo_res["html_url"]
         projeto.github_repo_full_name = repo_res["full_name"]
         projeto.github_default_branch = repo_res["default_branch"]

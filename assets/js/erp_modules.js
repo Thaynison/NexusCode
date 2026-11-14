@@ -1738,7 +1738,7 @@ export async function renderEmpresaView(ctx) {
         method: 'POST',
         body: JSON.stringify({ github_token: token, github_org: orgName })
       });
-      showToast(`Conectado ao GitHub: ${res.organizacao} (${res.tipo_conta} • @${res.usuario_github})`, 'success');
+      showToast(`Conectado ao GitHub: ${res.organizacao} (${res.tipo_conta} • ${res.tipo_token || 'PAT'}) — Lembre-se de clicar em "Salvar Todas as Integrações".`, 'success');
     } catch (err) {
       showNoticeModal({ title: 'Falha na Conexão GitHub', message: err.message, variant: 'error' });
     }
@@ -2164,7 +2164,7 @@ export async function renderEmpresaView(ctx) {
               </label>
             </div>
             <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-              <span class="muted" style="font-size:11.5px;">Escopos necessários no token: <code>repo</code> e <code>workflow</code>.</span>
+              <span class="muted" style="font-size:11.5px;">Classic Token: escopos <code>repo</code> e <code>workflow</code>. Fine-grained Token: <code>Administration: Read &amp; write</code> e <code>Contents: Read &amp; write</code>.</span>
               <button type="button" class="btn secondary" style="padding:6px 12px; font-size:12px;" onclick="window.nexusTestarGithubConexao()">Testar Conexão GitHub</button>
             </div>
           </div>
