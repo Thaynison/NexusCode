@@ -329,6 +329,7 @@ function applyRolePermissions() {
     const permKey = pageToPerm[p];
     if (permKey && colabPerms[permKey] === false) {
       btn.style.display = 'none';
+      if (page === p) window.nexusGo('dashboard');
     } else {
       btn.style.display = 'flex';
     }
