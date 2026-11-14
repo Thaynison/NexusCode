@@ -188,3 +188,177 @@ export function showNoticeModal({
     closeBtns[closeBtns.length - 1]?.focus();
   });
 }
+
+
+// ==================== SMART TABBED MODAL ENGINE (ZERO SCROLLBAR) ====================
+function isElementHidden(el) {
+  let cur = el;
+  while (cur && cur !== document.body) {
+    if (cur.style && cur.style.display === 'none') return true;
+    cur = cur.parentElement;
+  }
+  return false;
+}
+
+function cleanStepTitle(rawText, index) {
+  let txt = String(rawText || '').replace(/^\d+\s*/, '').trim();
+  txt = txt.replace(/\s*\([^)]*\)/g, '').trim();
+  if (txt.length > 30) {
+    const shortPart = txt.split(/[&—-]/)[0].trim();
+    if (shortPart.length >= 4) txt = shortPart;
+  }
+  return txt || `Etapa ${index + 1}`;
+}
+
+export function enhanceModalLayout(dialogEl) {
+  if (!dialogEl) return;
+
+  // Fechar ao clicar fora (no backdrop)
+  if (!dialogEl.dataset.backdropBound) {
+    dialogEl.dataset.backdropBound = '1';
+    dialogEl.addEventListener('click', (e) => {
+      if (e.target === dialogEl && dialogEl.id !== 'nc-system-dialog') {
+        dialogEl.close();
+      }
+    });
+  }
+
+  const modalRoot = dialogEl.querySelector('.modal');
+  const bodyEl = dialogEl.querySelector('.modal-body');
+  if (!modalRoot || !bodyEl) return;
+
+  // Remove barra de abas anterior antes de recalcular
+  modalRoot.querySelectorAll('.modal-tabs').forEach((n) => n.remove());
+  modalRoot.querySelectorAll('.modal-step-nav-btn').forEach((n) => n.remove());
+  modalRoot.classList.remove('modal-tabbed');
+
+  const allCards = [...bodyEl.querySelectorAll('.modal-section-card')];
+  const visibleCards = allCards.filter((c) => !isElementHidden(c));
+
+  // Se houver menos de 2 seções visíveis, garante que todas fiquem visíveis normalmente
+  if (visibleCards.length < 2) {
+    allCards.forEach((c) => {
+      c.style.removeProperty('display');
+      c.removeAttribute('data-tab-panel');
+    });
+    return;
+  }
+
+  modalRoot.classList.add('modal-tabbed');
+
+  const nav = document.createElement('nav');
+  nav.className = 'modal-tabs';
+  nav.setAttribute('role', 'tablist');
+
+  let activeIdx = 0;
+
+  const footerEl = modalRoot.querySelector('.modal-footer');
+  let prevBtn = null;
+  let nextBtn = null;
+
+  if (footerEl) {
+    const targetWrap = footerEl.querySelector('.modal-footer-right') || footerEl;
+    prevBtn = document.createElement('button');
+    prevBtn.type = 'button';
+    prevBtn.className = 'btn secondary modal-step-nav-btn';
+    prevBtn.textContent = '← Anterior';
+
+    nextBtn = document.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.className = 'btn secondary modal-step-nav-btn';
+    nextBtn.textContent = 'Próximo →';
+
+    const submitBtn = targetWrap.querySelector('button[type="submit"]');
+    if (submitBtn) {
+      targetWrap.insertBefore(prevBtn, submitBtn);
+      targetWrap.insertBefore(nextBtn, submitBtn);
+    } else {
+      targetWrap.prepend(nextBtn);
+      targetWrap.prepend(prevBtn);
+    }
+  }
+
+  const activateTab = (idx) => {
+    activeIdx = Math.max(0, Math.min(visibleCards.length - 1, idx));
+    visibleCards.forEach((card, i) => {
+      card.style.display = i === activeIdx ? 'flex' : 'none';
+      card.setAttribute('data-tab-panel', String(i));
+    });
+    nav.querySelectorAll('.modal-tab-btn').forEach((btn, i) => {
+      const isAct = i === activeIdx;
+      btn.classList.toggle('active', isAct);
+      btn.setAttribute('aria-selected', isAct ? 'true' : 'false');
+    });
+    if (prevBtn) prevBtn.style.display = activeIdx > 0 ? 'inline-flex' : 'none';
+    if (nextBtn) nextBtn.style.display = activeIdx < visibleCards.length - 1 ? 'inline-flex' : 'none';
+    bodyEl.scrollTop = 0;
+  };
+
+  visibleCards.forEach((card, i) => {
+    const titleEl = card.querySelector('.modal-section-title');
+    const stepEl = titleEl?.querySelector('.modal-section-step');
+    const stepNum = stepEl ? stepEl.textContent.trim() : String(i + 1);
+    const labelText = cleanStepTitle(titleEl ? titleEl.textContent : '', i);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'modal-tab-btn';
+    btn.setAttribute('role', 'tab');
+    btn.innerHTML = `<span class="modal-tab-step">${esc(stepNum)}</span><span>${esc(labelText)}</span>`;
+    btn.onclick = () => activateTab(i);
+    nav.appendChild(btn);
+  });
+
+  if (prevBtn) prevBtn.onclick = () => activateTab(activeIdx - 1);
+  if (nextBtn) nextBtn.onclick = () => activateTab(activeIdx + 1);
+
+  bodyEl.parentElement.insertBefore(nav, bodyEl);
+  activateTab(0);
+
+  // Ponte de validação HTML5: se um campo obrigatório estiver em outra aba, troca automaticamente para ela
+  const formEl = modalRoot.matches('form') ? modalRoot : modalRoot.querySelector('form');
+  if (formEl && !formEl.dataset.tabInvalidBound) {
+    formEl.dataset.tabInvalidBound = '1';
+    formEl.addEventListener('invalid', (ev) => {
+      const target = ev.target;
+      const panel = target?.closest?.('[data-tab-panel]');
+      if (panel) {
+        const panelIdx = Number(panel.getAttribute('data-tab-panel'));
+        if (!Number.isNaN(panelIdx)) {
+          const tabsNav = modalRoot.querySelector('.modal-tabs');
+          const tabBtns = tabsNav ? [...tabsNav.querySelectorAll('.modal-tab-btn')] : [];
+          if (tabBtns[panelIdx]) {
+            tabBtns[panelIdx].classList.add('has-error');
+            tabBtns[panelIdx].click();
+          }
+          setTimeout(() => target.focus?.(), 30);
+        }
+      }
+    }, true);
+  }
+}
+
+export function initGlobalModalEnhancer() {
+  if (typeof document === 'undefined') return;
+  const setupDialogs = () => {
+    document.querySelectorAll('dialog.dialog:not(#nc-system-dialog)').forEach((dlg) => {
+      if (dlg.dataset.observerAttached) return;
+      dlg.dataset.observerAttached = '1';
+      let timer = null;
+      const schedule = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => enhanceModalLayout(dlg), 35);
+      };
+      const obs = new MutationObserver(schedule);
+      obs.observe(dlg, { childList: true, subtree: true });
+      enhanceModalLayout(dlg);
+    });
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupDialogs);
+  } else {
+    setupDialogs();
+  }
+}
+
+initGlobalModalEnhancer();
