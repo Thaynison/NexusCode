@@ -1,4 +1,5 @@
 import { apiRequest, clearSession, getToken } from './config.js';
+import { showConfirmModal, showNoticeModal, showToast } from './ui.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -274,7 +275,7 @@ async function renderQuotes() {
       <td style="white-space:nowrap; font-size:12.5px;">${formatDateTime(o.criado_em)}</td>
       <td style="white-space:nowrap;">
         <button class="btn" style="padding:6px 12px; font-size:12px;" data-reply='${JSON.stringify(o).replace(/'/g, "&apos;")}'>${ICONS.reply}<span>${o.resposta ? 'Visualizar Resposta' : 'Responder'}</span></button>
-        <button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/orcamentos/${o.id}">Excluir</button>
+        <button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/orcamentos/${o.id}" data-label="${esc(o.nome)}">Excluir</button>
       </td>
     </tr>`).join('');
 
@@ -345,7 +346,7 @@ async function renderProjects() {
       <td>${formatDate(p.data_entrega)}</td>
       ${isStaff ? `<td style="white-space:nowrap;">
         <button class="btn secondary" style="padding:6px 10px; font-size:12px;" data-edit='${JSON.stringify(p).replace(/'/g, "&apos;")}'>Editar</button>
-        <button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/projetos/${p.id}">Excluir</button>
+        <button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/projetos/${p.id}" data-label="${esc(p.titulo)}">Excluir</button>
       </td>` : ''}
     </tr>`).join('');
 
@@ -398,7 +399,7 @@ async function renderClients(onlyLeads = false) {
       <td>${esc(c.origem || '-')}</td>
       <td style="white-space:nowrap;">
         <button class="btn secondary" style="padding:6px 10px; font-size:12px;" data-edit='${JSON.stringify(c).replace(/'/g, "&apos;")}'>Editar</button>
-        <button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/clientes/${c.id}">Excluir</button>
+        <button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/clientes/${c.id}" data-label="${esc(c.nome_empresa)}">Excluir</button>
       </td>
     </tr>`).join('');
 
@@ -447,7 +448,7 @@ async function renderUsers() {
       <td>${formatDate(u.criado_em)}</td>
       <td style="white-space:nowrap;">
         <button class="btn secondary" style="padding:6px 10px; font-size:12px;" data-edit='${JSON.stringify(u).replace(/'/g, "&apos;")}'>Editar</button>
-        ${u.id !== user.id ? `<button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/usuarios/${u.id}">Excluir</button>` : ''}
+        ${u.id !== user.id ? `<button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/usuarios/${u.id}" data-label="${esc(u.nome)}">Excluir</button>` : ''}
       </td>
     </tr>`).join('');
 
@@ -480,7 +481,7 @@ async function renderTasks() {
       <td>${formatDate(t.prazo)}</td>
       <td style="white-space:nowrap;">
         <button class="btn secondary" style="padding:6px 10px; font-size:12px;" data-edit='${JSON.stringify(t).replace(/'/g, "&apos;")}'>Editar</button>
-        <button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/tarefas/${t.id}">Excluir</button>
+        <button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/tarefas/${t.id}" data-label="${esc(t.titulo)}">Excluir</button>
       </td>
     </tr>`).join('');
 
@@ -513,7 +514,7 @@ async function renderInvoices() {
       <td>${formatDate(f.vencimento)}</td>
       ${isStaff ? `<td style="white-space:nowrap;">
         ${f.status !== 'pago' ? `<button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--ok);" data-pay="${f.id}">Confirmar Pagamento</button>` : ''}
-        <button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/faturas/${f.id}">Excluir</button>
+        <button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/faturas/${f.id}" data-label="${esc(f.descricao)}">Excluir</button>
       </td>` : ''}
     </tr>`).join('');
 
@@ -613,19 +614,130 @@ async function renderAudit() {
 }
 
 async function renderProfile() {
+  const me = await apiRequest('/auth/me'); // Get fresh user data to populate the form
+  
   return `
-    <div class="toolbar"><div><h1>Meu Perfil</h1><span class="muted">Informações da conta e nível de permissão</span></div></div>
-    <div class="card" style="max-width:520px;">
-      <div class="row-entity" style="margin-bottom:20px;">
-        <div class="row-avatar" style="width:48px; height:48px; font-size:16px;">${initials(user.nome)}</div>
-        <div>
-          <h3 style="margin:0;">${esc(user.nome)}</h3>
-          <span class="muted">${esc(user.email)}</span>
-        </div>
+    <div class="toolbar">
+      <div>
+        <h1>Meu Perfil Profissional</h1>
+        <span class="muted">Gerencie suas informações pessoais, endereço e aceite as políticas de privacidade (LGPD)</span>
       </div>
-      <p><b>Nível de Acesso:</b> <span class="badge ativo">${esc(user.perfil)}</span></p>
-      <p><b>Status da Conta:</b> <span class="badge ativo">Ativa</span></p>
-    </div>`;
+    </div>
+    <div class="grid" style="grid-template-columns: 1fr; max-width: 800px;">
+      <div class="card">
+        <div class="row-entity" style="margin-bottom:24px; padding-bottom: 24px; border-bottom: 1px solid var(--border);">
+          <div class="row-avatar" style="width:56px; height:56px; font-size:18px;">${initials(me.nome)}</div>
+          <div>
+            <h3 style="margin:0 0 6px; font-size:20px;">${esc(me.nome)}</h3>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <span class="muted">${esc(me.email)}</span>
+              <span class="badge ativo">${esc(me.perfil)}</span>
+            </div>
+          </div>
+        </div>
+
+        <form id="profile-form" style="display:flex; flex-direction:column; gap:16px;">
+          <h4 style="margin:0; font-size:15px; color:var(--text); font-weight:700;">Dados Pessoais & Profissionais</h4>
+          <div class="profile-grid">
+            <label class="field-full">Nome Completo *
+              <input type="text" name="nome" value="${esc(me.nome)}" required class="modal-input">
+            </label>
+            <label class="field-full">Cargo / Profissão
+              <input type="text" name="cargo" value="${esc(me.cargo || '')}" placeholder="Ex.: Diretor Executivo" class="modal-input">
+            </label>
+            <label class="field-full">CPF
+              <input type="text" name="cpf" value="${esc(me.cpf || '')}" placeholder="000.000.000-00" class="modal-input">
+            </label>
+            <label class="field-full">Data de Nascimento
+              <input type="date" name="data_nascimento" value="${me.data_nascimento || ''}" class="modal-input">
+            </label>
+            <label class="field-full">Telefone / WhatsApp
+              <input type="tel" name="telefone" value="${esc(me.telefone || '')}" placeholder="(00) 90000-0000" class="modal-input">
+            </label>
+          </div>
+
+          <h4 style="margin:12px 0 0; font-size:15px; color:var(--text); font-weight:700;">Endereço</h4>
+          <div class="profile-grid">
+            <label class="field-full">CEP
+              <input type="text" name="cep" value="${esc(me.cep || '')}" placeholder="00000-000" class="modal-input">
+            </label>
+            <label class="field-full">Endereço Completo
+              <input type="text" name="endereco" value="${esc(me.endereco || '')}" placeholder="Rua, Número, Bairro" class="modal-input">
+            </label>
+            <label class="field-full">Cidade
+              <input type="text" name="cidade" value="${esc(me.cidade || '')}" class="modal-input">
+            </label>
+            <label class="field-full">Estado (UF)
+              <input type="text" name="estado" value="${esc(me.estado || '')}" maxlength="2" placeholder="Ex.: ES" class="modal-input">
+            </label>
+          </div>
+
+          <h4 style="margin:12px 0 0; font-size:15px; color:var(--text); font-weight:700;">Segurança</h4>
+          <div class="profile-grid">
+            <label class="field-full">Nova Senha (deixe em branco para manter)
+              <input type="password" name="senha" minlength="6" placeholder="******" class="modal-input">
+            </label>
+          </div>
+
+          <div class="lgpd-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            <div>
+              <p><b>Privacidade e Proteção de Dados (LGPD)</b><br>As informações coletadas neste perfil são armazenadas com criptografia de ponta a ponta e utilizadas exclusivamente para processamento contratual, faturamento e prestação dos serviços contratados, conforme a Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018). Seus dados não serão compartilhados com terceiros.</p>
+              <label>
+                <input type="checkbox" name="lgpd_consent" required ${me.termos_aceitos_em ? 'checked' : ''}>
+                Confirmo que os dados fornecidos são exatos e consinto com o tratamento para as finalidades descritas.
+              </label>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap:12px;">
+            <button type="submit" class="btn" id="save-profile-btn">Atualizar Meu Perfil</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+// Add global form styling to match the new profile form (reusing modal classes)
+window.bindProfileForm = () => {
+  const form = document.getElementById('profile-form');
+  if (!form) return;
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('save-profile-btn');
+    const raw = Object.fromEntries(new FormData(form));
+    
+    if (!raw.lgpd_consent) {
+      showNoticeModal({ title: 'Atenção', message: 'Você precisa consentir com os termos da LGPD para salvar seu perfil.', variant: 'warning' });
+      return;
+    }
+    
+    // Clean up empty fields before sending
+    const payload = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (v.trim() !== '' && k !== 'lgpd_consent') payload[k] = v.trim();
+    }
+    
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+    try {
+      const updatedUser = await apiRequest('/auth/me', {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+      user = updatedUser; // update local context
+      localStorage.setItem('nexus_user', JSON.stringify(user));
+      $('#app-user-name').textContent = user.nome;
+      $('#user-avatar-initials').textContent = initials(user.nome);
+      showToast('Perfil atualizado com sucesso.', 'success');
+    } catch (err) {
+      showNoticeModal({ title: 'Erro ao atualizar perfil', message: err.message, variant: 'error' });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Atualizar Meu Perfil';
+    }
+  };
 }
 
 // ==================== MODAL DE RESPOSTA A SOLICITAÇÃO ====================
@@ -784,6 +896,22 @@ async function openRecordModal(editObj = null) {
 recordForm.onsubmit = async (e) => {
   e.preventDefault();
   const raw = Object.fromEntries(new FormData(recordForm));
+  const saveBtn = $('#record-save-btn');
+  const prevBtnText = saveBtn ? saveBtn.textContent : 'Salvar';
+  let inlineErr = $('#record-form-error');
+  if (!inlineErr) {
+    inlineErr = document.createElement('div');
+    inlineErr.id = 'record-form-error';
+    inlineErr.className = 'nc-inline-error';
+    inlineErr.style.display = 'none';
+    $('#dynamic-record-fields')?.appendChild(inlineErr);
+  }
+  inlineErr.style.display = 'none';
+
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Salvando...';
+  }
 
   try {
     if (modalMode === 'quote_reply') {
@@ -860,9 +988,23 @@ recordForm.onsubmit = async (e) => {
 
     recordDialog.close();
     invalidateCache();
+    showToast(
+      modalMode === 'quote_reply'
+        ? 'Atendimento comercial registrado com sucesso.'
+        : editingId
+          ? 'Registro atualizado com sucesso.'
+          : 'Registro cadastrado com sucesso.',
+      'success'
+    );
     render();
   } catch (err) {
-    alert('Não foi possível concluir a operação: ' + err.message);
+    inlineErr.textContent = err?.message || 'Não foi possível concluir a operação.';
+    inlineErr.style.display = 'block';
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = prevBtnText;
+    }
   }
 };
 
@@ -885,34 +1027,66 @@ async function render() {
     else if (page === 'kanban') view.innerHTML = await renderKanban(false);
     else if (page === 'invoices') view.innerHTML = await renderInvoices();
     else if (page === 'audit') view.innerHTML = await renderAudit();
-    else if (page === 'profile') view.innerHTML = await renderProfile();
+    else if (page === 'profile') { view.innerHTML = await renderProfile(); window.bindProfileForm(); }
 
     $$('[data-new]').forEach((b) => (b.onclick = () => openRecordModal(null)));
     $$('[data-edit]').forEach((b) => (b.onclick = () => openRecordModal(JSON.parse(b.dataset.edit))));
     $$('[data-reply]').forEach((b) => (b.onclick = () => openQuoteReplyModal(JSON.parse(b.dataset.reply))));
     $$('[data-filter]').forEach((b) => (b.onclick = () => { statusFilter = b.dataset.filter; render(); }));
-    $$('[data-del]').forEach((b) => (b.onclick = async () => {
-      if (!confirm('Confirma a exclusão permanente deste registro?')) return;
-      await apiRequest(b.dataset.del, { method: 'DELETE' });
-      invalidateCache();
-      render();
+    $$('[data-del]').forEach((b) => (b.onclick = () => {
+      const label = b.dataset.label ? ` "${b.dataset.label}"` : '';
+      showConfirmModal({
+        title: 'Confirmar Exclusão',
+        message: `Deseja excluir permanentemente o registro${label}?`,
+        detail: 'Esta ação é irreversível e removerá permanentemente as informações associadas.',
+        confirmText: 'Excluir Registro',
+        cancelText: 'Cancelar',
+        variant: 'danger',
+        onConfirm: async () => {
+          await apiRequest(b.dataset.del, { method: 'DELETE' });
+          invalidateCache();
+          showToast('Registro excluído com sucesso.', 'success');
+          await render();
+        }
+      });
     }));
-    $$('[data-pay]').forEach((b) => (b.onclick = async () => {
-      await apiRequest(`/faturas/${b.dataset.pay}`, { method: 'PATCH', body: JSON.stringify({ status: 'pago' }) });
-      invalidateCache();
-      render();
+    $$('[data-pay]').forEach((b) => (b.onclick = () => {
+      showConfirmModal({
+        title: 'Confirmar Recebimento',
+        message: 'Deseja registrar o pagamento desta fatura?',
+        detail: 'O status financeiro será atualizado para Pago com a data e hora atuais.',
+        confirmText: 'Confirmar Pagamento',
+        cancelText: 'Cancelar',
+        variant: 'primary',
+        onConfirm: async () => {
+          await apiRequest(`/faturas/${b.dataset.pay}`, { method: 'PATCH', body: JSON.stringify({ status: 'pago' }) });
+          invalidateCache();
+          showToast('Pagamento confirmado com sucesso.', 'success');
+          await render();
+        }
+      });
     }));
     $$('[data-move-client]').forEach((b) => (b.onclick = async () => {
-      const [id, status_funil] = b.dataset.moveClient.split(':');
-      await apiRequest(`/clientes/${id}`, { method: 'PATCH', body: JSON.stringify({ status_funil }) });
-      invalidateCache();
-      render();
+      try {
+        const [id, status_funil] = b.dataset.moveClient.split(':');
+        await apiRequest(`/clientes/${id}`, { method: 'PATCH', body: JSON.stringify({ status_funil }) });
+        invalidateCache();
+        showToast('Etapa comercial atualizada.', 'success');
+        render();
+      } catch (err) {
+        showNoticeModal({ title: 'Falha ao Mover Oportunidade', message: err.message, variant: 'error' });
+      }
     }));
     $$('[data-move-task]').forEach((b) => (b.onclick = async () => {
-      const [id, status] = b.dataset.moveTask.split(':');
-      await apiRequest(`/tarefas/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
-      invalidateCache();
-      render();
+      try {
+        const [id, status] = b.dataset.moveTask.split(':');
+        await apiRequest(`/tarefas/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+        invalidateCache();
+        showToast('Status da tarefa atualizado.', 'success');
+        render();
+      } catch (err) {
+        showNoticeModal({ title: 'Falha ao Atualizar Tarefa', message: err.message, variant: 'error' });
+      }
     }));
 
     // Drag and Drop para Kanban e Funil
@@ -932,14 +1106,22 @@ async function render() {
         e.preventDefault();
         col.classList.remove('drag-over');
         if (!dragged) return;
-        const targetStatus = col.dataset.dropCol;
-        if (dragged.type === 'client') {
-          await apiRequest(`/clientes/${dragged.id}`, { method: 'PATCH', body: JSON.stringify({ status_funil: targetStatus }) });
-        } else if (dragged.type === 'task') {
-          await apiRequest(`/tarefas/${dragged.id}`, { method: 'PATCH', body: JSON.stringify({ status: targetStatus }) });
-        }
+        const current = dragged;
         dragged = null;
-        render();
+        const targetStatus = col.dataset.dropCol;
+        try {
+          if (current.type === 'client') {
+            await apiRequest(`/clientes/${current.id}`, { method: 'PATCH', body: JSON.stringify({ status_funil: targetStatus }) });
+            showToast('Etapa comercial atualizada.', 'success');
+          } else if (current.type === 'task') {
+            await apiRequest(`/tarefas/${current.id}`, { method: 'PATCH', body: JSON.stringify({ status: targetStatus }) });
+            showToast('Status da tarefa atualizado.', 'success');
+          }
+          invalidateCache();
+          render();
+        } catch (err) {
+          showNoticeModal({ title: 'Não foi possível concluir a movimentação', message: err.message, variant: 'error' });
+        }
       });
     });
   } catch (err) {

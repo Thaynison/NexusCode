@@ -21,6 +21,15 @@ class Usuario(Base):
         nullable=False,
     )
     ativo = Column(Boolean, default=True, nullable=False)
+    cpf = Column(String(20), nullable=True)
+    data_nascimento = Column(Date, nullable=True)
+    telefone = Column(String(30), nullable=True)
+    endereco = Column(String(255), nullable=True)
+    cep = Column(String(20), nullable=True)
+    cidade = Column(String(100), nullable=True)
+    estado = Column(String(2), nullable=True)
+    cargo = Column(String(120), nullable=True)
+    termos_aceitos_em = Column(DateTime, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
     projetos_responsavel = relationship("Projeto", back_populates="responsavel")

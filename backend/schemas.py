@@ -30,6 +30,15 @@ class UsuarioBase(BaseModel):
     email: EmailStr
     perfil: Literal["admin", "colaborador", "cliente"] = "colaborador"
     ativo: bool = True
+    cpf: Optional[str] = None
+    data_nascimento: Optional[date] = None
+    telefone: Optional[str] = None
+    endereco: Optional[str] = None
+    cep: Optional[str] = None
+    cidade: Optional[str] = None
+    estado: Optional[str] = None
+    cargo: Optional[str] = None
+    termos_aceitos_em: Optional[datetime] = None
 
 
 class UsuarioCreate(UsuarioBase):
@@ -42,6 +51,15 @@ class UsuarioUpdate(BaseModel):
     perfil: Optional[Literal["admin", "colaborador", "cliente"]] = None
     ativo: Optional[bool] = None
     senha: Optional[str] = Field(default=None, min_length=6)
+    cpf: Optional[str] = None
+    data_nascimento: Optional[date] = None
+    telefone: Optional[str] = None
+    endereco: Optional[str] = None
+    cep: Optional[str] = None
+    cidade: Optional[str] = None
+    estado: Optional[str] = None
+    cargo: Optional[str] = None
+    termos_aceitos_em: Optional[datetime] = None
 
 
 class UsuarioOut(UsuarioBase):

@@ -1039,3 +1039,239 @@ body.crm-app {
   display: flex;
   flex-direction: column;
 }
+
+/* ==================== MODAIS DE CONFIRMAÇÃO & TOASTS CORPORATIVOS ==================== */
+.btn.danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+.btn.danger:hover {
+  background: #b91c1c;
+}
+.btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.nc-sys-dialog {
+  width: min(440px, 94vw);
+}
+
+.nc-confirm-modal {
+  padding: 24px 26px;
+  animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nc-confirm-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.nc-confirm-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.nc-confirm-badge.danger,
+.nc-confirm-badge.error {
+  background: #fee2e2;
+  color: #dc2626;
+}
+.nc-confirm-badge.warning {
+  background: #fef3c7;
+  color: #d97706;
+}
+.nc-confirm-badge.primary,
+.nc-confirm-badge.success {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.app-dark .nc-confirm-badge.danger,
+.app-dark .nc-confirm-badge.error {
+  background: rgba(239, 68, 68, 0.16);
+  color: #f87171;
+}
+.app-dark .nc-confirm-badge.warning {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+}
+.app-dark .nc-confirm-badge.primary,
+.app-dark .nc-confirm-badge.success {
+  background: rgba(59, 130, 246, 0.16);
+  color: #60a5fa;
+}
+
+.nc-confirm-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.nc-confirm-msg {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-light);
+}
+
+.nc-confirm-detail {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-light);
+  line-height: 1.45;
+}
+
+.nc-inline-error {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.app-dark .nc-inline-error {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+}
+
+.nc-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* Stack de Notificações (Toast) */
+.nc-toast-stack {
+  position: fixed;
+  bottom: 22px;
+  right: 22px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: min(380px, 92vw);
+  pointer-events: none;
+}
+
+.nc-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.35);
+  font-size: 13.5px;
+  font-weight: 500;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.nc-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.nc-toast-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.nc-toast-success .nc-toast-icon {
+  background: rgba(22, 163, 74, 0.22);
+  color: #4ade80;
+}
+.nc-toast-error .nc-toast-icon {
+  background: rgba(239, 68, 68, 0.22);
+  color: #f87171;
+}
+.nc-toast-info .nc-toast-icon {
+  background: rgba(59, 130, 246, 0.22);
+  color: #60a5fa;
+}
+
+.nc-toast-msg {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.nc-toast-close {
+  background: transparent;
+  border: 0;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+}
+.nc-toast-close:hover {
+  color: #ffffff;
+}
+
+/* Profile Form & LGPD */
+.profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 768px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.lgpd-box {
+  background: var(--surface2);
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 24px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.lgpd-box svg {
+  color: var(--primary);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.lgpd-box p {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.lgpd-box label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text);
+}

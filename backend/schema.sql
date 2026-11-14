@@ -9,6 +9,15 @@ CREATE TABLE IF NOT EXISTS usuarios (
     senha_hash VARCHAR(255) NOT NULL,
     perfil VARCHAR(20) NOT NULL DEFAULT 'colaborador' CHECK (perfil IN ('admin', 'colaborador', 'cliente')),
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    cpf VARCHAR(20) NULL,
+    data_nascimento DATE NULL,
+    telefone VARCHAR(30) NULL,
+    endereco VARCHAR(255) NULL,
+    cep VARCHAR(20) NULL,
+    cidade VARCHAR(100) NULL,
+    estado VARCHAR(2) NULL,
+    cargo VARCHAR(120) NULL,
+    termos_aceitos_em TIMESTAMP NULL,
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

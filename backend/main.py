@@ -192,6 +192,28 @@ def recuperar_senha(dados: ForgotPasswordRequest):
     }
 
 
+
+@app.patch("/api/auth/me", response_model=UsuarioOut, tags=["Auth"])
+def atualizar_meu_perfil(dados: UsuarioUpdate, db: Session = Depends(get_db), usuario: Usuario = Depends(get_usuario_db)):
+    payload = dados.model_dump(exclude_unset=True)
+    # Não permitir que o usuário altere o próprio perfil de acesso ou status via este endpoint
+    payload.pop("perfil", None)
+    payload.pop("ativo", None)
+
+    if "senha" in payload:
+        usuario.senha_hash = gerar_hash_senha(payload.pop("senha"))
+    
+    for campo, valor in payload.items():
+        setattr(usuario, campo, valor)
+
+    if not usuario.termos_aceitos_em:
+        usuario.termos_aceitos_em = datetime.utcnow()
+
+    registrar_log(db, usuario.nome, "EDITAR_PERFIL", "O usuário atualizou seus próprios dados cadastrais.")
+    db.commit()
+    db.refresh(usuario)
+    return usuario
+
 @app.get("/api/auth/me", response_model=UsuarioOut, tags=["Auth"])
 def perfil_logado(usuario: Usuario = Depends(get_usuario_db)):
     return usuario
