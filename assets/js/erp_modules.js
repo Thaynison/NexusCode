@@ -674,16 +674,28 @@ export async function renderChamadosView(ctx) {
       </div>
       <div class="modal-body">
         <div class="ticket-thread" id="admin-ticket-thread">
-          ${msgs.map((m) => `
-            <div class="ticket-msg ${m.perfil === 'cliente' ? 'client' : 'staff'}">
-              <div style="display:flex; justify-content:space-between; gap:12px; font-size:11px; color:var(--text-light); margin-bottom:4px;">
-                <b>${esc(m.autor)} (${esc(m.perfil)})</b>
-                <span>${esc(m.criado_em || '')}</span>
+          ${msgs.map((m) => {
+            const isStaff = m.perfil !== 'cliente';
+            const rowClass = isStaff ? 'staff' : 'client';
+            const initial = (m.autor || 'U').charAt(0).toUpperCase();
+            return `
+            <div class="ticket-bubble-row ${rowClass}">
+              <div class="ticket-avatar">${initial}</div>
+              <div class="ticket-msg">
+                <div class="ticket-msg-meta">
+                  <span>${esc(m.autor)}</span>
+                  <span class="ticket-msg-time">${esc(m.criado_em || '')}</span>
+                </div>
+                <div style="white-space:pre-wrap; word-break:break-word;">${esc(m.texto)}</div>
+                ${m.anexo_data ? `
+                  <a href="${m.anexo_data}" download="${esc(m.anexo_nome || 'anexo')}" class="ticket-attachment">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Baixar ${esc(m.anexo_nome || 'Anexo')}
+                  </a>
+                ` : ''}
               </div>
-              <div style="font-size:13.5px; line-height:1.5; white-space:pre-wrap;">${esc(m.texto)}</div>
-              ${m.anexo_data ? `<div style="margin-top:6px;"><a href="${m.anexo_data}" download="${esc(m.anexo_nome || 'anexo')}" class="btn secondary" style="padding:4px 8px; font-size:11px; text-decoration:none;">Baixar ${esc(m.anexo_nome || 'Anexo')}</a></div>` : ''}
             </div>
-          `).join('') || '<p class="muted">Sem mensagens.</p>'}
+          `}).join('') || '<p class="muted" style="text-align:center; padding:24px;">Nenhuma mensagem registrada.</p>'}
         </div>
 
         <form id="admin-ticket-reply-form" style="display:flex; flex-direction:column; gap:10px;">
@@ -1665,7 +1677,7 @@ export async function renderEmpresaView(ctx) {
         </div>
       </div>
 
-      <div class="formgrid" style="margin-bottom:14px;">
+      <div class="formgrid-3" style="margin-bottom:14px;">
         <label class="field-full">Nome da Plataforma / Marca *
           <input type="text" name="nome_plataforma" value="${esc(brand.nome_plataforma || org.nome || '')}" required class="nc-input" placeholder="Ex.: Minha Organização ERP">
         </label>
@@ -1680,7 +1692,7 @@ export async function renderEmpresaView(ctx) {
         </label>
       </div>
 
-      <div class="formgrid" style="margin-bottom:14px;">
+      <div class="formgrid-3" style="margin-bottom:14px;">
         <label class="field-full">Cor Primária (Ações &amp; Destaques)
           <div style="display:flex; gap:8px; align-items:center;">
             <input type="color" name="cor_primaria" value="${esc(brand.cor_primaria || '#0096B4')}" style="width:46px; height:38px; padding:2px; border:1px solid var(--border); border-radius:8px; cursor:pointer;">
@@ -2015,7 +2027,7 @@ export async function renderSaasMasterView(ctx) {
 
           <div class="modal-section-card">
             <div class="modal-section-title"><span class="modal-section-step">${isEdit ? '3' : '4'}</span> Identidade Visual White-Label (Logotipo &amp; Paleta)</div>
-            <div class="formgrid">
+            <div class="formgrid-3">
               <label>Nome Exibido no Portal
                 <input type="text" name="wl_nome" id="st-wl-nome" value="${esc(brand.nome_plataforma || '')}" placeholder="Nome da Organização">
               </label>
@@ -2188,8 +2200,7 @@ export async function renderSaasMasterView(ctx) {
     if (plObj?.modulos_json) {
       try { mods = { ...mods, ...JSON.parse(plObj.modulos_json) }; } catch (_) {}
     }
-    const recursosTxt = safeJsonArray(plObj?.recursos_json).join('
-');
+    const recursosTxt = safeJsonArray(plObj?.recursos_json).join('\n');
 
     holeriteContainer.innerHTML = `
       <form id="saas-plano-form">

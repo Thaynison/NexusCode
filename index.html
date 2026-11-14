@@ -34,6 +34,26 @@
         * {
             font-family: 'Inter', sans-serif;
             box-sizing: border-box;
+            scrollbar-width: thin;
+            scrollbar-color: #CBD5E1 transparent;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #CBD5E1;
+            border-radius: 999px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94A3B8;
         }
 
         h1, h2, h3, .font-brand {
@@ -1972,47 +1992,56 @@
         function showProductModal(productId) {
             const product = cart.products[productId];
             const modal = document.createElement('div');
-            modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4';
+            modal.className = 'fixed inset-0 bg-[#061224]/75 backdrop-blur-md z-50 flex items-center justify-center p-4 sm:p-6';
             modal.innerHTML = `
-                <div class="bg-white rounded-2xl max-w-md w-full p-6 border border-slate-200 shadow-2xl">
-                    <div class="text-center mb-6">
-                        <div class="w-24 h-24 mx-auto mb-3 rounded-2xl bg-[#0A1D37] p-3 flex items-center justify-center">
-                            <img src="${product.stamp}" alt="${product.name}" class="w-full h-full object-contain">
+                <div class="bg-white rounded-2xl max-w-xl w-full overflow-hidden border border-[#00B4D8]/30 shadow-2xl">
+                    <div class="bg-gradient-to-r from-[#061224] via-[#0A1D37] to-[#0F2E56] text-white px-7 py-5 flex items-center justify-between border-b-2 border-[#00B4D8]">
+                        <div>
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-[#00B4D8]">Configuração do Item</span>
+                            <h3 class="text-lg font-extrabold">${escHtml(product.name)}</h3>
                         </div>
-                        <h3 class="text-xl font-bold text-[#0A1D37]">${product.name}</h3>
-                        <p class="text-slate-600 text-sm">${product.description}</p>
-                        <div class="text-xl font-extrabold text-[#0096B4] mt-2">R$ ${product.price.toFixed(2).replace('.', ',')}</div>
+                        <button type="button" onclick="this.closest('.fixed').remove()" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] flex items-center justify-center text-xl font-bold transition-colors">&times;</button>
                     </div>
 
-                    <div class="space-y-4">
+                    <div class="p-7 space-y-5">
+                        <div class="flex items-center gap-4 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <div class="w-20 h-20 rounded-xl bg-[#0A1D37] p-3 flex items-center justify-center flex-shrink-0">
+                                <img src="${escHtml(product.stamp)}" alt="${escHtml(product.name)}" class="w-full h-full object-contain">
+                            </div>
+                            <div>
+                                <p class="text-slate-600 text-sm leading-relaxed">${escHtml(product.description)}</p>
+                                <div class="text-2xl font-black text-[#0096B4] mt-1">R$ ${product.price.toFixed(2).replace('.', ',')}</div>
+                            </div>
+                        </div>
+
                         <div>
-                            <label class="block font-bold text-[#0A1D37] text-sm mb-2">Tamanho:</label>
-                            <div class="grid grid-cols-4 gap-2">
+                            <label class="block font-bold text-[#0A1D37] text-xs uppercase tracking-wider mb-2">Selecione o Tamanho</label>
+                            <div class="grid grid-cols-4 gap-2.5">
                                 ${product.sizes.map(size => `
-                                    <button class="size-btn border-2 border-slate-300 hover:border-[#00B4D8] px-3 py-2 rounded-lg font-bold text-sm transition-colors" data-size="${size}">
-                                        ${size}
+                                    <button type="button" class="size-btn border-2 border-slate-200 hover:border-[#00B4D8] px-3 py-2.5 rounded-xl font-bold text-sm transition-all" data-size="${escHtml(size)}">
+                                        ${escHtml(size)}
                                     </button>
                                 `).join('')}
                             </div>
                         </div>
 
                         <div>
-                            <label class="block font-bold text-[#0A1D37] text-sm mb-2">Cor:</label>
-                            <div class="grid grid-cols-2 gap-2">
+                            <label class="block font-bold text-[#0A1D37] text-xs uppercase tracking-wider mb-2">Selecione a Cor</label>
+                            <div class="grid grid-cols-2 gap-2.5">
                                 ${product.colors.map(color => `
-                                    <button class="color-btn border-2 border-slate-300 hover:border-[#00B4D8] px-3 py-2 rounded-lg font-bold text-sm transition-colors" data-color="${color}">
-                                        ${color}
+                                    <button type="button" class="color-btn border-2 border-slate-200 hover:border-[#00B4D8] px-3 py-2.5 rounded-xl font-bold text-sm transition-all" data-color="${escHtml(color)}">
+                                        ${escHtml(color)}
                                     </button>
                                 `).join('')}
                             </div>
                         </div>
                     </div>
 
-                    <div class="flex space-x-3 mt-6">
-                        <button onclick="this.closest('.fixed').remove()" class="flex-1 border-2 border-slate-300 text-slate-600 hover:border-red-500 hover:text-red-500 py-3 rounded-xl font-bold text-sm transition-colors">
+                    <div class="px-7 py-4 bg-slate-50 border-t border-slate-200 flex gap-3">
+                        <button type="button" onclick="this.closest('.fixed').remove()" class="flex-1 border border-slate-300 text-slate-700 hover:bg-slate-100 py-3 rounded-xl font-bold text-sm transition-colors">
                             Cancelar
                         </button>
-                        <button id="add-to-cart-btn" class="flex-1 bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] py-3 rounded-xl font-bold text-sm transition-colors disabled:opacity-50" disabled>
+                        <button type="button" id="add-to-cart-btn" class="flex-1 bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] py-3 rounded-xl font-extrabold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled>
                             Adicionar ao Carrinho
                         </button>
                     </div>
@@ -2085,40 +2114,40 @@
             if (!item) return;
 
             const modal = document.createElement('div');
-            modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4';
+            modal.className = 'fixed inset-0 bg-[#061224]/75 backdrop-blur-md z-[60] flex items-center justify-center p-4 sm:p-6';
             modal.innerHTML = `
-                <div class="bg-white rounded-2xl max-w-xl w-full overflow-hidden shadow-2xl border border-slate-200">
-                    <div class="bg-[#0A1D37] text-white p-6 flex items-start justify-between gap-4 border-b border-[#00B4D8]/30">
+                <div class="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl border border-[#00B4D8]/30">
+                    <div class="bg-gradient-to-r from-[#061224] via-[#0A1D37] to-[#0F2E56] text-white px-7 py-6 flex items-start justify-between gap-4 border-b-2 border-[#00B4D8]">
                         <div>
-                            <span class="inline-block bg-[#00B4D8]/20 text-[#00B4D8] px-3 py-1 rounded-full text-xs font-bold mb-2">${item.tag}</span>
-                            <h3 class="text-2xl font-bold">${item.title}</h3>
-                            <p class="text-[#00B4D8] text-sm mt-1 font-medium">${item.metric}</p>
+                            <span class="inline-block bg-[#00B4D8]/20 text-[#00B4D8] border border-[#00B4D8]/35 px-3 py-1 rounded-full text-xs font-bold mb-2">${item.tag}</span>
+                            <h3 class="text-2xl font-extrabold">${item.title}</h3>
+                            <p class="text-[#00B4D8] text-sm mt-1 font-semibold">${item.metric}</p>
                         </div>
-                        <button type="button" data-close-case class="text-white hover:text-[#00B4D8] text-2xl font-bold leading-none">&times;</button>
+                        <button type="button" data-close-case class="w-9 h-9 rounded-xl bg-white/10 hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] flex items-center justify-center text-xl font-bold transition-colors">&times;</button>
                     </div>
-                    <div class="p-6 space-y-4 text-sm">
-                        <div>
-                            <h4 class="font-bold text-[#0A1D37] mb-1">Desafio</h4>
+                    <div class="p-7 space-y-5 text-sm">
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <h4 class="font-extrabold text-[#0A1D37] uppercase text-xs tracking-wider mb-1.5">Desafio de Negócio</h4>
                             <p class="text-slate-600 leading-relaxed">${item.challenge}</p>
                         </div>
-                        <div>
-                            <h4 class="font-bold text-[#0A1D37] mb-1">Solução Implementada</h4>
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <h4 class="font-extrabold text-[#0A1D37] uppercase text-xs tracking-wider mb-1.5">Arquitetura &amp; Solução</h4>
                             <p class="text-slate-600 leading-relaxed">${item.solution}</p>
                         </div>
                         <div>
-                            <h4 class="font-bold text-[#0A1D37] mb-2">Tecnologias Utilizadas</h4>
+                            <h4 class="font-extrabold text-[#0A1D37] uppercase text-xs tracking-wider mb-2">Stack Tecnológica</h4>
                             <div class="flex flex-wrap gap-2">
-                                ${item.stack.map(t => `<span class="bg-[#0A1D37] text-[#00B4D8] px-3 py-1 rounded-full text-xs font-bold">${t}</span>`).join('')}
+                                ${item.stack.map(t => `<span class="bg-[#0A1D37] text-[#00B4D8] px-3.5 py-1.5 rounded-lg text-xs font-bold">${t}</span>`).join('')}
                             </div>
                         </div>
-                        <div class="flex gap-3 pt-4 border-t">
-                            <button type="button" data-close-case class="flex-1 border border-slate-300 text-slate-700 hover:bg-slate-50 py-3 rounded-xl font-bold transition-colors">
-                                Fechar
-                            </button>
-                            <button type="button" data-quote-case class="flex-1 bg-[#00B4D8] hover:bg-[#0096B4] text-[#0A1D37] py-3 rounded-xl font-extrabold transition-colors">
-                                Solicitar Projeto Semelhante
-                            </button>
-                        </div>
+                    </div>
+                    <div class="px-7 py-4 bg-slate-50 border-t border-slate-200 flex gap-3">
+                        <button type="button" data-close-case class="flex-1 border border-slate-300 text-slate-700 hover:bg-slate-100 py-3 rounded-xl font-bold text-sm transition-colors">
+                            Fechar
+                        </button>
+                        <button type="button" data-quote-case class="flex-1 bg-[#00B4D8] hover:bg-[#0096B4] text-[#0A1D37] py-3 rounded-xl font-extrabold text-sm transition-colors">
+                            Solicitar Projeto Semelhante
+                        </button>
                     </div>
                 </div>
             `;
@@ -2133,26 +2162,31 @@
             };
         }
 
-
         function openTermsModal() {
             const modal = document.createElement('div');
-            modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4';
+            modal.className = 'fixed inset-0 bg-[#061224]/75 backdrop-blur-md z-[60] flex items-center justify-center p-4 sm:p-6';
             modal.innerHTML = `
-                <div class="bg-white rounded-2xl max-w-xl w-full overflow-hidden shadow-2xl border border-slate-200 text-slate-800">
-                    <div class="bg-[#0A1D37] text-white p-6 flex items-center justify-between border-b border-[#00B4D8]/30">
+                <div class="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl border border-[#00B4D8]/30 text-slate-800">
+                    <div class="bg-gradient-to-r from-[#061224] via-[#0A1D37] to-[#0F2E56] text-white px-7 py-5 flex items-center justify-between border-b-2 border-[#00B4D8]">
                         <div>
-                            <span class="inline-block bg-[#00B4D8]/20 text-[#00B4D8] px-3 py-1 rounded-full text-xs font-bold mb-1">Contrato &amp; Uso</span>
-                            <h3 class="text-xl font-bold">Termos de Uso da Plataforma</h3>
+                            <span class="inline-block bg-[#00B4D8]/20 text-[#00B4D8] px-3 py-0.5 rounded-full text-xs font-bold mb-1">Contrato &amp; Uso Corporativo</span>
+                            <h3 class="text-xl font-extrabold">Termos de Uso da Plataforma</h3>
                         </div>
-                        <button type="button" data-close-terms class="text-white hover:text-[#00B4D8] text-2xl font-bold leading-none">&times;</button>
+                        <button type="button" data-close-terms class="w-9 h-9 rounded-xl bg-white/10 hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] flex items-center justify-center text-xl font-bold transition-colors">&times;</button>
                     </div>
-                    <div class="p-6 space-y-3 text-sm text-slate-600 leading-relaxed max-h-[70vh] overflow-y-auto">
-                        <p><b class="text-[#0A1D37]">1. Objeto:</b> A plataforma <b>Nexus Code Brasil</b> disponibiliza ambiente digital para solicitação de orçamentos, aquisição de produtos oficiais, acompanhamento de projetos, aprovação de propostas e suporte técnico.</p>
-                        <p><b class="text-[#0A1D37]">2. Credenciais e Acesso:</b> O acesso ao Portal do Cliente e ao painel corporativo é pessoal e intransferível, protegido por autenticação criptografada e auditoria de ações.</p>
-                        <p><b class="text-[#0A1D37]">3. Propriedade Intelectual:</b> Todo código-fonte, marcas, logotipos e materiais exclusivos da Nexus Code Brasil são protegidos pela legislação brasileira de direitos autorais e propriedade industrial.</p>
+                    <div class="p-7 space-y-4 text-sm text-slate-600 leading-relaxed max-h-[70vh] overflow-y-auto">
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <p><b class="text-[#0A1D37]">1. Objeto:</b> A plataforma <b>Nexus Code Brasil</b> disponibiliza infraestrutura SaaS corporativa para gestão ERP, CRM, RH, propostas comerciais, faturamento e atendimento técnico.</p>
+                        </div>
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <p><b class="text-[#0A1D37]">2. Credenciais e Isolamento Multi-Tenant:</b> Cada organização contratante opera em ambiente logicamente isolado, com controle granular de permissões por perfil e auditoria completa de ações.</p>
+                        </div>
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <p><b class="text-[#0A1D37]">3. Propriedade Intelectual:</b> Todo código-fonte, arquitetura e componentes tecnológicos da Nexus Code Brasil são protegidos pela legislação brasileira de direitos autorais e propriedade industrial.</p>
+                        </div>
                     </div>
-                    <div class="px-6 py-4 bg-slate-50 border-t flex justify-end">
-                        <button type="button" data-close-terms class="bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] px-6 py-2.5 rounded-xl font-bold text-sm transition-colors">Fechar</button>
+                    <div class="px-7 py-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+                        <button type="button" data-close-terms class="bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] px-7 py-2.5 rounded-xl font-bold text-sm transition-colors">Fechar</button>
                     </div>
                 </div>
             `;
@@ -2160,7 +2194,6 @@
             modal.querySelectorAll('[data-close-terms]').forEach((b) => (b.onclick = () => modal.remove()));
             modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
         }
-
 
         function renderDynamicSaasPlans(planosList) {
             const grid = document.getElementById('saas-plans-grid');
@@ -2201,66 +2234,188 @@
         }
 
         function openSaasTrialModal(planoCodigo = 'pro', planoNome = 'Pro Gestão & Financeiro') {
-            const isEnterprise = String(planoCodigo || '').toLowerCase() === 'enterprise';
+            const cod = String(planoCodigo || 'pro').toLowerCase();
+            const isEnterprise = cod === 'enterprise';
+
+            const planMeta = {
+                starter: {
+                    price: 'R$ 197,00',
+                    subtitle: 'Operação Comercial & Atendimento',
+                    users: 'Até 5 usuários internos',
+                    domainRule: 'Subdomínio gerenciado (.nexuscodebrasil.com.br)',
+                    features: [
+                        'CRM, Leads & Funil Kanban',
+                        'Propostas Comerciais & Faturamento',
+                        'Portal do Cliente White-Label',
+                        'Certificado SSL & Backup Diário'
+                    ]
+                },
+                pro: {
+                    price: 'R$ 397,00',
+                    subtitle: 'Gestão Integrada & Financeiro',
+                    users: 'Até 15 usuários internos',
+                    domainRule: 'Subdomínio gerenciado (.nexuscodebrasil.com.br)',
+                    features: [
+                        'Todos os recursos do plano Starter',
+                        'Timesheet & Rentabilidade de Projetos',
+                        'DRE Gerencial & Fluxo de Caixa',
+                        'Contas a Pagar, Contratos MRR & Service Desk'
+                    ]
+                },
+                enterprise: {
+                    price: 'R$ 697,00',
+                    subtitle: 'Suíte Corporativa Completa ERP + RH',
+                    users: 'Até 50 usuários internos',
+                    domainRule: 'Domínio Corporativo Próprio (CNAME) Incluso',
+                    features: [
+                        'Todos os recursos do plano Pro',
+                        'Gestão de Ponto Eletrônico',
+                        'Holerite & Folha Automática (INSS/IRRF)',
+                        'Domínio próprio (CNAME) + Suporte Prioritário'
+                    ]
+                }
+            };
+            const meta = planMeta[cod] || planMeta.pro;
+
             const modal = document.createElement('div');
-            modal.className = 'fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4';
+            modal.className = 'fixed inset-0 bg-[#061224]/80 backdrop-blur-md z-[60] flex items-center justify-center p-4 sm:p-6 overflow-y-auto';
             modal.innerHTML = `
-                <form id="saas-onboarding-form" class="bg-white text-slate-800 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200">
-                    <div class="bg-[#0A1D37] text-white p-6 flex items-center justify-between border-b border-[#00B4D8]/30">
-                        <div>
-                            <span class="inline-block bg-[#00B4D8]/20 text-[#00B4D8] px-3 py-0.5 rounded-full text-xs font-bold mb-1">14 Dias de Avaliação • Ambiente Isolado</span>
-                            <h3 class="text-xl font-bold">Provisionar Portal — ${escHtml(planoNome)}</h3>
-                        </div>
-                        <button type="button" data-close-ob class="text-white hover:text-[#00B4D8] text-2xl font-bold leading-none">&times;</button>
-                    </div>
-                    <div class="p-6 space-y-4 text-sm">
-                        <div class="grid sm:grid-cols-2 gap-3">
-                            <div>
-                                <label class="block font-bold text-[#0A1D37] mb-1">Nome da Organização *</label>
-                                <input type="text" name="nome_empresa" id="ob-empresa" required placeholder="Ex.: Alpha Soluções" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8]">
+                <div class="bg-white text-slate-800 rounded-2xl max-w-4xl w-full overflow-hidden shadow-2xl border border-[#00B4D8]/35 my-auto">
+                    <!-- Cabeçalho Executivo -->
+                    <div class="bg-gradient-to-r from-[#061224] via-[#0A1D37] to-[#0F2E56] text-white px-7 py-5 flex items-center justify-between border-b-2 border-[#00B4D8]">
+                        <div class="flex items-center gap-4">
+                            <div class="w-11 h-11 rounded-xl bg-[#00B4D8]/15 border border-[#00B4D8]/40 text-[#00B4D8] flex items-center justify-center flex-shrink-0">
+                                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M9 3v18"></path><path d="M14 9h4"></path><path d="M14 14h4"></path></svg>
                             </div>
                             <div>
-                                <label class="block font-bold text-[#0A1D37] mb-1">Identificador de Subdomínio *</label>
-                                <div class="flex items-center border border-slate-300 rounded-xl overflow-hidden focus-within:border-[#00B4D8]">
-                                    <input type="text" name="slug" id="ob-slug" required placeholder="alpha" class="w-full px-3 py-2 outline-none font-bold text-[#0096B4]">
-                                    <span class="bg-slate-100 px-2 py-2 text-[11px] text-slate-500 whitespace-nowrap">.nexuscodebrasil.com.br</span>
+                                <span class="inline-block bg-[#00B4D8]/20 text-[#00B4D8] border border-[#00B4D8]/35 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider mb-1">
+                                    14 Dias de Avaliação Gratuita • Provisionamento Instantâneo
+                                </span>
+                                <h3 class="text-xl font-extrabold tracking-tight">Provisionar Ambiente — ${escHtml(planoNome)}</h3>
+                            </div>
+                        </div>
+                        <button type="button" data-close-ob class="w-9 h-9 rounded-xl bg-white/10 hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] flex items-center justify-center text-xl font-bold transition-colors">&times;</button>
+                    </div>
+
+                    <!-- Corpo em Duas Colunas (Resumo do Plano + Formulário Estruturado) -->
+                    <div class="grid lg:grid-cols-12">
+                        <!-- Coluna Esquerda: Resumo Executivo do Plano -->
+                        <div class="lg:col-span-5 bg-gradient-to-b from-[#0A1D37] to-[#061224] text-white p-7 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-[#00B4D8]/20">
+                            <div>
+                                <div class="text-xs font-bold uppercase tracking-wider text-[#00B4D8] mb-1">${escHtml(meta.subtitle)}</div>
+                                <div class="text-2xl font-black text-white mb-1">${escHtml(planoNome)}</div>
+                                <div class="flex items-baseline gap-1.5 mb-5 pb-5 border-b border-white/10">
+                                    <span class="text-3xl font-black text-[#00B4D8]">${meta.price}</span>
+                                    <span class="text-xs text-slate-400">/mês após 14 dias</span>
                                 </div>
-                                <div id="ob-slug-status" class="text-[11px] mt-1 text-slate-500"></div>
+
+                                <div class="space-y-3 mb-6">
+                                    <div class="bg-white/5 border border-white/10 rounded-xl p-3">
+                                        <div class="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Capacidade &amp; Endereçamento</div>
+                                        <div class="text-xs font-semibold text-white mt-1">• ${escHtml(meta.users)}</div>
+                                        <div class="text-xs font-semibold text-[#00B4D8] mt-0.5">• ${escHtml(meta.domainRule)}</div>
+                                    </div>
+
+                                    <div class="text-xs font-bold uppercase tracking-wider text-slate-300 pt-1">Módulos &amp; Garantias Inclusas</div>
+                                    <ul class="space-y-2 text-xs text-slate-200">
+                                        ${meta.features.map(f => `<li class="flex items-start gap-2"><span class="text-[#00B4D8] font-bold">✓</span><span>${escHtml(f)}</span></li>`).join('')}
+                                    </ul>
+                                </div>
                             </div>
-                            ${isEnterprise ? `
-                            <div class="sm:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                <label class="block font-bold text-[#0A1D37] mb-1">Domínio Corporativo Próprio — CNAME (Opcional)</label>
-                                <input type="text" name="dominio_customizado" placeholder="Ex.: portal.suaempresa.com.br" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#00B4D8]">
-                                <p class="text-[11px] text-slate-500 mt-1">Recurso exclusivo do plano <b>Enterprise Full</b>. Você também pode configurar ou alterar o apontamento CNAME posteriormente nas configurações do sistema.</p>
-                            </div>
-                            ` : `
-                            <div class="sm:col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600">
-                                Este plano utiliza subdomínio dedicado sob nossa infraestrutura gerenciada (<code class="text-[#0096B4] font-semibold">.nexuscodebrasil.com.br</code>). Para utilizar domínio corporativo próprio, selecione o plano <b>Enterprise Full</b>.
-                            </div>
-                            `}
-                            <div>
-                                <label class="block font-bold text-[#0A1D37] mb-1">Nome do Administrador *</label>
-                                <input type="text" name="admin_nome" required placeholder="Nome completo" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8]">
-                            </div>
-                            <div>
-                                <label class="block font-bold text-[#0A1D37] mb-1">E-mail Corporativo *</label>
-                                <input type="email" name="admin_email" required placeholder="admin@suaempresa.com.br" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8]">
-                            </div>
-                            <div>
-                                <label class="block font-bold text-[#0A1D37] mb-1">Senha de Acesso *</label>
-                                <input type="password" name="admin_senha" minlength="6" required placeholder="Mínimo 6 caracteres" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8]">
-                            </div>
-                            <div>
-                                <label class="block font-bold text-[#0A1D37] mb-1">Cor Principal da Marca</label>
-                                <input type="color" name="cor_primaria" value="#0096B4" class="w-full h-10 p-1 border border-slate-300 rounded-xl cursor-pointer">
+
+                            <div class="bg-[#00B4D8]/10 border border-[#00B4D8]/30 rounded-xl p-3.5 text-xs text-slate-200 leading-relaxed">
+                                <b class="text-[#00B4D8] block mb-0.5">Sem compromisso durante a avaliação</b>
+                                Seu ambiente é criado imediatamente com banco de dados isolado, painel White-Label e Portal do Cliente pronto para uso.
                             </div>
                         </div>
-                        <div id="ob-feedback" class="text-xs font-bold"></div>
-                        <button type="submit" id="ob-submit" class="w-full bg-[#00B4D8] hover:bg-[#0096B4] text-[#0A1D37] font-extrabold py-3.5 rounded-xl transition-colors">
-                            Provisionar Ambiente Corporativo
-                        </button>
+
+                        <!-- Coluna Direita: Formulário de Implantação -->
+                        <form id="saas-onboarding-form" class="lg:col-span-7 p-7 space-y-5 text-sm max-h-[78vh] overflow-y-auto">
+                            <div>
+                                <div class="text-xs font-extrabold uppercase tracking-wider text-[#0A1D37] mb-3 pb-1.5 border-b border-slate-200 flex items-center gap-2">
+                                    <span class="w-5 h-5 rounded-md bg-[#0A1D37] text-[#00B4D8] text-[11px] font-extrabold inline-flex items-center justify-center">1</span>
+                                    Identificação da Organização
+                                </div>
+                                <div class="grid sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block font-bold text-slate-700 text-xs mb-1.5">Nome da Organização *</label>
+                                        <input type="text" name="nome_empresa" id="ob-empresa" required placeholder="Ex.: Alpha Soluções Ltda" class="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8] focus:ring-2 focus:ring-[#00B4D8]/20 transition-all">
+                                    </div>
+                                    <div>
+                                        <label class="block font-bold text-slate-700 text-xs mb-1.5">Subdomínio de Acesso *</label>
+                                        <input type="text" name="slug" id="ob-slug" required placeholder="alpha" class="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8] focus:ring-2 focus:ring-[#00B4D8]/20 font-bold text-[#0096B4] transition-all">
+                                    </div>
+                                </div>
+
+                                <div class="mt-3 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2 flex-wrap">
+                                    <div class="text-xs text-slate-600">
+                                        URL do ambiente: <code id="ob-url-preview" class="font-bold text-[#0A1D37]">https://suaempresa.nexuscodebrasil.com.br</code>
+                                    </div>
+                                    <span id="ob-slug-status" class="text-[11px] font-bold text-slate-500"></span>
+                                </div>
+
+                                ${isEnterprise ? `
+                                <div class="mt-3 bg-cyan-50/60 border border-[#00B4D8]/35 rounded-xl p-3.5">
+                                    <label class="block font-bold text-[#0A1D37] text-xs mb-1.5">Domínio Corporativo Próprio — CNAME (Opcional)</label>
+                                    <input type="text" name="dominio_customizado" placeholder="Ex.: portal.suaempresa.com.br" class="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8] text-sm">
+                                    <p class="text-[11px] text-slate-600 mt-1.5">Exclusivo do plano <b>Enterprise Full</b>. Você também pode configurar ou alterar o CNAME posteriormente nas configurações internas.</p>
+                                </div>
+                                ` : `
+                                <div class="mt-3 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-[11.5px] text-slate-600">
+                                    Este plano opera sob subdomínio gerenciado (<code class="text-[#0096B4] font-semibold">.nexuscodebrasil.com.br</code>). Para utilizar domínio próprio (CNAME), selecione o plano <b>Enterprise Full</b>.
+                                </div>
+                                `}
+                            </div>
+
+                            <div>
+                                <div class="text-xs font-extrabold uppercase tracking-wider text-[#0A1D37] mb-3 pb-1.5 border-b border-slate-200 flex items-center gap-2">
+                                    <span class="w-5 h-5 rounded-md bg-[#0A1D37] text-[#00B4D8] text-[11px] font-extrabold inline-flex items-center justify-center">2</span>
+                                    Administrador &amp; Identidade Visual
+                                </div>
+                                <div class="grid sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block font-bold text-slate-700 text-xs mb-1.5">Nome do Administrador *</label>
+                                        <input type="text" name="admin_nome" required placeholder="Nome completo" class="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8] focus:ring-2 focus:ring-[#00B4D8]/20 transition-all">
+                                    </div>
+                                    <div>
+                                        <label class="block font-bold text-slate-700 text-xs mb-1.5">E-mail Corporativo *</label>
+                                        <input type="email" name="admin_email" required placeholder="admin@suaempresa.com.br" class="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8] focus:ring-2 focus:ring-[#00B4D8]/20 transition-all">
+                                    </div>
+                                    <div>
+                                        <label class="block font-bold text-slate-700 text-xs mb-1.5">Senha de Acesso *</label>
+                                        <div class="relative">
+                                            <input type="password" name="admin_senha" id="ob-senha" minlength="6" required placeholder="Mínimo 6 caracteres" class="w-full px-3.5 py-2.5 pr-10 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8] focus:ring-2 focus:ring-[#00B4D8]/20 transition-all">
+                                            <button type="button" id="ob-toggle-pass" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#0A1D37] text-xs font-bold">Ver</button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block font-bold text-slate-700 text-xs mb-1.5">Cor Principal da Marca</label>
+                                        <div class="flex items-center gap-2.5 bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5">
+                                            <input type="color" name="cor_primaria" id="ob-color-inp" value="#0096B4" class="w-9 h-8 p-0 border-0 bg-transparent cursor-pointer">
+                                            <span id="ob-color-hex" class="font-mono text-xs font-bold text-slate-700">#0096B4</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <label class="flex items-start gap-2.5 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3 cursor-pointer">
+                                <input type="checkbox" required class="mt-0.5 accent-[#00B4D8]">
+                                <span class="leading-relaxed">Concordo com os Termos de Uso e com o tratamento de dados conforme a <b>Lei Geral de Proteção de Dados (LGPD)</b> para ativação do ambiente corporativo.</span>
+                            </label>
+
+                            <div id="ob-feedback" class="text-xs font-bold"></div>
+
+                            <div class="flex items-center justify-end gap-3 pt-2 border-t border-slate-200">
+                                <button type="button" data-close-ob class="px-5 py-3 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold text-sm transition-colors">
+                                    Cancelar
+                                </button>
+                                <button type="submit" id="ob-submit" class="px-6 py-3 rounded-xl bg-[#00B4D8] hover:bg-[#0096B4] text-[#0A1D37] font-extrabold text-sm transition-all shadow-lg">
+                                    Provisionar Ambiente Corporativo
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                </form>
+                </div>
             `;
             document.body.appendChild(modal);
             modal.querySelectorAll('[data-close-ob]').forEach((b) => (b.onclick = () => modal.remove()));
@@ -2268,10 +2423,34 @@
 
             const empInp = modal.querySelector('#ob-empresa');
             const slugInp = modal.querySelector('#ob-slug');
+            const urlPrev = modal.querySelector('#ob-url-preview');
             const statusEl = modal.querySelector('#ob-slug-status');
+            const senhaInp = modal.querySelector('#ob-senha');
+            const togglePassBtn = modal.querySelector('#ob-toggle-pass');
+            const colorInp = modal.querySelector('#ob-color-inp');
+            const colorHex = modal.querySelector('#ob-color-hex');
+
+            const syncSlugPreview = () => {
+                const clean = (slugInp.value || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '').slice(0, 35);
+                slugInp.value = clean;
+                urlPrev.textContent = `https://${clean || 'suaempresa'}.nexuscodebrasil.com.br`;
+            };
 
             empInp.addEventListener('input', () => {
-                slugInp.value = empInp.value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30);
+                slugInp.value = empInp.value;
+                syncSlugPreview();
+            });
+
+            slugInp.addEventListener('input', syncSlugPreview);
+
+            togglePassBtn?.addEventListener('click', () => {
+                const isPwd = senhaInp.type === 'password';
+                senhaInp.type = isPwd ? 'text' : 'password';
+                togglePassBtn.textContent = isPwd ? 'Ocultar' : 'Ver';
+            });
+
+            colorInp?.addEventListener('input', () => {
+                if (colorHex) colorHex.textContent = colorInp.value.toUpperCase();
             });
 
             slugInp.addEventListener('blur', async () => {
@@ -2279,7 +2458,7 @@
                 try {
                     const r = await fetch(`${NEXUS_API_URL}/public/saas/check-slug?slug=${encodeURIComponent(slugInp.value.trim())}`).then((x) => x.json());
                     statusEl.textContent = r.motivo;
-                    statusEl.className = r.disponivel ? 'text-[11px] mt-1 text-emerald-600 font-bold' : 'text-[11px] mt-1 text-rose-600 font-bold';
+                    statusEl.className = r.disponivel ? 'text-[11px] text-emerald-600 font-bold' : 'text-[11px] text-rose-600 font-bold';
                 } catch (_) {}
             });
 
@@ -2309,7 +2488,7 @@
                     window.location.href = `app/index.html?tenant=${encodeURIComponent(raw.slug.trim().toLowerCase())}`;
                 } catch (err) {
                     fb.textContent = err.message;
-                    fb.className = 'text-xs font-bold text-rose-600';
+                    fb.className = 'text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl p-3';
                     btn.disabled = false;
                     btn.textContent = 'Provisionar Ambiente Corporativo';
                 }
@@ -2318,23 +2497,29 @@
 
         function openLgpdModal() {
             const modal = document.createElement('div');
-            modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4';
+            modal.className = 'fixed inset-0 bg-[#061224]/75 backdrop-blur-md z-[60] flex items-center justify-center p-4 sm:p-6';
             modal.innerHTML = `
-                <div class="bg-white rounded-2xl max-w-xl w-full overflow-hidden shadow-2xl border border-slate-200 text-slate-800">
-                    <div class="bg-[#0A1D37] text-white p-6 flex items-center justify-between border-b border-[#00B4D8]/30">
+                <div class="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl border border-[#00B4D8]/30 text-slate-800">
+                    <div class="bg-gradient-to-r from-[#061224] via-[#0A1D37] to-[#0F2E56] text-white px-7 py-5 flex items-center justify-between border-b-2 border-[#00B4D8]">
                         <div>
-                            <span class="inline-block bg-[#00B4D8]/20 text-[#00B4D8] px-3 py-1 rounded-full text-xs font-bold mb-1">Lei nº 13.709/2018</span>
-                            <h3 class="text-xl font-bold">Política de Privacidade &amp; LGPD</h3>
+                            <span class="inline-block bg-[#00B4D8]/20 text-[#00B4D8] px-3 py-0.5 rounded-full text-xs font-bold mb-1">Lei nº 13.709/2018</span>
+                            <h3 class="text-xl font-extrabold">Política de Privacidade &amp; LGPD</h3>
                         </div>
-                        <button type="button" data-close-lgpd class="text-white hover:text-[#00B4D8] text-2xl font-bold leading-none">&times;</button>
+                        <button type="button" data-close-lgpd class="w-9 h-9 rounded-xl bg-white/10 hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] flex items-center justify-center text-xl font-bold transition-colors">&times;</button>
                     </div>
-                    <div class="p-6 space-y-3 text-sm text-slate-600 leading-relaxed max-h-[70vh] overflow-y-auto">
-                        <p><b class="text-[#0A1D37]">1. Controlador e Finalidade:</b> A <b>Nexus Code Brasil</b> coleta e trata dados pessoais (nome, e-mail, telefone, CPF, endereço e informações curriculares) estritamente para atendimento comercial, execução de contratos, emissão de faturas e gestão de projetos.</p>
-                        <p><b class="text-[#0A1D37]">2. Segurança e Armazenamento:</b> Todas as comunicações utilizam criptografia TLS, senhas são armazenadas com hash criptográfico irreversível (Bcrypt) e o acesso administrativo é auditado por logs.</p>
-                        <p><b class="text-[#0A1D37]">3. Direitos do Titular (Art. 18 da LGPD):</b> Você pode consultar, corrigir, exportar em formato estruturado ou solicitar a eliminação dos seus dados pessoais a qualquer momento pelo painel do usuário ou pelo e-mail <b>contato@nexuscodebrasil.com.br</b>.</p>
+                    <div class="p-7 space-y-4 text-sm text-slate-600 leading-relaxed max-h-[70vh] overflow-y-auto">
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <p><b class="text-[#0A1D37]">1. Controlador e Finalidade:</b> A <b>Nexus Code Brasil</b> coleta e trata dados pessoais (nome, e-mail, telefone, CPF, endereço e informações curriculares) estritamente para atendimento comercial, execução de contratos, emissão de faturas e gestão de projetos.</p>
+                        </div>
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <p><b class="text-[#0A1D37]">2. Segurança e Armazenamento:</b> Todas as comunicações utilizam criptografia TLS, senhas são armazenadas com hash criptográfico irreversível (Bcrypt) e o acesso administrativo é auditado por logs.</p>
+                        </div>
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <p><b class="text-[#0A1D37]">3. Direitos do Titular (Art. 18 da LGPD):</b> Você pode consultar, corrigir, exportar em formato estruturado ou solicitar a eliminação dos seus dados pessoais a qualquer momento pelo painel do usuário ou pelo e-mail <b>contato@nexuscodebrasil.com.br</b>.</p>
+                        </div>
                     </div>
-                    <div class="px-6 py-4 bg-slate-50 border-t flex justify-end">
-                        <button type="button" data-close-lgpd class="bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] px-6 py-2.5 rounded-xl font-bold text-sm transition-colors">Entendi</button>
+                    <div class="px-7 py-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+                        <button type="button" data-close-lgpd class="bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] px-7 py-2.5 rounded-xl font-bold text-sm transition-colors">Entendi</button>
                     </div>
                 </div>
             `;
