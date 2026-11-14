@@ -9,37 +9,78 @@ _HOLIDAYS_CACHE: Dict[int, set] = {}
 _MIN_WAGE_CACHE: Optional[float] = None
 
 CBO_CATALOG = [
-    {"codigo": "2124-05", "titulo": "Analista de Desenvolvimento de Sistemas", "familia": "Tecnologia da Informação"},
-    {"codigo": "2124-10", "titulo": "Analista de Redes e de Comunicação de Dados", "familia": "Tecnologia da Informação"},
-    {"codigo": "2124-15", "titulo": "Analista de Sistemas de Automação", "familia": "Tecnologia da Informação"},
-    {"codigo": "2124-20", "titulo": "Analista de Suporte Computacional", "familia": "Tecnologia da Informação"},
-    {"codigo": "3171-10", "titulo": "Programador de Sistemas de Informação", "familia": "Tecnologia da Informação"},
-    {"codigo": "3171-05", "titulo": "Desenvolvedor Web e Mobile (Front-end / Full Stack)", "familia": "Tecnologia da Informação"},
-    {"codigo": "2123-05", "titulo": "Administrador de Banco de Dados (DBA)", "familia": "Tecnologia da Informação"},
-    {"codigo": "2123-15", "titulo": "Administrador de Sistemas Operacionais / DevOps", "familia": "Tecnologia da Informação"},
-    {"codigo": "2122-05", "titulo": "Engenheiro de Aplicativos em Computação", "familia": "Engenharia & Software"},
-    {"codigo": "2122-15", "titulo": "Engenheiro de Sistemas Operacionais em Computação", "familia": "Engenharia & Software"},
-    {"codigo": "1425-05", "titulo": "Gerente de Rede / Infraestrutura TI", "familia": "Gestão & Liderança"},
-    {"codigo": "1425-10", "titulo": "Gerente de Desenvolvimento de Sistemas (Tech Lead)", "familia": "Gestão & Liderança"},
-    {"codigo": "1425-15", "titulo": "Gerente de Produção de Tecnologia da Informação", "familia": "Gestão & Liderança"},
-    {"codigo": "1425-20", "titulo": "Gerente de Projetos de Tecnologia da Informação", "familia": "Gestão & Liderança"},
-    {"codigo": "1425-25", "titulo": "Gerente de Segurança da Informação", "familia": "Gestão & Liderança"},
-    {"codigo": "1231-05", "titulo": "Diretor Administrativo", "familia": "Diretoria Executiva"},
-    {"codigo": "1231-15", "titulo": "Diretor Financeiro (CFO)", "familia": "Diretoria Executiva"},
-    {"codigo": "1236-05", "titulo": "Diretor de Serviços de Informática (CTO)", "familia": "Diretoria Executiva"},
-    {"codigo": "2624-10", "titulo": "Designer Gráfico e de Interfaces (UI/UX)", "familia": "Design & Produto"},
-    {"codigo": "2624-25", "titulo": "Designer de Produto Digital", "familia": "Design & Produto"},
-    {"codigo": "2521-05", "titulo": "Administrador / Analista Administrativo", "familia": "Administração & RH"},
-    {"codigo": "4110-10", "titulo": "Assistente Administrativo", "familia": "Administração & RH"},
-    {"codigo": "2524-05", "titulo": "Analista de Recursos Humanos (RH)", "familia": "Administração & RH"},
-    {"codigo": "4131-10", "titulo": "Auxiliar de Contabilidade / Departamento Pessoal", "familia": "Financeiro & Fiscal"},
-    {"codigo": "2522-10", "titulo": "Contador / Analista Contábil e Fiscal", "familia": "Financeiro & Fiscal"},
-    {"codigo": "2525-15", "titulo": "Analista Financeiro", "familia": "Financeiro & Fiscal"},
-    {"codigo": "1423-05", "titulo": "Gerente Comercial", "familia": "Comercial & Vendas"},
-    {"codigo": "3541-25", "titulo": "Assistente de Vendas / SDR", "familia": "Comercial & Vendas"},
-    {"codigo": "3541-35", "titulo": "Técnico de Vendas / Executivo de Contas", "familia": "Comercial & Vendas"},
-    {"codigo": "2531-15", "titulo": "Publicitário / Analista de Marketing Digital", "familia": "Marketing & Comunicação"},
-    {"codigo": "4223-10", "titulo": "Operador de Atendimento / Sucesso do Cliente (CS)", "familia": "Atendimento & Suporte"},
+    # Diretoria e Gerência
+    {"codigo": "1231-05", "titulo": "Diretor Administrativo", "familia": "Diretoria"},
+    {"codigo": "1231-15", "titulo": "Diretor Financeiro (CFO)", "familia": "Diretoria"},
+    {"codigo": "1236-05", "titulo": "Diretor de TI (CTO)", "familia": "Diretoria"},
+    {"codigo": "1421-05", "titulo": "Gerente Administrativo", "familia": "Gestão"},
+    {"codigo": "1421-15", "titulo": "Gerente Financeiro", "familia": "Gestão"},
+    {"codigo": "1422-05", "titulo": "Gerente de Recursos Humanos", "familia": "Gestão"},
+    {"codigo": "1423-05", "titulo": "Gerente Comercial", "familia": "Gestão"},
+    {"codigo": "1423-15", "titulo": "Gerente de Marketing", "familia": "Gestão"},
+    {"codigo": "1425-10", "titulo": "Gerente de Desenvolvimento de Sistemas", "familia": "Gestão"},
+    
+    # Administrativo e Financeiro
+    {"codigo": "4110-10", "titulo": "Assistente Administrativo", "familia": "Administrativo"},
+    {"codigo": "4110-05", "titulo": "Auxiliar de Escritório", "familia": "Administrativo"},
+    {"codigo": "4131-10", "titulo": "Auxiliar de Contabilidade", "familia": "Financeiro"},
+    {"codigo": "4132-10", "titulo": "Operador de Caixa", "familia": "Financeiro"},
+    {"codigo": "2521-05", "titulo": "Administrador", "familia": "Administrativo"},
+    {"codigo": "2522-10", "titulo": "Contador", "familia": "Financeiro"},
+    {"codigo": "2525-15", "titulo": "Analista Financeiro", "familia": "Financeiro"},
+    
+    # Recursos Humanos
+    {"codigo": "2524-05", "titulo": "Analista de Recursos Humanos", "familia": "RH"},
+    {"codigo": "4110-30", "titulo": "Auxiliar de Pessoal", "familia": "RH"},
+    
+    # Comercial, Vendas e Atendimento
+    {"codigo": "3541-25", "titulo": "Assistente de Vendas (SDR)", "familia": "Comercial"},
+    {"codigo": "3541-20", "titulo": "Vendedor Pracista / Representante Comercial", "familia": "Comercial"},
+    {"codigo": "5211-10", "titulo": "Vendedor de Comércio Varejista", "familia": "Comercial"},
+    {"codigo": "4223-10", "titulo": "Operador de Telemarketing", "familia": "Comercial"},
+    {"codigo": "4221-05", "titulo": "Recepcionista", "familia": "Atendimento"},
+    {"codigo": "2531-15", "titulo": "Publicitário / Marketing", "familia": "Marketing"},
+    
+    # TI, Engenharia e Design
+    {"codigo": "3171-10", "titulo": "Programador de Sistemas de Informação", "familia": "TI"},
+    {"codigo": "3171-05", "titulo": "Desenvolvedor Web e Mobile", "familia": "TI"},
+    {"codigo": "2124-05", "titulo": "Analista de Desenvolvimento de Sistemas", "familia": "TI"},
+    {"codigo": "2124-20", "titulo": "Analista de Suporte Computacional", "familia": "TI"},
+    {"codigo": "2123-05", "titulo": "Administrador de Banco de Dados", "familia": "TI"},
+    {"codigo": "2624-10", "titulo": "Designer Gráfico", "familia": "Design"},
+    {"codigo": "2122-05", "titulo": "Engenheiro de Software", "familia": "TI"},
+    
+    # Saúde e Clínicas
+    {"codigo": "2251-25", "titulo": "Médico Clínico", "familia": "Saúde"},
+    {"codigo": "2232-08", "titulo": "Cirurgião Dentista", "familia": "Saúde"},
+    {"codigo": "2235-05", "titulo": "Enfermeiro", "familia": "Saúde"},
+    {"codigo": "3222-05", "titulo": "Técnico de Enfermagem", "familia": "Saúde"},
+    {"codigo": "2236-05", "titulo": "Fisioterapeuta", "familia": "Saúde"},
+    {"codigo": "2239-05", "titulo": "Nutricionista", "familia": "Saúde"},
+    {"codigo": "2515-10", "titulo": "Psicólogo Clínico", "familia": "Saúde"},
+    
+    # Operacional, Logística e Transporte
+    {"codigo": "7842-05", "titulo": "Alimentador de Linha de Produção", "familia": "Indústria"},
+    {"codigo": "4141-05", "titulo": "Almoxarife", "familia": "Logística"},
+    {"codigo": "4141-10", "titulo": "Armazenista", "familia": "Logística"},
+    {"codigo": "7832-25", "titulo": "Ajudante de Carga e Descarga", "familia": "Logística"},
+    {"codigo": "7825-10", "titulo": "Motorista de Caminhão", "familia": "Transporte"},
+    {"codigo": "7823-05", "titulo": "Motorista de Carro de Passeio", "familia": "Transporte"},
+    {"codigo": "5143-20", "titulo": "Faxineiro", "familia": "Serviços Gerais"},
+    {"codigo": "5174-10", "titulo": "Porteiro", "familia": "Serviços Gerais"},
+    
+    # Engenharia Civil e Construção
+    {"codigo": "2142-05", "titulo": "Engenheiro Civil", "familia": "Engenharia"},
+    {"codigo": "2141-05", "titulo": "Arquiteto", "familia": "Engenharia"},
+    {"codigo": "7152-10", "titulo": "Pedreiro", "familia": "Construção"},
+    {"codigo": "7156-15", "titulo": "Eletricista de Instalações", "familia": "Construção"},
+    {"codigo": "7151-25", "titulo": "Operador de Máquinas de Construção", "familia": "Construção"},
+    
+    # Outros Setores Comuns
+    {"codigo": "5132-05", "titulo": "Cozinheiro Geral", "familia": "Alimentação"},
+    {"codigo": "5134-05", "titulo": "Garçom", "familia": "Alimentação"},
+    {"codigo": "3311-05", "titulo": "Professor de Ensino Básico", "familia": "Educação"},
+    {"codigo": "2410-05", "titulo": "Advogado", "familia": "Jurídico"}
 ]
 
 

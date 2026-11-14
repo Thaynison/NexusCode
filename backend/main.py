@@ -1857,10 +1857,9 @@ def login(dados: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/auth/register", response_model=TokenResponse, status_code=201, tags=["Auth"])
 def registrar_conta(dados: RegisterRequest, req: Request, db: Session = Depends(get_db)):
-    if db.query(Usuario.id).filter(func.lower(Usuario.email) == dados.email.strip().lower()).first():
-        raise HTTPException(status_code=400, detail="Este endereço de e-mail já está vinculado a uma conta.")
-
     org = _resolver_org_por_request(req, db)
+    if db.query(Usuario.id).filter(Usuario.organizacao_id == org.id, func.lower(Usuario.email) == dados.email.strip().lower()).first():
+        raise HTTPException(status_code=400, detail="Este endereço de e-mail já está vinculado a uma conta neste ambiente.")
     if not org.is_master and org.status_assinatura == "suspenso":
         raise HTTPException(status_code=403, detail="Este portal está temporariamente suspenso.")
 
@@ -1977,8 +1976,8 @@ def atualizar_meu_perfil(dados: UsuarioUpdate, db: Session = Depends(get_db), us
             usuario.senha_hash = gerar_hash_senha(nova_senha)
 
     if "email" in payload and payload["email"] and payload["email"] != usuario.email:
-        if db.query(Usuario.id).filter(Usuario.email == payload["email"], Usuario.id != usuario.id).first():
-            raise HTTPException(status_code=400, detail="Este e-mail já está em uso por outra conta.")
+        if db.query(Usuario.id).filter(Usuario.organizacao_id == admin.organizacao_id, Usuario.email == payload["email"], Usuario.id != usuario.id).first():
+            raise HTTPException(status_code=400, detail="Este e-mail já está em uso por outra conta neste ambiente.")
 
     for campo, valor in payload.items():
         setattr(usuario, campo, valor)
@@ -4039,8 +4038,8 @@ def criar_usuario(
                 detail=f"Limite de {org.limite_usuarios} usuário(s) internos do plano {org.plano.upper()} atingido.",
             )
 
-    if db.query(Usuario.id).filter(func.lower(Usuario.email) == dados.email.strip().lower()).first():
-        raise HTTPException(status_code=400, detail="E-mail já cadastrado.")
+    if db.query(Usuario.id).filter(Usuario.organizacao_id == org.id, func.lower(Usuario.email) == dados.email.strip().lower()).first():
+        raise HTTPException(status_code=400, detail="E-mail já cadastrado neste ambiente.")
     is_client_role = dados.perfil == "cliente"
     cargo_final = None if is_client_role else (dados.cargo or dados.cbo_descricao)
     novo = Usuario(

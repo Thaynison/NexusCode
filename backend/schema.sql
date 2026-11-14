@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     id SERIAL PRIMARY KEY,
     organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     nome VARCHAR(120) NOT NULL,
-    email VARCHAR(150) NOT NULL UNIQUE,
+    email VARCHAR(150) NOT NULL,
     senha_hash VARCHAR(255) NOT NULL,
     perfil VARCHAR(20) NOT NULL DEFAULT 'colaborador' CHECK (perfil IN ('admin', 'colaborador', 'cliente')),
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     linkedin_url VARCHAR(255) NULL,
     resumo_profissional TEXT NULL,
     foto_url TEXT NULL,
+    permissoes_individuais_json TEXT NULL,
     cep VARCHAR(20) NULL,
     endereco VARCHAR(255) NULL,
     bairro VARCHAR(120) NULL,
@@ -411,6 +412,7 @@ CREATE INDEX IF NOT EXISTS idx_faturas_cliente ON faturas(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_holerites_usuario ON holerites(usuario_id);
 CREATE INDEX IF NOT EXISTS idx_informes_usuario ON informes_rendimentos(usuario_id);
 CREATE INDEX IF NOT EXISTS idx_ponto_usuario_data ON registros_ponto(usuario_id, data_ponto);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_org_email ON usuarios(organizacao_id, email);
 CREATE INDEX IF NOT EXISTS idx_propostas_cliente ON propostas_comerciais(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_despesas_vencimento ON despesas(vencimento);
 CREATE INDEX IF NOT EXISTS idx_contratos_cliente ON contratos_recorrentes(cliente_id);

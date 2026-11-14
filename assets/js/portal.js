@@ -195,8 +195,8 @@ window.portalOpenNewProjectRequestModal = () => {
           <div class="formgrid">
             <label>Serviço / Tipo de Demanda *
               <select name="tipo_projeto" id="portal-req-tipo" required>
-                ${catalogo.map((s) => `<option value="${esc(s.nome)}" data-base="${s.valor_base}" data-dias="${s.prazo_dias}">${esc(s.nome)} — A partir de ${formatMoney(s.valor_base)}</option>`).join('')}
-                <option value="Projeto Sob Medida / Outro" data-base="0" data-dias="15">Projeto Sob Medida / Outro</option>
+                ${catalogo.map((s) => `<option value="${esc(s.nome)}" data-base="${s.valor_base}" data-dias="${s.prazo_dias}">${esc(s.nome)}</option>`).join('')}
+                <option value="Projeto Sob Medida / Outro" data-base="0" data-dias="15">Projeto Sob Medida / Consultoria</option>
               </select>
             </label>
             <label>Prioridade / Urgência *

@@ -54,7 +54,7 @@ class Usuario(Base):
     id = Column(Integer, primary_key=True, index=True)
     organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     nome = Column(String(120), nullable=False)
-    email = Column(String(150), unique=True, index=True, nullable=False)
+    email = Column(String(150), index=True, nullable=False)
     senha_hash = Column(String(255), nullable=False)
     perfil = Column(
         Enum("admin", "colaborador", "cliente", name="perfil_usuario"),
@@ -87,6 +87,7 @@ class Usuario(Base):
     linkedin_url = Column(String(255), nullable=True)
     resumo_profissional = Column(Text, nullable=True)
     foto_url = Column(Text, nullable=True)
+    permissoes_individuais_json = Column(Text, nullable=True)
     cep = Column(String(20), nullable=True)
     endereco = Column(String(255), nullable=True)
     bairro = Column(String(120), nullable=True)

@@ -402,6 +402,23 @@ function applyRolePermissions() {
     }
     btn.style.display = 'flex';
   });
+
+  // Hide empty nav-groups
+  $$('.nav-group:not(.saas-master-only)').forEach(group => {
+    let nextEl = group.nextElementSibling;
+    let hasVisibleBtn = false;
+    while (nextEl && nextEl.tagName === 'BUTTON') {
+      if (nextEl.style.display !== 'none' && !nextEl.classList.contains('saas-master-only')) {
+        hasVisibleBtn = true;
+        break;
+      }
+      nextEl = nextEl.nextElementSibling;
+    }
+    group.style.display = hasVisibleBtn ? (document.querySelector('.shell').classList.contains('sidebar-collapsed') && window.innerWidth > 900 ? 'block' : 'block') : 'none';
+    if (!hasVisibleBtn) {
+        group.style.display = 'none';
+    }
+  });
 }
 
 $('#app-notif-btn')?.addEventListener('click', (e) => {
@@ -669,6 +686,7 @@ async function renderDashboard() {
           <strong>${kpi.projetos_ativos}</strong>
           <span class="pill-info">Em execução e homologação</span>
         </div>
+        ${cache.empresa_config?.permissoes_json && JSON.parse(cache.empresa_config.permissoes_json).colaborador?.financeiro_dre ? `
         <div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('dre')">
           <div class="metric-head">
             <span class="title">Receita Paga / Lucro</span>
@@ -676,7 +694,7 @@ async function renderDashboard() {
           </div>
           <strong>${formatMoney(kpi.receita_paga)}</strong>
           <span class="pill-info">Lucro: ${formatMoney(kpi.lucro_realizado ?? kpi.receita_paga)} • MRR: ${formatMoney(kpi.mrr_ativo ?? 0)}</span>
-        </div>
+        </div>` : ''}
         <div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('propostas')">
           <div class="metric-head">
             <span class="title">Propostas Abertas</span>
@@ -4622,6 +4640,13 @@ async function render(useCache = false) {
 }
 
 window.nexusGo = (targetPage, openCreate = false) => {
+  // Check if button exists and is visible before navigating
+  const navBtn = document.querySelector(`[data-app-page="${targetPage}"]`);
+  if (navBtn && navBtn.style.display === 'none') {
+    showNoticeModal({ title: 'Acesso Restrito', message: 'Você não possui permissão para acessar esta área.', variant: 'warning' });
+    return;
+  }
+  
   if (targetPage === 'tasks') {
     page = 'kanban';
     kanbanViewMode = 'list';

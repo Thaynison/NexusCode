@@ -98,6 +98,7 @@ class UsuarioBase(BaseModel):
     linkedin_url: Optional[str] = None
     resumo_profissional: Optional[str] = None
     foto_url: Optional[str] = None
+    permissoes_individuais_json: Optional[str] = None
     cep: Optional[str] = None
     endereco: Optional[str] = None
     bairro: Optional[str] = None
@@ -140,6 +141,7 @@ class UsuarioUpdate(BaseModel):
     linkedin_url: Optional[str] = None
     resumo_profissional: Optional[str] = None
     foto_url: Optional[str] = None
+    permissoes_individuais_json: Optional[str] = None
     cep: Optional[str] = None
     endereco: Optional[str] = None
     bairro: Optional[str] = None
@@ -181,6 +183,7 @@ class UsuarioListOut(BaseModel):
     cargo: Optional[str] = None
     cidade: Optional[str] = None
     estado: Optional[str] = None
+    permissoes_individuais_json: Optional[str] = None
     criado_em: datetime
     model_config = ConfigDict(from_attributes=True)
 
