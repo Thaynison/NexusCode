@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nexus Code Studio — Cloud IDE (Codespaces)</title>
+  <title>Nexus CodeSpaces · Ambiente de desenvolvimento em nuvem</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/brand/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -15,159 +16,476 @@
     } catch (_) {}
   </script>
 </head>
-<body class="vsc-body">
-  <header class="vsc-titlebar">
-    <div class="vsc-title-left">
-      <a href="./index.html" class="vsc-back-btn" title="Voltar ao Portal Nexus">&#8592; Portal Nexus</a>
-      <span class="vsc-logo-pill">NEXUS STUDIO</span>
-      <span class="vsc-repo-label" id="vsc-repo-name">Carregando repositório...</span>
+<body class="ncs-body">
+  <!-- TOP TITLE BAR (GitHub Codespaces / VS Code Web) -->
+  <header class="ncs-titlebar">
+    <div class="ncs-title-left">
+      <div class="ncs-menu-wrap">
+        <button type="button" class="ncs-icon-btn" id="ncs-menu-btn" title="Menu Principal (Alt)">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3.5h12v1H2v-1zm0 4h12v1H2v-1zm0 4h12v1H2v-1z"/></svg>
+        </button>
+        <div class="ncs-dropdown-menu" id="ncs-main-menu" style="display:none;">
+          <div class="ncs-menu-section">
+            <button type="button" data-cmd="newFile"><span>Novo Arquivo...</span><kbd>Ctrl+N</kbd></button>
+            <button type="button" data-cmd="newFolder"><span>Nova Pasta...</span></button>
+            <button type="button" data-cmd="commitPush"><span>Salvar &amp; Commit no GitHub</span><kbd>Ctrl+S</kbd></button>
+          </div>
+          <div class="ncs-menu-sep"></div>
+          <div class="ncs-menu-section">
+            <button type="button" data-cmd="find"><span>Localizar no Arquivo</span><kbd>Ctrl+F</kbd></button>
+            <button type="button" data-cmd="format"><span>Formatar Documento</span><kbd>Shift+Alt+F</kbd></button>
+            <button type="button" data-cmd="toggleDiff"><span>Comparar Alterações (Diff)</span></button>
+          </div>
+          <div class="ncs-menu-sep"></div>
+          <div class="ncs-menu-section">
+            <button type="button" data-cmd="commandPalette"><span>Paleta de Comandos...</span><kbd>Ctrl+Shift+P</kbd></button>
+            <button type="button" data-cmd="quickOpen"><span>Ir para Arquivo...</span><kbd>Ctrl+P</kbd></button>
+            <button type="button" data-cmd="toggleSidebar"><span>Alternar Barra Lateral</span><kbd>Ctrl+B</kbd></button>
+            <button type="button" data-cmd="toggleTerminal"><span>Alternar Terminal</span><kbd>Ctrl+`</kbd></button>
+            <button type="button" data-cmd="togglePreview"><span>Alternar Live Preview</span></button>
+          </div>
+          <div class="ncs-menu-sep"></div>
+          <div class="ncs-menu-section">
+            <button type="button" data-cmd="deployProd"><span>&#9889; Deploy Produção (Vercel)</span></button>
+            <button type="button" data-cmd="openGitHub"><span>Abrir Repositório no GitHub &#8599;</span></button>
+            <button type="button" data-cmd="backPortal"><span>&#8592; Voltar ao Portal Nexus</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="ncs-nav-arrows">
+        <button type="button" class="ncs-icon-btn" id="ncs-nav-back" title="Voltar Editor (Alt+Left)" disabled>
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M7.78 12.53a.75.75 0 0 1-1.06 0L2.47 8.28a.75.75 0 0 1 0-1.06l4.25-4.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L4.81 7h7.44a.75.75 0 0 1 0 1.5H4.81l2.97 2.97a.75.75 0 0 1 0 1.06Z"/></svg>
+        </button>
+        <button type="button" class="ncs-icon-btn" id="ncs-nav-fwd" title="Avançar Editor (Alt+Right)" disabled>
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8.22 2.97a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l2.97-2.97H3.75a.75.75 0 0 1 0-1.5h7.44L8.22 4.03a.75.75 0 0 1 0-1.06Z"/></svg>
+        </button>
+      </div>
+
+      <div class="ncs-brand-chip" title="Nexus CodeSpaces · Ambiente de desenvolvimento em nuvem">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00B4D8" stroke-width="2.2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><polyline points="7 8 10 10.5 7 13"/><line x1="12" y1="13" x2="16" y2="13"/></svg>
+        <span class="ncs-brand-name">Nexus CodeSpaces</span>
+      </div>
+
+      <span class="ncs-title-sep">/</span>
+      <span class="ncs-repo-label" id="ncs-repo-name">Carregando repositório...</span>
     </div>
 
-    <div class="vsc-command-center" id="vsc-quick-open-trigger" title="Pesquisar arquivos (Ctrl+P)">
-      <span>&#128269;</span>
-      <span id="vsc-cmd-title">Pesquisar arquivos no repositório (Ctrl+P)</span>
+    <!-- CENTER COMMAND CENTER (GitHub Codespaces Search & Command Trigger) -->
+    <div class="ncs-command-center-wrap">
+      <button type="button" class="ncs-command-center" id="ncs-quick-open-trigger" title="Pesquisar arquivos (Ctrl+P) ou Comandos (Ctrl+Shift+P)">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+        <span id="ncs-cmd-title">Nexus CodeSpaces — Pesquisar (Ctrl+P)</span>
+      </button>
+      <button type="button" class="ncs-cmd-palette-btn" id="ncs-cmd-palette-trigger" title="Paleta de Comandos (Ctrl+Shift+P)">&gt;_</button>
     </div>
 
-    <div class="vsc-title-right">
-      <button type="button" class="vsc-top-btn" id="vsc-btn-preview" title="Alternar Preview ao Vivo">&#9654; Preview</button>
-      <button type="button" class="vsc-top-btn primary" id="vsc-btn-commit" title="Salvar e Fazer Commit no GitHub (Ctrl+S)">&#10003; Commit &amp; Push <span id="vsc-dirty-badge" style="display:none;">0</span></button>
-      <button type="button" class="vsc-top-btn deploy" id="vsc-btn-deploy" title="Disparar Deploy Vercel">&#9889; Deploy</button>
-      <a href="#" target="_blank" rel="noopener" class="vsc-top-btn" id="vsc-link-github">GitHub &#8599;</a>
+    <!-- RIGHT WORKSPACE & DEPLOY CONTROLS -->
+    <div class="ncs-title-right">
+      <div class="ncs-layout-toggles">
+        <button type="button" class="ncs-icon-btn active" id="ncs-layout-sidebar" title="Alternar Barra Lateral Primária (Ctrl+B)">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2.5A1.5 1.5 0 0 1 3.5 1h9A1.5 1.5 0 0 1 14 2.5v11a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 13.5v-11zM3.5 2a.5.5 0 0 0-.5.5v11a.5.5 0 0 0 .5.5H6V2H3.5zM7 2v12h5.5a.5.5 0 0 0 .5-.5v-11a.5.5 0 0 0-.5-.5H7z"/></svg>
+        </button>
+        <button type="button" class="ncs-icon-btn active" id="ncs-layout-panel" title="Alternar Painel Inferior / Terminal (Ctrl+`)">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2.5A1.5 1.5 0 0 1 3.5 1h9A1.5 1.5 0 0 1 14 2.5v11a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 13.5v-11zM3.5 2a.5.5 0 0 0-.5.5V10h10V2.5a.5.5 0 0 0-.5-.5h-9zM3 11v2.5a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5V11H3z"/></svg>
+        </button>
+        <button type="button" class="ncs-icon-btn" id="ncs-btn-preview" title="Abrir Preview ao Vivo ao Lado">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2.5A1.5 1.5 0 0 1 3.5 1h9A1.5 1.5 0 0 1 14 2.5v11a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 13.5v-11zM3.5 2a.5.5 0 0 0-.5.5v11a.5.5 0 0 0 .5.5H8V2H3.5zM9 2v12h3.5a.5.5 0 0 0 .5-.5v-11a.5.5 0 0 0-.5-.5H9z"/></svg>
+        </button>
+      </div>
+
+      <button type="button" class="ncs-top-btn gh-green" id="ncs-btn-commit" title="Commit & Push para GitHub (Ctrl+S)">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>
+        <span>Commit &amp; Push</span>
+        <span class="ncs-pill-count" id="ncs-dirty-badge" style="display:none;">0</span>
+      </button>
+
+      <button type="button" class="ncs-top-btn deploy" id="ncs-btn-deploy" title="Disparar Deploy Vercel">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M9.504.43a1.516 1.516 0 0 1 2.437 1.713L10.415 5.5h2.123c1.57 0 2.346 1.909 1.22 3.004l-7.34 7.142a1.249 1.249 0 0 1-.871.354h-.302a1.25 1.25 0 0 1-1.157-1.723L5.633 10.5H3.462c-1.57 0-2.346-1.909-1.22-3.004L9.503.429Z"/></svg>
+        <span>Deploy</span>
+      </button>
+
+      <a href="#" target="_blank" rel="noopener" class="ncs-top-btn" id="ncs-link-github" title="Abrir Repositório no GitHub">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
+        <span>GitHub</span>
+      </a>
+
+      <a href="./index.html" class="ncs-top-btn" title="Voltar ao Portal Nexus">&#8592; Portal</a>
     </div>
   </header>
 
-  <div class="vsc-workbench">
-    <nav class="vsc-activitybar">
-      <button type="button" class="vsc-act-btn active" data-side-tab="explorer" title="Explorador de Arquivos (Ctrl+Shift+E)">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+  <!-- MAIN WORKBENCH -->
+  <div class="ncs-workbench">
+    <!-- ACTIVITY BAR (Far Left) -->
+    <nav class="ncs-activitybar" aria-label="Barra de Atividades">
+      <button type="button" class="ncs-act-btn active" data-side-tab="explorer" title="Explorador (Ctrl+Shift+E)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
       </button>
-      <button type="button" class="vsc-act-btn" data-side-tab="search" title="Pesquisar no Código (Ctrl+Shift+F)">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <button type="button" class="ncs-act-btn" data-side-tab="search" title="Pesquisar no Repositório (Ctrl+Shift+F)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/></svg>
       </button>
-      <button type="button" class="vsc-act-btn" data-side-tab="git" title="Controle do Código-Fonte (Git)">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>
-        <span class="vsc-act-badge" id="vsc-git-badge" style="display:none;">0</span>
+      <button type="button" class="ncs-act-btn" data-side-tab="git" title="Controle do Código-Fonte / Git (Ctrl+Shift+G)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>
+        <span class="ncs-act-badge" id="ncs-git-badge" style="display:none;">0</span>
       </button>
-      <button type="button" class="vsc-act-btn" data-side-tab="deploys" title="Deploys Vercel & CI/CD">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      <button type="button" class="ncs-act-btn" data-side-tab="run" title="Executar & Live Preview (Ctrl+Shift+D)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       </button>
+      <button type="button" class="ncs-act-btn" data-side-tab="deploys" title="Nexus Cloud & Deploys Vercel">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+      </button>
+
       <div style="flex:1;"></div>
-      <button type="button" class="vsc-act-btn" id="vsc-toggle-terminal-btn" title="Alternar Terminal (Ctrl+`)">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+
+      <button type="button" class="ncs-act-btn" id="ncs-account-btn" title="Conta Conectada">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </button>
+      <button type="button" class="ncs-act-btn" data-side-tab="settings" title="Configurações do Nexus CodeSpaces">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
     </nav>
 
-    <aside class="vsc-sidebar" id="vsc-sidebar">
-      <div class="vsc-side-pane active" id="pane-explorer">
-        <div class="vsc-side-header">
+    <!-- PRIMARY SIDEBAR -->
+    <aside class="ncs-sidebar" id="ncs-sidebar">
+      <!-- PANE 1: EXPLORER -->
+      <div class="ncs-side-pane active" id="pane-explorer">
+        <div class="ncs-side-header">
           <span>EXPLORADOR</span>
-          <div class="vsc-side-actions">
-            <button type="button" id="vsc-new-file-btn" title="Novo Arquivo">+ Arquivo</button>
-            <button type="button" id="vsc-refresh-tree-btn" title="Atualizar Árvore">&#8635;</button>
+          <div class="ncs-side-actions">
+            <button type="button" id="ncs-new-file-btn" title="Novo Arquivo">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M9.5 1.1l3.4 3.5.1.4v2h-1V6H8V2H3v11h4v1H2.5l-.5-.5v-12l.5-.5h6.7l.3.1zM9 2v3h2.9L9 2zm4 14h-1v-3H9v-1h3V9h1v3h3v1h-3v3z"/></svg>
+            </button>
+            <button type="button" id="ncs-new-folder-btn" title="Nova Pasta">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14.5 2H7.71l-.85-.85L6.51 1h-5l-.5.5v11l.5.5H7v-1H1.99V6h4.49l.35-.15.86-.86H14v1.5l-.001.51h1.011V2.5L14.5 2zm-.51 2h-6.5l-.35.15-.86.86H2v-3h4.29l.85.85.36.15H14l-.01.99zM13 16h-1v-3H9v-1h3V9h1v3h3v1h-3v3z"/></svg>
+            </button>
+            <button type="button" id="ncs-collapse-all-btn" title="Recolher Pastas">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M9 9H4v1h5V9z"/><path fill-rule="evenodd" clip-rule="evenodd" d="M5 3l1-1h7l1 1v7l-1 1h-2v2l-1 1H3l-1-1V6l1-1h2V3zm1 2h4l1 1v4h2V3H6v2zm4 1H3v7h7V6z"/></svg>
+            </button>
+            <button type="button" id="ncs-refresh-tree-btn" title="Atualizar Árvore do GitHub">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M4.681 3H2V2h3.5l.5.5V6H5V4a5 5 0 1 0 4.53-.761l.302-.954A6 6 0 1 1 4.681 3z"/></svg>
+            </button>
           </div>
         </div>
-        <div class="vsc-tree-scroll" id="vsc-file-tree"></div>
-      </div>
 
-      <div class="vsc-side-pane" id="pane-search">
-        <div class="vsc-side-header"><span>PESQUISAR ARQUIVOS</span></div>
-        <div style="padding:10px;">
-          <input type="text" id="vsc-search-input" class="vsc-input" placeholder="Filtrar arquivos pelo nome...">
-          <div id="vsc-search-results" style="margin-top:10px;"></div>
+        <!-- Accordion 1: OPEN EDITORS -->
+        <div class="ncs-accordion" id="acc-open-editors">
+          <div class="ncs-acc-head" data-acc-target="acc-open-editors-body">
+            <span class="ncs-chevron">&#9662;</span>
+            <span>EDITORES ABERTOS</span>
+            <span class="ncs-acc-count" id="ncs-open-count">0</span>
+          </div>
+          <div class="ncs-acc-body" id="acc-open-editors-body"></div>
+        </div>
+
+        <!-- Accordion 2: REPOSITORY TREE -->
+        <div class="ncs-accordion flex-grow" id="acc-repo-tree">
+          <div class="ncs-acc-head" data-acc-target="ncs-file-tree">
+            <span class="ncs-chevron">&#9662;</span>
+            <span id="ncs-tree-repo-title" style="text-transform:uppercase;">REPOSITÓRIO</span>
+          </div>
+          <div class="ncs-tree-scroll" id="ncs-file-tree"></div>
+        </div>
+
+        <!-- Accordion 3: TIMELINE -->
+        <div class="ncs-accordion collapsed" id="acc-timeline">
+          <div class="ncs-acc-head" data-acc-target="ncs-timeline-body">
+            <span class="ncs-chevron">&#9656;</span>
+            <span>LINHA DO TEMPO (GIT)</span>
+          </div>
+          <div class="ncs-acc-body" id="ncs-timeline-body" style="display:none; max-height:170px; overflow-y:auto;"></div>
         </div>
       </div>
 
-      <div class="vsc-side-pane" id="pane-git">
-        <div class="vsc-side-header"><span>CONTROLE DE CÓDIGO-FONTE</span></div>
-        <div style="padding:10px; display:flex; flex-direction:column; gap:10px;">
-          <textarea id="vsc-commit-msg" class="vsc-input" rows="3" placeholder="Mensagem do commit (ex.: feat: implementa endpoint)..."></textarea>
-          <button type="button" class="vsc-top-btn primary" style="width:100%; justify-content:center;" id="vsc-git-commit-btn">&#10003; Commit &amp; Push para GitHub</button>
-          <div class="vsc-sub-title">ALTERAÇÕES NÃO SALVAS (<span id="vsc-changes-count">0</span>)</div>
-          <div id="vsc-changes-list"></div>
-          <div class="vsc-sub-title">ÚLTIMOS COMMITS NO GITHUB</div>
-          <div id="vsc-commits-list" class="vsc-commits-scroll"></div>
+      <!-- PANE 2: SEARCH -->
+      <div class="ncs-side-pane" id="pane-search">
+        <div class="ncs-side-header"><span>PESQUISAR</span></div>
+        <div class="ncs-pane-pad">
+          <div class="ncs-search-box">
+            <input type="text" id="ncs-search-input" class="ncs-input" placeholder="Pesquisar arquivos ou texto no código...">
+            <button type="button" id="ncs-search-case" class="ncs-case-btn" title="Diferenciar Maiúsculas/Minúsculas">Aa</button>
+          </div>
+          <div id="ncs-search-meta" class="ncs-muted-xs" style="margin:6px 0;"></div>
+          <div id="ncs-search-results" class="ncs-scroll-col"></div>
         </div>
       </div>
 
-      <div class="vsc-side-pane" id="pane-deploys">
-        <div class="vsc-side-header"><span>DEPLOYS &amp; AMBIENTES</span></div>
-        <div style="padding:10px; display:flex; flex-direction:column; gap:10px;">
-          <button type="button" class="vsc-top-btn deploy" style="width:100%; justify-content:center;" id="vsc-side-deploy-prod">&#9889; Deploy Produção (Vercel)</button>
-          <button type="button" class="vsc-top-btn" style="width:100%; justify-content:center;" id="vsc-side-deploy-prev">Deploy Homologação (Preview)</button>
-          <div id="vsc-deploys-list" class="vsc-commits-scroll"></div>
+      <!-- PANE 3: SOURCE CONTROL (GIT) -->
+      <div class="ncs-side-pane" id="pane-git">
+        <div class="ncs-side-header">
+          <span>CONTROLE DO CÓDIGO-FONTE</span>
+          <div class="ncs-side-actions">
+            <button type="button" id="ncs-git-branch-btn" title="Trocar ou Criar Branch">&#9741; Branch</button>
+          </div>
+        </div>
+        <div class="ncs-pane-pad" style="gap:10px; overflow-y:auto;">
+          <textarea id="ncs-commit-msg" class="ncs-input" rows="3" placeholder="Mensagem (Ctrl+Enter para Commit & Push em &quot;main&quot;)"></textarea>
+          <button type="button" class="ncs-top-btn gh-green" style="width:100%; justify-content:center; padding:6px 10px;" id="ncs-git-commit-btn">
+            &#10003; Commit &amp; Push
+          </button>
+
+          <div class="ncs-sub-title">ALTERAÇÕES (<span id="ncs-changes-count">0</span>)</div>
+          <div id="ncs-changes-list" class="ncs-scroll-col"></div>
+
+          <div class="ncs-sub-title" style="margin-top:8px;">HISTÓRICO DE COMMITS</div>
+          <div id="ncs-commits-list" class="ncs-scroll-col"></div>
+        </div>
+      </div>
+
+      <!-- PANE 4: RUN & LIVE PREVIEW -->
+      <div class="ncs-side-pane" id="pane-run">
+        <div class="ncs-side-header"><span>EXECUTAR &amp; PREVIEW</span></div>
+        <div class="ncs-pane-pad" style="gap:10px;">
+          <button type="button" class="ncs-top-btn gh-green" style="width:100%; justify-content:center; padding:7px 10px;" id="ncs-run-preview-btn">
+            &#9654; Executar Preview ao Vivo
+          </button>
+          <p class="ncs-muted-xs" style="line-height:1.5;">
+            Renderiza o projeto Web (HTML + CSS + JS do repositório) ou visualiza documentos Markdown em tempo real ao lado do editor.
+          </p>
+          <div class="ncs-sub-title">AMBIENTES REMOTOS</div>
+          <div id="ncs-env-links" class="ncs-scroll-col"></div>
+        </div>
+      </div>
+
+      <!-- PANE 5: NEXUS CLOUD & DEPLOYS -->
+      <div class="ncs-side-pane" id="pane-deploys">
+        <div class="ncs-side-header"><span>NEXUS CLOUD &amp; DEPLOYS</span></div>
+        <div class="ncs-pane-pad" style="gap:10px; overflow-y:auto;">
+          <button type="button" class="ncs-top-btn deploy" style="width:100%; justify-content:center; padding:7px 10px;" id="ncs-side-deploy-prod">&#9889; Deploy Produção (main)</button>
+          <button type="button" class="ncs-top-btn" style="width:100%; justify-content:center; padding:6px 10px;" id="ncs-side-deploy-prev">Deploy Homologação (Preview)</button>
+          <div class="ncs-sub-title">HISTÓRICO DE DEPLOYS VERCEL</div>
+          <div id="ncs-deploys-list" class="ncs-scroll-col"></div>
+        </div>
+      </div>
+
+      <!-- PANE 6: SETTINGS -->
+      <div class="ncs-side-pane" id="pane-settings">
+        <div class="ncs-side-header"><span>CONFIGURAÇÕES DO EDITOR</span></div>
+        <div class="ncs-pane-pad" style="gap:12px;">
+          <label class="ncs-set-label">Tema de Cores
+            <select id="ncs-set-theme" class="ncs-input">
+              <option value="nexus-codespaces-dark">GitHub Dark Default (Nexus CodeSpaces)</option>
+              <option value="vs-dark">VS Code Dark+ Modern</option>
+            </select>
+          </label>
+          <label class="ncs-set-label">Tamanho da Fonte (px)
+            <input type="number" id="ncs-set-fontsize" class="ncs-input" min="11" max="22" value="14">
+          </label>
+          <label class="ncs-set-label">Tamanho da Tabulação (Espaços)
+            <select id="ncs-set-tabsize" class="ncs-input">
+              <option value="2" selected>2 espaços</option>
+              <option value="4">4 espaços</option>
+            </select>
+          </label>
+          <label class="ncs-set-check">
+            <input type="checkbox" id="ncs-set-minimap" checked>
+            <span>Exibir Minimapa do Código</span>
+          </label>
+          <label class="ncs-set-check">
+            <input type="checkbox" id="ncs-set-wordwrap">
+            <span>Quebra Automática de Linha (Word Wrap)</span>
+          </label>
         </div>
       </div>
     </aside>
 
-    <main class="vsc-editor-column">
-      <div class="vsc-tabs-bar" id="vsc-tabs-bar"></div>
-      <div class="vsc-breadcrumbs" id="vsc-breadcrumbs">Selecione um arquivo no explorador à esquerda para começar a editar</div>
+    <!-- RESIZE HANDLE: SIDEBAR -->
+    <div class="ncs-resizer-v" id="ncs-sidebar-resizer" title="Arraste para redimensionar"></div>
 
-      <div class="vsc-editor-split">
-        <div class="vsc-code-wrap" id="vsc-code-wrap">
-          <div class="vsc-welcome" id="vsc-welcome">
-            <div class="vsc-welcome-logo">NEXUS CODE STUDIO</div>
-            <p>Ambiente Cloud IDE conectado diretamente ao repositório GitHub da empresa.</p>
-            <div class="vsc-shortcuts">
-              <div><kbd>Ctrl + S</kbd> Salvar &amp; Commit no GitHub</div>
-              <div><kbd>Ctrl + P</kbd> Busca Rápida de Arquivos</div>
-              <div><kbd>Ctrl + `</kbd> Abrir / Fechar Terminal</div>
-            </div>
-          </div>
-          <div class="vsc-editor-stage" id="vsc-editor-stage" style="display:none;">
-            <div class="vsc-gutter" id="vsc-gutter">1</div>
-            <div class="vsc-highlight-container">
-              <pre class="vsc-code-highlight" id="vsc-code-highlight" aria-hidden="true"></pre>
-              <textarea id="vsc-textarea" class="vsc-textarea" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
-            </div>
-          </div>
-        </div>
-
-        <div class="vsc-preview-pane" id="vsc-preview-pane" style="display:none;">
-          <div class="vsc-preview-header">
-            <span>PREVIEW AO VIVO</span>
-            <button type="button" id="vsc-close-preview">&times;</button>
-          </div>
-          <iframe id="vsc-preview-frame" sandbox="allow-scripts"></iframe>
+    <!-- CENTER EDITOR & BOTTOM PANEL COLUMN -->
+    <main class="ncs-editor-column">
+      <!-- EDITOR TABS BAR -->
+      <div class="ncs-tabs-bar-wrap">
+        <div class="ncs-tabs-bar" id="ncs-tabs-bar"></div>
+        <div class="ncs-tabs-actions" id="ncs-tabs-actions" style="display:none;">
+          <button type="button" class="ncs-icon-btn" id="ncs-tab-diff-btn" title="Comparar Alterações (Diff)">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8.75 1.75V5H12a.75.75 0 0 1 0 1.5H8.75v3.25a.75.75 0 0 1-1.5 0V6.5H4A.75.75 0 0 1 4 5h3.25V1.75a.75.75 0 0 1 1.5 0ZM4 13h8a.75.75 0 0 1 0 1.5H4A.75.75 0 0 1 4 13Z"/></svg>
+          </button>
+          <button type="button" class="ncs-icon-btn" id="ncs-tab-preview-btn" title="Abrir Preview ao Lado">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 2.75a.25.25 0 0 1 .25-.25h12.5a.25.25 0 0 1 .25.25v10.5a.25.25 0 0 1-.25.25H1.75a.25.25 0 0 1-.25-.25V2.75Zm1.5.25v9.5h10V3H3Z"/></svg>
+          </button>
         </div>
       </div>
 
-      <section class="vsc-bottom-panel" id="vsc-bottom-panel">
-        <div class="vsc-bottom-tabs">
-          <span class="vsc-btab active">TERMINAL (bash — codespaces)</span>
-          <span class="vsc-btab" id="vsc-output-status">SAÍDA: PRONTO</span>
-          <div style="flex:1;"></div>
-          <button type="button" id="vsc-hide-terminal" class="vsc-close-panel">&times;</button>
+      <!-- BREADCRUMBS -->
+      <div class="ncs-breadcrumbs" id="ncs-breadcrumbs">
+        <span>Nexus CodeSpaces</span>
+      </div>
+
+      <!-- EDITOR SPLIT (MONACO + LIVE PREVIEW) -->
+      <div class="ncs-editor-split">
+        <div class="ncs-code-wrap" id="ncs-code-wrap">
+          <!-- WELCOME SCREEN (GitHub Codespaces Start) -->
+          <div class="ncs-welcome" id="ncs-welcome">
+            <div class="ncs-welcome-head">
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#58a6ff" stroke-width="1.6"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><polyline points="7 8 10 10.5 7 13"/><line x1="12" y1="13" x2="16" y2="13"/></svg>
+              <div>
+                <div class="ncs-welcome-title">Nexus CodeSpaces</div>
+                <div class="ncs-welcome-sub">Ambiente de desenvolvimento em nuvem · GitHub Cloud IDE</div>
+              </div>
+            </div>
+
+            <div class="ncs-welcome-grid">
+              <div>
+                <div class="ncs-welcome-sec">Iniciar</div>
+                <button type="button" class="ncs-welcome-link" id="ncs-wel-newfile">&#128196; Novo Arquivo...</button>
+                <button type="button" class="ncs-welcome-link" id="ncs-wel-quickopen">&#128269; Abrir Arquivo (Ctrl+P)</button>
+                <button type="button" class="ncs-welcome-link" id="ncs-wel-git">&#9741; Controle de Código-Fonte (Git)</button>
+                <button type="button" class="ncs-welcome-link" id="ncs-wel-deploy">&#9889; Publicar na Nuvem (Vercel)</button>
+              </div>
+              <div>
+                <div class="ncs-welcome-sec">Atalhos de Teclado</div>
+                <div class="ncs-shortcut-row"><span>Paleta de Comandos</span><kbd>Ctrl+Shift+P</kbd></div>
+                <div class="ncs-shortcut-row"><span>Busca Rápida</span><kbd>Ctrl+P</kbd></div>
+                <div class="ncs-shortcut-row"><span>Commit &amp; Push</span><kbd>Ctrl+S</kbd></div>
+                <div class="ncs-shortcut-row"><span>Localizar no Código</span><kbd>Ctrl+F</kbd></div>
+                <div class="ncs-shortcut-row"><span>Alternar Terminal</span><kbd>Ctrl+`</kbd></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- MONACO EDITOR HOST -->
+          <div id="ncs-monaco-container" style="display:none; width:100%; height:100%;"></div>
+          <div id="ncs-diff-container" style="display:none; width:100%; height:100%;"></div>
+
+          <!-- FALLBACK EDITOR (if offline) -->
+          <div class="ncs-fallback-stage" id="ncs-fallback-stage" style="display:none;">
+            <div class="ncs-gutter" id="ncs-gutter">1</div>
+            <div class="ncs-highlight-container">
+              <pre class="ncs-code-highlight" id="ncs-code-highlight" aria-hidden="true"></pre>
+              <textarea id="ncs-textarea" class="ncs-textarea" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+            </div>
+          </div>
         </div>
-        <div class="vsc-terminal-out" id="vsc-terminal-out"></div>
-        <div class="vsc-terminal-input-row">
-          <span class="vsc-prompt" id="vsc-term-prompt">nexus@codespaces:~/repo$</span>
-          <input type="text" id="vsc-term-input" placeholder="Digite um comando (help, ls, git status, git commit -m 'msg', nexus deploy, clear)..." autocomplete="off">
+
+        <!-- LIVE PREVIEW PANE -->
+        <div class="ncs-preview-pane" id="ncs-preview-pane" style="display:none;">
+          <div class="ncs-preview-header">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span>PREVIEW AO VIVO</span>
+              <span class="ncs-preview-url" id="ncs-preview-label">localhost:3000</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <button type="button" id="ncs-reload-preview" title="Recarregar Preview">&#8635;</button>
+              <button type="button" id="ncs-close-preview" title="Fechar Preview">&times;</button>
+            </div>
+          </div>
+          <iframe id="ncs-preview-frame" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+      </div>
+
+      <!-- RESIZE HANDLE: BOTTOM PANEL -->
+      <div class="ncs-resizer-h" id="ncs-panel-resizer" title="Arraste para redimensionar o painel"></div>
+
+      <!-- BOTTOM PANEL (PROBLEMS, OUTPUT, TERMINAL, PORTS) -->
+      <section class="ncs-bottom-panel" id="ncs-bottom-panel">
+        <div class="ncs-bottom-tabs">
+          <button type="button" class="ncs-btab" data-panel-tab="problems">PROBLEMAS <span class="ncs-tab-pill" id="ncs-problems-count">0</span></button>
+          <button type="button" class="ncs-btab" data-panel-tab="output">SAÍDA</button>
+          <button type="button" class="ncs-btab active" data-panel-tab="terminal">TERMINAL</button>
+          <button type="button" class="ncs-btab" data-panel-tab="ports">PORTAS <span class="ncs-tab-pill" id="ncs-ports-count">2</span></button>
+          <div style="flex:1;"></div>
+          <span class="ncs-term-shell-tag" id="ncs-output-status">bash · nexus-codespaces</span>
+          <button type="button" id="ncs-clear-terminal" class="ncs-icon-btn" title="Limpar Terminal">&#128465;</button>
+          <button type="button" id="ncs-hide-terminal" class="ncs-icon-btn" title="Fechar Painel">&times;</button>
+        </div>
+
+        <!-- TAB: TERMINAL -->
+        <div class="ncs-panel-view active" id="panel-view-terminal">
+          <div class="ncs-terminal-out" id="ncs-terminal-out"></div>
+          <div class="ncs-terminal-input-row">
+            <span class="ncs-prompt" id="ncs-term-prompt">nexus@codespaces:~/repo$</span>
+            <input type="text" id="ncs-term-input" placeholder="Digite um comando (help, ls, git status, git commit -m 'msg', nexus deploy, clear)..." autocomplete="off">
+          </div>
+        </div>
+
+        <!-- TAB: PROBLEMS -->
+        <div class="ncs-panel-view" id="panel-view-problems" style="display:none;">
+          <div class="ncs-panel-scroll" id="ncs-problems-list">
+            <div class="ncs-muted-xs" style="padding:12px;">Nenhum problema detectado no workspace.</div>
+          </div>
+        </div>
+
+        <!-- TAB: OUTPUT -->
+        <div class="ncs-panel-view" id="panel-view-output" style="display:none;">
+          <div class="ncs-terminal-out" id="ncs-output-log"></div>
+        </div>
+
+        <!-- TAB: PORTS (GitHub Codespaces Forwarded Ports) -->
+        <div class="ncs-panel-view" id="panel-view-ports" style="display:none;">
+          <div class="ncs-panel-scroll">
+            <table class="ncs-ports-table">
+              <thead>
+                <tr>
+                  <th>Porta</th>
+                  <th>Ambiente / Serviço</th>
+                  <th>Endereço Encaminhado</th>
+                  <th>Visibilidade</th>
+                  <th>Ação</th>
+                </tr>
+              </thead>
+              <tbody id="ncs-ports-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </section>
     </main>
   </div>
 
-  <footer class="vsc-statusbar">
-    <div class="vsc-status-left">
-      <span class="vsc-remote-badge">&#8644; Codespaces: Nexus Cloud</span>
-      <button type="button" class="vsc-status-item" id="vsc-branch-btn" title="Trocar ou Criar Branch Git">&#9741; <span id="vsc-branch-name">main</span></button>
-      <span class="vsc-status-item" id="vsc-sync-status">&#10003; Sincronizado</span>
+  <!-- BOTTOM STATUS BAR (Authentic GitHub Codespaces Status Bar) -->
+  <footer class="ncs-statusbar">
+    <div class="ncs-status-left">
+      <button type="button" class="ncs-remote-badge" id="ncs-remote-btn" title="Nexus CodeSpaces · Ambiente de desenvolvimento em nuvem">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M5.22 14.78a.75.75 0 0 0 1.06-1.06L4.56 12h8.69a.75.75 0 0 0 0-1.5H4.56l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3a.75.75 0 0 0 0 1.06l3 3Zm5.56-6.5a.75.75 0 1 1-1.06-1.06l1.72-1.72H2.75a.75.75 0 0 1 0-1.5h8.69L9.72 2.28a.75.75 0 0 1 1.06-1.06l3 3a.75.75 0 0 1 0 1.06l-3 3Z"/></svg>
+        <span>Nexus CodeSpaces</span>
+      </button>
+
+      <button type="button" class="ncs-status-item" id="ncs-branch-btn" title="Git: Trocar ou Criar Branch">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.493 2.493 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
+        <span id="ncs-branch-name">main</span>
+      </button>
+
+      <button type="button" class="ncs-status-item" id="ncs-sync-btn" title="Sincronizar / Commit & Push">
+        <span id="ncs-sync-status">&#10003; Sincronizado</span>
+      </button>
+
+      <button type="button" class="ncs-status-item" id="ncs-problems-status" title="Problemas no Workspace">
+        &#8855; <span id="ncs-prob-stat-num">0</span> &nbsp;&#9888; 0
+      </button>
     </div>
-    <div class="vsc-status-right">
-      <span class="vsc-status-item" id="vsc-cursor-pos">Ln 1, Col 1</span>
-      <span class="vsc-status-item">UTF-8</span>
-      <span class="vsc-status-item" id="vsc-lang-mode">Plain Text</span>
+
+    <div class="ncs-status-right">
+      <button type="button" class="ncs-status-item" id="ncs-cursor-pos" title="Ir para Linha (Ctrl+G)">Ln 1, Col 1</button>
+      <span class="ncs-status-item" id="ncs-tab-info">Espaços: 2</span>
+      <span class="ncs-status-item">UTF-8</span>
+      <span class="ncs-status-item">LF</span>
+      <span class="ncs-status-item" id="ncs-lang-mode">Plain Text</span>
+      <span class="ncs-status-item" style="color:#58a6ff; font-weight:600;">&#9679; Cloud IDE</span>
     </div>
   </footer>
 
-  <div class="vsc-quickopen-backdrop" id="vsc-quickopen" style="display:none;">
-    <div class="vsc-quickopen-box">
-      <input type="text" id="vsc-quickopen-input" placeholder="Digite o nome do arquivo para abrir...">
-      <div id="vsc-quickopen-list"></div>
+  <!-- QUICK OPEN & COMMAND PALETTE MODAL -->
+  <div class="ncs-modal-backdrop" id="ncs-quickopen" style="display:none;">
+    <div class="ncs-quickopen-box">
+      <input type="text" id="ncs-quickopen-input" placeholder="Digite o nome do arquivo ou '>' para comandos...">
+      <div id="ncs-quickopen-list"></div>
     </div>
   </div>
 
+  <!-- CUSTOM INPUT / CONFIRM DIALOG -->
+  <div class="ncs-modal-backdrop" id="ncs-input-modal" style="display:none;">
+    <div class="ncs-dialog-card">
+      <div class="ncs-dialog-title" id="ncs-dlg-title">Novo Arquivo</div>
+      <div class="ncs-dialog-desc" id="ncs-dlg-desc">Informe o caminho relativo no repositório:</div>
+      <input type="text" id="ncs-dlg-input" class="ncs-input" style="font-size:13px; padding:8px 10px;">
+      <div class="ncs-dialog-actions">
+        <button type="button" class="ncs-top-btn" id="ncs-dlg-cancel">Cancelar</button>
+        <button type="button" class="ncs-top-btn gh-green" id="ncs-dlg-ok">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MONACO EDITOR LOADER (VS Code Engine) -->
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
   <script type="module" src="../assets/js/vscode_ide.js"></script>
 </body>
 </html>

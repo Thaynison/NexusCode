@@ -899,7 +899,7 @@ window.nexusOpenProjectIde = (projetoId) => {
     showConfirmModal({
       title: 'Vincular Repositório GitHub ao Projeto',
       message: `O projeto "${proj.titulo}" ainda não possui um repositório GitHub vinculado. Deseja criar um repositório automaticamente na organização GitHub da empresa agora?`,
-      detail: 'Após criar o repositório, o Nexus Code Studio (VS Code Web) será aberto imediatamente.',
+      detail: 'Após criar o repositório, o Nexus CodeSpaces será aberto imediatamente.',
       confirmText: 'Criar Repositório & Abrir IDE',
       variant: 'primary',
       onConfirm: async () => {
