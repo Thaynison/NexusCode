@@ -56,9 +56,9 @@ engine = create_engine(
     max_overflow=4 if IS_VERCEL else 10,
     pool_timeout=10,
     pool_recycle=45,
-    pool_pre_ping=False,
+    pool_pre_ping=True,
     connect_args={
-        "connect_timeout": 8,
+        "connect_timeout": 12,
         "keepalives": 1,
         "keepalives_idle": 30,
         "keepalives_interval": 10,

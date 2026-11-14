@@ -460,29 +460,36 @@ def _run_full_schema_sync():
     if not existing_tables:
         return
 
-    with engine.begin() as conn:
-        for table in Base.metadata.sorted_tables:
-            if table.name not in existing_tables:
-                continue
-            existing_cols = {col["name"] for col in inspector.get_columns(table.name)}
-            for column in table.columns:
-                if column.name not in existing_cols:
-                    col_type = column.type.compile(dialect=engine.dialect)
-                    default_sql = ""
-                    if column.default is not None and column.default.is_scalar:
-                        val = column.default.arg
-                        if isinstance(val, str):
-                            escaped_val = val.replace("'", "''")
-                            default_sql = f" DEFAULT '{escaped_val}'"
-                        elif isinstance(val, bool):
-                            default_sql = f" DEFAULT {'TRUE' if val else 'FALSE'}"
-                        elif isinstance(val, (int, float)):
-                            default_sql = f" DEFAULT {val}"
-                    conn.execute(
-                        text(f'ALTER TABLE "{table.name}" ADD COLUMN IF NOT EXISTS "{column.name}" {col_type}{default_sql}')
-                    )
-        if "faturas" in existing_tables:
-            conn.execute(text("ALTER TABLE faturas ALTER COLUMN projeto_id DROP NOT NULL"))
+    ddl_statements = []
+    for table in Base.metadata.sorted_tables:
+        if table.name not in existing_tables:
+            continue
+        existing_cols = {col["name"] for col in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name not in existing_cols:
+                col_type = column.type.compile(dialect=engine.dialect)
+                default_sql = ""
+                if column.default is not None and column.default.is_scalar:
+                    val = column.default.arg
+                    if isinstance(val, str):
+                        escaped_val = val.replace("'", "''")
+                        default_sql = f" DEFAULT '{escaped_val}'"
+                    elif isinstance(val, bool):
+                        default_sql = f" DEFAULT {'TRUE' if val else 'FALSE'}"
+                    elif isinstance(val, (int, float)):
+                        default_sql = f" DEFAULT {val}"
+                ddl_statements.append(
+                    f'ALTER TABLE "{table.name}" ADD COLUMN IF NOT EXISTS "{column.name}" {col_type}{default_sql}'
+                )
+    if "faturas" in existing_tables:
+        ddl_statements.append("ALTER TABLE faturas ALTER COLUMN projeto_id DROP NOT NULL")
+
+    for stmt in ddl_statements:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+        except Exception as ddl_err:
+            print(f"[Schema Sync Warning] {stmt} -> {ddl_err}")
 
 
 def ensure_db_initialized(force_sync: bool = False):
@@ -802,9 +809,12 @@ async def init_db_middleware(request: Request, call_next):
         path = request.scope["path"]
 
     if path.startswith("/api") and path != "/api/health":
-        ensure_db_initialized(force_sync=(request.query_params.get("migrate") == "1"))
-    elif path == "/api/health" and request.query_params.get("db") == "1":
-        ensure_db_initialized(force_sync=True)
+        try:
+            ensure_db_initialized(force_sync=(request.query_params.get("migrate") == "1"))
+        except Exception as init_err:
+            print(f"[Init DB Warning] {init_err}")
+            if path != "/api/public/tenant-branding":
+                raise
     return await call_next(request)
 
 
@@ -812,12 +822,24 @@ router = APIRouter(prefix="/api")
 
 
 @router.get("/health", tags=["Status"])
-def raiz():
+def raiz(db: int = 0):
+    db_status = "skipped"
+    db_error = None
+    if db == 1:
+        try:
+            ensure_db_initialized(force_sync=True)
+            db_status = "connected_and_synced"
+        except Exception as exc:
+            db_status = "error"
+            db_error = str(exc)
     return {
-        "status": "online",
+        "status": "online" if db_status != "error" else "degraded",
         "sistema": "Nexus Code Enterprise SaaS ERP & CRM API",
-        "versao": "2.3.0",
+        "versao": "2.3.3",
         "regiao": os.getenv("VERCEL_REGION", "local"),
+        "database_url_configurada": bool(os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")),
+        "db_status": db_status,
+        **({"db_error": db_error} if db_error else {}),
     }
 
 
@@ -830,7 +852,24 @@ def forcar_migracao_banco(_: Usuario = Depends(exigir_master_admin)):
 # ==================== WHITE-LABEL BRANDING & SAAS ONBOARDING PÚBLICO ====================
 @router.get("/public/tenant-branding", tags=["SaaS White-Label"])
 def obter_branding_tenant(req: Request, db: Session = Depends(get_db)):
-    org = _resolver_org_por_request(req, db)
+    try:
+        org = _resolver_org_por_request(req, db)
+    except Exception as exc:
+        print(f"[Branding Fallback] {exc}")
+        master_mods = dict(DEFAULT_MODULOS_TENANT)
+        master_mods["loja"] = True
+        master_mods["saas_tenants"] = True
+        return {
+            "organizacao_id": 1,
+            "nome": "Nexus Code Brasil",
+            "slug": "nexus",
+            "dominio_customizado": None,
+            "subdominio_url": "https://www.nexuscodebrasil.com.br",
+            "is_master": True,
+            "status_assinatura": "ativo",
+            "branding": dict(DEFAULT_BRANDING_MASTER),
+            "modulos": master_mods,
+        }
     cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first()
     branding = _parse_json_dict(org.branding_json, DEFAULT_BRANDING_MASTER)
     if not branding.get("nome_plataforma") or (not org.is_master and branding.get("nome_plataforma") == "NEXUS CODE"):
@@ -4359,6 +4398,40 @@ from integrations import (
 )
 
 
+
+def _aplicar_env_fallback_integracoes(cfg: Optional[ConfiguracaoEmpresa]) -> Optional[ConfiguracaoEmpresa]:
+    """Permite usar variáveis de ambiente da Vercel (MP_ACCESS_TOKEN, MP_PUBLIC_KEY, etc.) caso não preenchidas no painel."""
+    if not cfg:
+        return cfg
+    env_token = (os.getenv("MP_ACCESS_TOKEN") or "").strip()
+    env_pub = (os.getenv("MP_PUBLIC_KEY") or "").strip()
+    env_wh = (os.getenv("MP_WEBHOOK_SECRET") or "").strip()
+    env_tipo = (os.getenv("MP_API_TIPO") or "").strip().lower()
+    env_amb = (os.getenv("MP_AMBIENTE") or "").strip().lower()
+
+    if not cfg.mp_access_token and env_token:
+        cfg.mp_access_token = env_token
+        cfg.mp_ativo = True
+    if not cfg.mp_public_key and env_pub:
+        cfg.mp_public_key = env_pub
+    if not cfg.mp_webhook_secret and env_wh:
+        cfg.mp_webhook_secret = env_wh
+    if env_tipo in ("orders", "payments") and not cfg.mp_api_tipo:
+        cfg.mp_api_tipo = env_tipo
+    if env_amb in ("sandbox", "producao") and not cfg.mp_ambiente:
+        cfg.mp_ambiente = env_amb
+
+    if not cfg.registrar_api_user and os.getenv("REGISTRAR_API_USER"):
+        cfg.registrar_api_user = os.getenv("REGISTRAR_API_USER").strip()
+    if not cfg.registrar_api_key and os.getenv("REGISTRAR_API_KEY"):
+        cfg.registrar_api_key = os.getenv("REGISTRAR_API_KEY").strip()
+    if not cfg.vercel_token and os.getenv("VERCEL_TOKEN"):
+        cfg.vercel_token = os.getenv("VERCEL_TOKEN").strip()
+    if not cfg.vercel_project_id and os.getenv("VERCEL_PROJECT_ID"):
+        cfg.vercel_project_id = os.getenv("VERCEL_PROJECT_ID").strip()
+    return cfg
+
+
 def _executar_ativacao_dominio_pago(db: Session, pedido: PedidoDominio, cfg: ConfiguracaoEmpresa):
     """Registra o domínio no provedor, aponta DNS/SSL na Vercel, cria Ativo + Contrato Anual e notifica."""
     if pedido.status == "ativo":
@@ -4464,7 +4537,7 @@ def _processar_checkout_dominio(
     base_url: str,
     usuario_logado: Optional[Usuario] = None,
 ) -> PedidoDominio:
-    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first()
+    cfg = _aplicar_env_fallback_integracoes(db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first())
     if not cfg or not cfg.mp_ativo or not cfg.mp_access_token:
         raise HTTPException(status_code=400, detail="Gateway Mercado Pago não habilitado no painel administrativo.")
 
@@ -4698,7 +4771,7 @@ def gerar_cobranca_mercadopago_fatura(
     if fat.status == "pago":
         return fat
 
-    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == usuario.organizacao_id).first()
+    cfg = _aplicar_env_fallback_integracoes(db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == usuario.organizacao_id).first())
     if not cfg or not cfg.mp_ativo or not cfg.mp_access_token:
         raise HTTPException(status_code=400, detail="Configure e ative o Mercado Pago em Empresa & Permissões > Integrações.")
 
@@ -4793,7 +4866,7 @@ async def webhook_mercadopago(req: Request, org_id: int = 1, db: Session = Depen
     if topic and topic not in ("order", "payment", "merchant_order") and not is_order_event:
         return {"received": True}
 
-    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org_id).first()
+    cfg = _aplicar_env_fallback_integracoes(db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org_id).first())
     if not cfg or not cfg.mp_access_token:
         return {"received": False, "reason": "mp_not_configured"}
 
@@ -4869,7 +4942,7 @@ def pagar_holerite_via_mercadopago(
     if not colab or not colab.pix_chave:
         raise HTTPException(status_code=400, detail=f"Cadastre a Chave PIX de {colab.nome if colab else 'colaborador'} antes de disparar o pagamento.")
 
-    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == admin.organizacao_id).first()
+    cfg = _aplicar_env_fallback_integracoes(db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == admin.organizacao_id).first())
     if not cfg or not cfg.mp_ativo or not cfg.mp_access_token:
         raise HTTPException(status_code=400, detail="Configure e ative o Mercado Pago em Empresa & Permissões > Integrações.")
 
