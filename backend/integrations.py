@@ -1006,9 +1006,14 @@ def github_criar_repositorio_empresa(
     clean_tok = token.strip()
     clean_repo = slugify_repo_name(repo_nome)
     is_private = (visibilidade or "private").strip().lower() != "public"
+    raw_desc = (descricao or f"Repositório gerenciado pelo Portal {empresa_nome}").splitlines()[0].strip()
+    clean_desc = re.sub(r"[\x00-\x1f\x7f]+", " ", raw_desc)
+    clean_desc = re.sub(r"\s+", " ", clean_desc).strip()[:280]
+    if not clean_desc:
+        clean_desc = re.sub(r"[\x00-\x1f\x7f]+", " ", f"Repositório gerenciado pelo Portal {empresa_nome}").strip()[:280]
     payload = {
         "name": clean_repo,
-        "description": (descricao or f"Repositório gerenciado pelo Portal {empresa_nome}")[:300],
+        "description": clean_desc,
         "private": is_private,
         "auto_init": False,
         "has_issues": True,
