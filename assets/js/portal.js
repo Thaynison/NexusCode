@@ -152,6 +152,14 @@ document.addEventListener('click', (e) => {
 
 // ==================== MODAIS DO PORTAL DO CLIENTE ====================
 window.portalOpenNewProjectRequestModal = () => {
+  const catalogo = portalData.catalogo_servicos || [];
+  const params = portalData.parametros_orcamento || {
+    imposto_servico_percent: 6,
+    multa_atraso_percent: 2,
+    juros_mensal_percent: 1,
+    multa_rescisao_percent: 10
+  };
+
   portalModalContainer.innerHTML = `
     <form id="portal-new-project-form">
       <div class="modal-header">
@@ -160,49 +168,88 @@ window.portalOpenNewProjectRequestModal = () => {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           </div>
           <div>
-            <h2>Solicitar Novo Projeto ou Melhoria</h2>
-            <p class="modal-subtitle">Envie o escopo desejado diretamente para nossa engenharia comercial</p>
+            <h2>Solicitar Novo Projeto ou Orçamento</h2>
+            <p class="modal-subtitle">Escolha um serviço do Catálogo Oficial Nexus Code para simulação automática ou descreva uma demanda sob medida</p>
           </div>
         </div>
         <button type="button" class="modal-close-btn" onclick="document.getElementById('portal-dialog').close()">&times;</button>
       </div>
       <div class="modal-body">
+        ${catalogo.length ? `
+          <div class="modal-section-card" style="border-left: 4px solid #00B4D8;">
+            <div class="modal-section-title">Catálogo Oficial de Serviços Precificados Nexus Code</div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:10px; max-height:220px; overflow-y:auto;">
+              ${catalogo.map((s) => `
+                <div class="portal-svc-card" data-svc-cod="${esc(s.codigo)}" style="padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface); cursor:pointer; transition:border-color 0.2s;">
+                  <div style="font-size:10.5px; font-weight:800; color:var(--primary); text-transform:uppercase;">${esc(s.categoria)}</div>
+                  <div style="font-weight:700; font-size:13px; margin:2px 0;">${esc(s.nome)}</div>
+                  <div style="font-weight:900; font-size:14px; color:var(--ok);">A partir de ${formatMoney(s.valor_base)}</div>
+                  <div class="muted" style="font-size:11px;">Prazo médio: ${s.prazo_dias} dias • até ${s.parcelas_padrao}x</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
         <div class="modal-section-card">
           <div class="formgrid">
-            <label>Tipo de Demanda *
-              <select name="tipo_projeto" required>
-                <option value="Desenvolvimento Web / Sistema">Desenvolvimento Web / Sistema</option>
-                <option value="Novo Módulo / Evolução de Projeto">Novo Módulo / Evolução de Projeto</option>
-                <option value="Aplicativo Mobile (iOS / Android)">Aplicativo Mobile (iOS / Android)</option>
-                <option value="Integração de APIs / Automação">Integração de APIs / Automação</option>
-                <option value="Consultoria / Infraestrutura Cloud">Consultoria / Infraestrutura Cloud</option>
+            <label>Serviço / Tipo de Demanda *
+              <select name="tipo_projeto" id="portal-req-tipo" required>
+                ${catalogo.map((s) => `<option value="${esc(s.nome)}" data-base="${s.valor_base}" data-dias="${s.prazo_dias}">${esc(s.nome)} — A partir de ${formatMoney(s.valor_base)}</option>`).join('')}
+                <option value="Projeto Sob Medida / Outro" data-base="0" data-dias="15">Projeto Sob Medida / Outro</option>
               </select>
             </label>
             <label>Prioridade / Urgência *
-              <select name="urgencia">
+              <select name="urgencia" id="portal-req-urg">
                 <option value="normal">Normal (Planejada)</option>
-                <option value="alta">Alta (Prioritária)</option>
-                <option value="urgente">Urgente (Crítica)</option>
+                <option value="alta">Alta (Prioritária +15%)</option>
+                <option value="urgente">Urgente (Crítica +30%)</option>
               </select>
             </label>
             <label>Título do Projeto / Demanda *
-              <input type="text" name="titulo" required placeholder="Ex.: Módulo de Relatórios Financeiros">
+              <input type="text" name="titulo" required placeholder="Ex.: Módulo de Relatórios / Modpack">
             </label>
-            <label>Orçamento Estimado (Opcional)
-              <input type="text" name="orcamento_estimado" placeholder="Ex.: R$ 5.000 a R$ 10.000">
+            <label>Estimativa Calculada (com Impostos ${params.imposto_servico_percent}%)
+              <input type="text" name="orcamento_estimado" id="portal-req-est" readonly style="font-weight:800; color:var(--primary);">
             </label>
           </div>
           <label class="field-full">Descrição Detalhada dos Objetivos e Requisitos *
-            <textarea name="mensagem" rows="4" required placeholder="Descreva as funcionalidades esperadas, integrações necessárias e prazos desejados..."></textarea>
+            <textarea name="mensagem" rows="3" required placeholder="Descreva as funcionalidades esperadas, integrações necessárias e prazos desejados..."></textarea>
           </label>
         </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn secondary" onclick="document.getElementById('portal-dialog').close()">Cancelar</button>
-        <button type="submit" class="btn" id="portal-req-proj-btn">Enviar Solicitação</button>
+        <button type="submit" class="btn" id="portal-req-proj-btn">Enviar Solicitação de Orçamento</button>
       </div>
     </form>
   `;
+
+  const updatePortalEstimate = () => {
+    const sel = document.getElementById('portal-req-tipo');
+    const opt = sel?.selectedOptions?.[0];
+    const base = Number(opt?.dataset?.base || 0);
+    const urg = document.getElementById('portal-req-urg')?.value || 'normal';
+    const mult = urg === 'urgente' ? 1.30 : urg === 'alta' ? 1.15 : 1.0;
+    const imp = 1 + (Number(params.imposto_servico_percent || 6) / 100);
+    const estEl = document.getElementById('portal-req-est');
+    if (estEl) {
+      estEl.value = base > 0 ? `${formatMoney(base * mult * imp)} (inclui ${params.imposto_servico_percent}% impostos)` : 'Sob consulta técnica';
+    }
+  };
+
+  document.querySelectorAll('.portal-svc-card').forEach((card) => {
+    card.onclick = () => {
+      const s = catalogo.find((x) => x.codigo === card.dataset.svcCod);
+      if (!s) return;
+      const sel = document.getElementById('portal-req-tipo');
+      if (sel) sel.value = s.nome;
+      updatePortalEstimate();
+    };
+  });
+  document.getElementById('portal-req-tipo')?.addEventListener('change', updatePortalEstimate);
+  document.getElementById('portal-req-urg')?.addEventListener('change', updatePortalEstimate);
+  updatePortalEstimate();
 
   $('#portal-new-project-form').onsubmit = async (e) => {
     e.preventDefault();
@@ -222,13 +269,13 @@ window.portalOpenNewProjectRequestModal = () => {
         })
       });
       portalDialog.close();
-      showToast('Solicitação de novo projeto enviada com sucesso!', 'success');
+      showToast('Solicitação enviada! Nossa equipe enviará o orçamento oficial em breve.', 'success');
       render('quotes');
     } catch (err) {
       showNoticeModal({ title: 'Erro ao enviar solicitação', message: err.message, variant: 'error' });
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Enviar Solicitação';
+      btn.textContent = 'Enviar Solicitação de Orçamento';
     }
   };
 

@@ -1632,8 +1632,10 @@ export async function renderEmpresaView(ctx) {
             conta: raw.conta || null,
             chave_pix: raw.chave_pix || null,
             titular_pix: raw.titular_pix || null,
-            multa_atraso_percent: Number(raw.multa_atraso_percent || 2),
-            juros_mensal_percent: Number(raw.juros_mensal_percent || 1),
+            multa_atraso_percent: Number(raw.multa_atraso_percent ?? 2),
+            juros_mensal_percent: Number(raw.juros_mensal_percent ?? 1),
+            multa_rescisao_percent: Number(raw.multa_rescisao_percent ?? 10),
+            imposto_servico_percent: Number(raw.imposto_servico_percent ?? 6),
             permissoes_json: JSON.stringify({ admin: true, colaborador: colabPerms })
           })
         });
@@ -1663,6 +1665,60 @@ export async function renderEmpresaView(ctx) {
   if (cfg?.dominio_precos_json) {
     try { savedTlds = JSON.parse(cfg.dominio_precos_json) || {}; } catch (_) {}
   }
+
+  
+  const catalogoServicos = Array.isArray(cache.catalogo_servicos) ? [...cache.catalogo_servicos] : [];
+
+  window.nexusSaveCatalogoServicos = async () => {
+    const rows = [...document.querySelectorAll('[data-cat-row]')];
+    const updatedList = rows.map((tr, idx) => ({
+      codigo: tr.dataset.catCode || `srv-${idx + 1}`,
+      categoria: tr.querySelector('[data-f="categoria"]')?.value?.trim() || 'Desenvolvimento',
+      nome: tr.querySelector('[data-f="nome"]')?.value?.trim() || 'Serviço Nexus Code',
+      descricao: tr.querySelector('[data-f="descricao"]')?.value?.trim() || '',
+      valor_base: Number(tr.querySelector('[data-f="valor_base"]')?.value || 0),
+      prazo_dias: Number(tr.querySelector('[data-f="prazo_dias"]')?.value || 15),
+      parcelas_padrao: Number(tr.querySelector('[data-f="parcelas_padrao"]')?.value || 2),
+      ativo: true,
+      entregaveis: (catalogoServicos[idx]?.entregaveis) || [
+        'Levantamento Técnico e Arquitetura',
+        'Desenvolvimento e Integração',
+        'Homologação e Implantação'
+      ]
+    })).filter((s) => s.nome);
+
+    try {
+      await apiRequest('/empresa', {
+        method: 'PUT',
+        body: JSON.stringify({ catalogo_servicos_json: JSON.stringify(updatedList) })
+      });
+      invalidateCache();
+      showToast('Catálogo de Serviços Precificados atualizado com sucesso!', 'success');
+      render();
+    } catch (err) {
+      showNoticeModal({ title: 'Erro ao salvar catálogo', message: err.message, variant: 'error' });
+    }
+  };
+
+  window.nexusAddCatalogoServicoRow = () => {
+    const tbody = document.getElementById('catalogo-servicos-tbody');
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.dataset.catRow = '1';
+    tr.dataset.catCode = `srv-${Date.now().toString(36)}`;
+    tr.innerHTML = `
+      <td><input type="text" data-f="categoria" value="Desenvolvimento" class="nc-input" style="min-width:130px;"></td>
+      <td>
+        <input type="text" data-f="nome" placeholder="Nome do Serviço" class="nc-input" style="font-weight:700; margin-bottom:4px;">
+        <input type="text" data-f="descricao" placeholder="Descrição breve para o cliente" class="nc-input" style="font-size:12px;">
+      </td>
+      <td><input type="number" step="0.01" min="0" data-f="valor_base" value="1500.00" class="nc-input" style="max-width:130px; font-weight:700;"></td>
+      <td><input type="number" min="1" max="365" data-f="prazo_dias" value="15" class="nc-input" style="max-width:90px;"></td>
+      <td><input type="number" min="1" max="24" data-f="parcelas_padrao" value="2" class="nc-input" style="max-width:80px;"></td>
+      <td><button type="button" class="btn secondary" style="padding:5px 9px; font-size:11.5px; color:var(--danger);" onclick="this.closest('tr').remove()">Remover</button></td>
+    `;
+    tbody.appendChild(tr);
+  };
 
   window.nexusSetEmpresaTab = (tab) => {
     document.querySelectorAll('.empresa-tab-view').forEach((el) => { el.style.display = 'none'; });
@@ -1924,6 +1980,12 @@ export async function renderEmpresaView(ctx) {
                 <input type="text" name="conta" placeholder="Conta" value="${esc(cfg?.conta || '')}" class="nc-input">
               </div>
             </label>
+            <label class="field-full">Impostos sobre Serviços (%) — Orçamentos
+              <input type="number" step="0.1" name="imposto_servico_percent" value="${cfg?.imposto_servico_percent ?? 6.0}" class="nc-input">
+            </label>
+            <label class="field-full">Multa Rescisória Contratual (%)
+              <input type="number" step="0.1" name="multa_rescisao_percent" value="${cfg?.multa_rescisao_percent ?? 10.0}" class="nc-input">
+            </label>
             <label class="field-full">Multa por Atraso (%)
               <input type="number" step="0.1" name="multa_atraso_percent" value="${cfg?.multa_atraso_percent ?? 2.0}" class="nc-input">
             </label>
@@ -1953,6 +2015,48 @@ export async function renderEmpresaView(ctx) {
         </div>
       </div>
     </form>
+
+    <div class="card" style="margin-top:20px; border-left: 4px solid #00B4D8;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+        <div>
+          <h4 class="profile-section-title" style="font-size:16px;">4. Catálogo Oficial de Serviços Precificados (Orçamentos Automáticos)</h4>
+          <p class="profile-section-sub" style="margin:0;">Estes serviços e valores base aparecem automaticamente no Gerador de Orçamentos, no Portal do Cliente e no Site.</p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn secondary" onclick="window.nexusAddCatalogoServicoRow()">+ Adicionar Serviço</button>
+          <button type="button" class="btn" onclick="window.nexusSaveCatalogoServicos()">Salvar Catálogo de Serviços</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Categoria</th>
+              <th>Serviço &amp; Descrição Comercial</th>
+              <th>Custo Base (R$)</th>
+              <th>Prazo (dias)</th>
+              <th>Parcelas</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody id="catalogo-servicos-tbody">
+            ${catalogoServicos.map((s) => `
+              <tr data-cat-row="1" data-cat-code="${esc(s.codigo)}">
+                <td><input type="text" data-f="categoria" value="${esc(s.categoria || '')}" class="nc-input" style="min-width:130px;"></td>
+                <td>
+                  <input type="text" data-f="nome" value="${esc(s.nome || '')}" class="nc-input" style="font-weight:700; margin-bottom:4px;">
+                  <input type="text" data-f="descricao" value="${esc(s.descricao || '')}" class="nc-input" style="font-size:12px;">
+                </td>
+                <td><input type="number" step="0.01" min="0" data-f="valor_base" value="${Number(s.valor_base || 0).toFixed(2)}" class="nc-input" style="max-width:130px; font-weight:700;"></td>
+                <td><input type="number" min="1" max="365" data-f="prazo_dias" value="${Number(s.prazo_dias || 15)}" class="nc-input" style="max-width:90px;"></td>
+                <td><input type="number" min="1" max="24" data-f="parcelas_padrao" value="${Number(s.parcelas_padrao || 2)}" class="nc-input" style="max-width:80px;"></td>
+                <td><button type="button" class="btn secondary" style="padding:5px 9px; font-size:11.5px; color:var(--danger);" onclick="this.closest('tr').remove()">Remover</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
     </div>
 
     <!-- TAB 2: INTEGRAÇÕES & APIS -->

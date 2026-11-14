@@ -675,6 +675,9 @@ class ConfiguracaoEmpresaUpdate(BaseModel):
     titular_pix: Optional[str] = None
     multa_atraso_percent: Optional[Decimal] = None
     juros_mensal_percent: Optional[Decimal] = None
+    multa_rescisao_percent: Optional[Decimal] = None
+    imposto_servico_percent: Optional[Decimal] = None
+    catalogo_servicos_json: Optional[str] = None
     permissoes_json: Optional[str] = None
     mp_ativo: Optional[bool] = None
     mp_api_tipo: Optional[str] = None
@@ -1254,3 +1257,21 @@ class IdeBranchCreateRequest(BaseModel):
 class ProjetoDeployRequest(BaseModel):
     target: Literal["production", "preview"] = "production"
     branch: Optional[str] = None
+
+
+class GerarOrcamentoAutoRequest(BaseModel):
+    servico_codigo: Optional[str] = None
+    titulo_proposta: Optional[str] = None
+    valor_base: Decimal = Field(..., ge=0)
+    urgencia: Literal["normal", "alta", "urgente"] = "normal"
+    desconto: Decimal = Field(default=Decimal("0.00"), ge=0)
+    imposto_percent: Optional[Decimal] = Field(default=None, ge=0, le=100)
+    multa_atraso_percent: Optional[Decimal] = Field(default=None, ge=0, le=100)
+    juros_mensal_percent: Optional[Decimal] = Field(default=None, ge=0, le=100)
+    multa_rescisao_percent: Optional[Decimal] = Field(default=None, ge=0, le=100)
+    parcelas: int = Field(default=2, ge=1, le=36)
+    prazo_dias: int = Field(default=15, ge=1, le=730)
+    validade_dias: int = Field(default=15, ge=1, le=180)
+    escopo_adicional: Optional[str] = None
+    entregaveis: Optional[List[str]] = None
+    converter_em_projeto: bool = False

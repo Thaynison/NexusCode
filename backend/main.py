@@ -41,6 +41,7 @@ from schemas import (
     UsuarioCreate, UsuarioUpdate, UsuarioOut, UsuarioListOut,
     ClienteCreate, ClienteUpdate, ClienteOut,
     SolicitacaoPublicCreate, SolicitacaoPortalCreate, SolicitacaoResponder, SolicitacaoUpdate, SolicitacaoOut,
+    GerarOrcamentoAutoRequest,
     ProjetoCreate, ProjetoUpdate, ProjetoHomologacaoCliente, ProjetoOut,
     TarefaCreate, TarefaUpdate, TarefaOut,
     InteracaoCreate, InteracaoOut,
@@ -139,6 +140,164 @@ DEFAULT_PERMISSOES = {
     },
 }
 
+
+
+
+DEFAULT_CATALOGO_SERVICOS = [
+    {
+        "codigo": "web-institucional",
+        "categoria": "Desenvolvimento Web",
+        "nome": "Site Institucional & Landing Page High-Conversion",
+        "descricao": "Site corporativo moderno, ultra-rápido, responsivo e integrado ao CRM e WhatsApp.",
+        "valor_base": 1800.00,
+        "prazo_dias": 10,
+        "parcelas_padrao": 2,
+        "ativo": True,
+        "entregaveis": [
+            "Design UI/UX Responsivo (Desktop & Mobile)",
+            "Otimização SEO Técnico e Alta Performance",
+            "Formulário Comercial Integrado ao CRM Nexus",
+            "Configuração de Domínio, Certificado SSL e Deploy"
+        ]
+    },
+    {
+        "codigo": "sistema-web",
+        "categoria": "Sistemas & Portais",
+        "nome": "Sistema Web Personalizado / Portal Corporativo",
+        "descricao": "Aplicação Full Stack sob medida com painel administrativo, autenticação JWT e banco de dados.",
+        "valor_base": 4500.00,
+        "prazo_dias": 25,
+        "parcelas_padrao": 3,
+        "ativo": True,
+        "entregaveis": [
+            "Arquitetura Full Stack & Modelagem de Banco de Dados",
+            "Painel Administrativo, Dashboards e Controle de Perfis",
+            "Desenvolvimento de APIs REST e Regras de Negócio",
+            "Homologação Assistida e Implantação em Produção"
+        ]
+    },
+    {
+        "codigo": "modpack-server",
+        "categoria": "Servidores & Modpacks",
+        "nome": "Servidor & Modpack Customizado (Gaming Enterprise)",
+        "descricao": "Desenvolvimento, otimização de TPS/performance, balanceamento de mods/scripts e integração web.",
+        "valor_base": 1500.00,
+        "prazo_dias": 12,
+        "parcelas_padrao": 2,
+        "ativo": True,
+        "entregaveis": [
+            "Curadoria, Configuração e Balanceamento do Modpack",
+            "Otimização de Servidor Dedicado, Memória e TPS",
+            "Scripts Customizados, Permissões e Segurança Anti-Exploit",
+            "Testes de Estresse, Documentação e Entrega em Produção"
+        ]
+    },
+    {
+        "codigo": "ecommerce",
+        "categoria": "E-commerce & Pagamentos",
+        "nome": "Loja Virtual / E-commerce Completo com Checkout PIX",
+        "descricao": "Plataforma de vendas online com catálogo, carrinho, frete e gateway Mercado Pago integrado.",
+        "valor_base": 3800.00,
+        "prazo_dias": 20,
+        "parcelas_padrao": 3,
+        "ativo": True,
+        "entregaveis": [
+            "Vitrine de Produtos, Variações e Carrinho Inteligente",
+            "Checkout PIX Instantâneo & Cartão (Mercado Pago)",
+            "Gestão de Pedidos, Faturas e Notificações por E-mail",
+            "Publicação com Certificado SSL e Treinamento"
+        ]
+    },
+    {
+        "codigo": "app-mobile",
+        "categoria": "Aplicativos Mobile",
+        "nome": "Aplicativo Mobile (Android & iOS)",
+        "descricao": "Aplicativo multiplataforma conectado em tempo real à API da sua empresa com notificações push.",
+        "valor_base": 6500.00,
+        "prazo_dias": 35,
+        "parcelas_padrao": 4,
+        "ativo": True,
+        "entregaveis": [
+            "Protótipo Navegável UI/UX e Fluxo de Telas",
+            "Desenvolvimento Multiplataforma Android e iOS",
+            "Integração com Backend REST API e Push Notifications",
+            "Empacotamento e Suporte à Publicação nas Lojas"
+        ]
+    },
+    {
+        "codigo": "automacao-api",
+        "categoria": "Automação & APIs",
+        "nome": "Integração de APIs, Webhooks & Automação",
+        "descricao": "Conectores automáticos entre ERPs, gateways financeiros, GitHub, WhatsApp e fluxos internos.",
+        "valor_base": 2200.00,
+        "prazo_dias": 12,
+        "parcelas_padrao": 2,
+        "ativo": True,
+        "entregaveis": [
+            "Mapeamento de Endpoints, Webhooks e Regras",
+            "Desenvolvimento de Microsserviço / Worker Automatizado",
+            "Logs de Auditoria, Retentativas e Tratamento de Erros",
+            "Documentação Técnica e Implantação"
+        ]
+    },
+    {
+        "codigo": "cloud-devops",
+        "categoria": "Infraestrutura & Cloud",
+        "nome": "Infraestrutura Cloud, Domínio, CI/CD & Segurança",
+        "descricao": "Configuração completa de domínio, DNS, SSL, esteira GitHub + Vercel e hardening de segurança.",
+        "valor_base": 1200.00,
+        "prazo_dias": 7,
+        "parcelas_padrao": 1,
+        "ativo": True,
+        "entregaveis": [
+            "Configuração de Domínio Corporativo, DNS e SSL/HTTPS",
+            "Pipeline Automatizado de Deploy (GitHub + Cloud)",
+            "Auditoria de Segurança OWASP e Backup Automatizado",
+            "Entrega de Credenciais e Relatório de Arquitetura"
+        ]
+    },
+    {
+        "codigo": "portal-saas",
+        "categoria": "SaaS Enterprise",
+        "nome": "Implantação Portal Nexus Enterprise White-Label",
+        "descricao": "Ambiente ERP & CRM completo com marca própria, subdomínio, RH, Ponto e Financeiro.",
+        "valor_base": 2900.00,
+        "prazo_dias": 10,
+        "parcelas_padrao": 2,
+        "ativo": True,
+        "entregaveis": [
+            "Provisionamento de Ambiente Multi-Tenant Isolado",
+            "Identidade Visual White-Label e Domínio Customizado",
+            "Configuração de Gateway Financeiro e Permissões",
+            "Onboarding Executivo e Treinamento da Equipe"
+        ]
+    }
+]
+
+
+def _get_catalogo_servicos_empresa(cfg: Optional[ConfiguracaoEmpresa]) -> list:
+    if cfg and cfg.catalogo_servicos_json:
+        try:
+            parsed = json.loads(cfg.catalogo_servicos_json)
+            if isinstance(parsed, list) and len(parsed) > 0:
+                return parsed
+        except Exception:
+            pass
+    return [dict(item) for item in DEFAULT_CATALOGO_SERVICOS]
+
+
+def _get_parametros_orcamento_empresa(cfg: Optional[ConfiguracaoEmpresa]) -> dict:
+    return {
+        "imposto_servico_percent": float(cfg.imposto_servico_percent) if (cfg and cfg.imposto_servico_percent is not None) else 6.00,
+        "multa_atraso_percent": float(cfg.multa_atraso_percent) if (cfg and cfg.multa_atraso_percent is not None) else 2.00,
+        "juros_mensal_percent": float(cfg.juros_mensal_percent) if (cfg and cfg.juros_mensal_percent is not None) else 1.00,
+        "multa_rescisao_percent": float(cfg.multa_rescisao_percent) if (cfg and cfg.multa_rescisao_percent is not None) else 10.00,
+        "urgencia_multiplicadores": {
+            "normal": 0.0,
+            "alta": 15.0,
+            "urgente": 30.0,
+        },
+    }
 
 def _slugify_tenant(texto: str) -> str:
     norm = unicodedata.normalize("NFKD", texto or "empresa").encode("ascii", "ignore").decode("ascii")
@@ -790,7 +949,7 @@ def ensure_db_initialized(force_sync: bool = False):
                 conn.execute(text("SELECT mp_payout_id FROM holerites LIMIT 1"))
                 conn.execute(text("SELECT mp_payout_id FROM reembolsos_despesas LIMIT 1"))
                 conn.execute(text("SELECT mp_order_id FROM pedidos_dominios LIMIT 1"))
-                conn.execute(text("SELECT github_ativo, github_org, github_token, github_visibilidade_padrao FROM configuracoes_empresa LIMIT 1"))
+                conn.execute(text("SELECT github_ativo, github_org, github_token, github_visibilidade_padrao, imposto_servico_percent, multa_rescisao_percent, catalogo_servicos_json FROM configuracoes_empresa LIMIT 1"))
                 conn.execute(text("SELECT github_repo_full_name, github_default_branch, github_visibilidade, vercel_project_id, ultimo_deploy_status, ultimo_deploy_em FROM projetos LIMIT 1"))
             _db_ready = True
             return
@@ -1118,7 +1277,7 @@ def raiz(db: int = 0):
     return {
         "status": "online" if db_status != "error" else "degraded",
         "sistema": "Nexus Code Enterprise SaaS ERP & CRM API",
-        "versao": "2.4.5-prod",
+        "versao": "2.4.7-prod",
         "regiao": os.getenv("VERCEL_REGION", "local"),
         "database_url_configurada": bool(os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")),
         "db_status": db_status,
@@ -2054,6 +2213,225 @@ def responder_solicitacao(
     return sol
 
 
+
+
+@router.post("/orcamentos/{orcamento_id}/gerar-orcamento-automatico", tags=["Orçamentos"])
+def gerar_orcamento_automatico_para_cliente(
+    orcamento_id: int,
+    dados: GerarOrcamentoAutoRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    equipe: Usuario = Depends(exigir_equipe),
+):
+    org = _get_org_or_404(db, equipe.organizacao_id)
+    sol = db.query(SolicitacaoOrcamento).filter(
+        SolicitacaoOrcamento.id == orcamento_id,
+        SolicitacaoOrcamento.organizacao_id == org.id,
+    ).first()
+    if not sol:
+        raise HTTPException(status_code=404, detail="Solicitação de orçamento não encontrada.")
+
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first()
+    catalogo = _get_catalogo_servicos_empresa(cfg)
+    params_padrao = _get_parametros_orcamento_empresa(cfg)
+
+    servico_obj = next((s for s in catalogo if s.get("codigo") == dados.servico_codigo), None) if dados.servico_codigo else None
+
+    # Garante cliente vinculado no CRM
+    cliente = db.query(Cliente).filter(Cliente.id == sol.cliente_id, Cliente.organizacao_id == org.id).first() if sol.cliente_id else None
+    if not cliente:
+        cliente = db.query(Cliente).filter(Cliente.organizacao_id == org.id, Cliente.email == sol.email).first()
+    if not cliente:
+        cliente = Cliente(
+            organizacao_id=org.id,
+            nome_empresa=(sol.empresa or sol.nome).strip(),
+            contato_nome=sol.nome.strip(),
+            email=sol.email,
+            telefone=sol.telefone,
+            status_funil="proposta",
+            origem="Solicitação de Orçamento",
+        )
+        db.add(cliente)
+        db.flush()
+    sol.cliente_id = cliente.id
+
+    # Cálculo financeiro automático
+    valor_base = round(float(dados.valor_base or 0), 2)
+    urg_map = {"normal": 0.0, "alta": 15.0, "urgente": 30.0}
+    urg_pct = urg_map.get(dados.urgencia, 0.0)
+    valor_urgencia = round(valor_base * (urg_pct / 100.0), 2)
+    desconto = round(float(dados.desconto or 0), 2)
+    subtotal_tecnico = round(max(0.0, valor_base + valor_urgencia - desconto), 2)
+
+    imposto_pct = float(dados.imposto_percent) if dados.imposto_percent is not None else params_padrao["imposto_servico_percent"]
+    multa_atraso_pct = float(dados.multa_atraso_percent) if dados.multa_atraso_percent is not None else params_padrao["multa_atraso_percent"]
+    juros_mensal_pct = float(dados.juros_mensal_percent) if dados.juros_mensal_percent is not None else params_padrao["juros_mensal_percent"]
+    multa_rescisao_pct = float(dados.multa_rescisao_percent) if dados.multa_rescisao_percent is not None else params_padrao["multa_rescisao_percent"]
+
+    valor_imposto = round(subtotal_tecnico * (imposto_pct / 100.0), 2)
+    valor_total_final = round(subtotal_tecnico + valor_imposto, 2)
+    n_parcelas = max(1, int(dados.parcelas or 1))
+    valor_parcela = round(valor_total_final / n_parcelas, 2)
+    prazo_dias = max(1, int(dados.prazo_dias or (servico_obj.get("prazo_dias") if servico_obj else 15)))
+
+    titulo_final = (
+        (dados.titulo_proposta or "").strip()
+        or (servico_obj.get("nome") if servico_obj else None)
+        or sol.tipo_projeto
+        or f"Projeto {cliente.nome_empresa}"
+    )
+
+    entregaveis_raw = dados.entregaveis if (dados.entregaveis and len(dados.entregaveis) > 0) else (servico_obj.get("entregaveis") if servico_obj else [])
+    if not entregaveis_raw:
+        entregaveis_raw = [
+            "Levantamento Técnico e Arquitetura da Solução",
+            "Desenvolvimento e Integração dos Módulos",
+            "Homologação com Cliente e Publicação em Produção",
+        ]
+    entregaveis_struct = [
+        {"titulo": item.strip(), "prazo_dias": max(2, round(((idx + 1) / len(entregaveis_raw)) * prazo_dias))}
+        for idx, item in enumerate(entregaveis_raw)
+        if str(item).strip()
+    ]
+
+    seq = (db.query(func.count(PropostaComercial.id)).scalar() or 0) + 1
+    codigo_prop = f"PROP-{date.today().year}-{seq:04d}"
+
+    clausulas_financeiras = (
+        f"DEMONSTRATIVO AUTOMÁTICO DE INVESTIMENTO ({codigo_prop})\n"
+        f"• Serviço / Categoria: {titulo_final}\n"
+        f"• Custo Técnico Base: {_format_brl(valor_base)}\n"
+        + (f"• Adicional de Urgência ({dados.urgencia.upper()} +{urg_pct:.0f}%): {_format_brl(valor_urgencia)}\n" if valor_urgencia > 0 else "")
+        + (f"• Desconto Comercial Concedido: -{_format_brl(desconto)}\n" if desconto > 0 else "")
+        + f"• Subtotal Líquido Técnico: {_format_brl(subtotal_tecnico)}\n"
+        + f"• Impostos & Tributos Incidentes ({imposto_pct:.2f}%): {_format_brl(valor_imposto)}\n"
+        + f"• VALOR TOTAL DO ORÇAMENTO: {_format_brl(valor_total_final)} ({n_parcelas}x de {_format_brl(valor_parcela)})\n"
+        + f"• Prazo Estimado de Entrega: {prazo_dias} dias corridos\n\n"
+        + f"CLÁUSULAS DE MULTAS E ENCARGOS CONTRATUAIS\n"
+        + f"• Multa por Atraso de Pagamento: {multa_atraso_pct:.2f}% sobre o valor da parcela vencida.\n"
+        + f"• Juros Moratórios: {juros_mensal_pct:.2f}% ao mês (pro-rata die) após o vencimento.\n"
+        + f"• Multa por Rescisão Imotivada: {multa_rescisao_pct:.2f}% sobre o saldo contratual remanescente."
+    )
+
+    escopo_completo = (
+        (f"{dados.escopo_adicional.strip()}\n\n" if (dados.escopo_adicional and dados.escopo_adicional.strip()) else (f"{servico_obj.get('descricao')}\n\n" if servico_obj else ""))
+        + clausulas_financeiras
+    )
+
+    condicoes_pgto = (
+        f"{n_parcelas}x de {_format_brl(valor_parcela)} (PIX / Checkout) | "
+        f"Multa atraso: {multa_atraso_pct:.1f}% + Juros {juros_mensal_pct:.1f}% a.m. | "
+        f"Rescisão: {multa_rescisao_pct:.1f}%"
+    )
+
+    prop = PropostaComercial(
+        organizacao_id=org.id,
+        codigo=codigo_prop,
+        cliente_id=cliente.id,
+        solicitacao_id=sol.id,
+        criado_por_id=equipe.id,
+        titulo=titulo_final[:180],
+        escopo=escopo_completo,
+        entregaveis_json=json.dumps(entregaveis_struct, ensure_ascii=False),
+        valor_total=Decimal(str(valor_total_final)),
+        condicoes_pagamento=condicoes_pgto[:200],
+        parcelas=n_parcelas,
+        prazo_dias=prazo_dias,
+        validade_ate=date.today() + timedelta(days=int(dados.validade_dias or 15)),
+        status="aprovada" if dados.converter_em_projeto else "enviada",
+    )
+    db.add(prop)
+    db.flush()
+
+    projeto_criado = None
+    if dados.converter_em_projeto:
+        prop.aprovado_por_cliente = f"Aprovado na emissão por {equipe.nome}"
+        prop.aprovado_em = datetime.utcnow()
+        projeto_criado = _converter_proposta_em_projeto(db, prop, equipe.nome)
+        sol.status = "convertido"
+    else:
+        sol.status = "respondido"
+        if cliente.status_funil == "lead":
+            cliente.status_funil = "proposta"
+
+    sol.resposta = clausulas_financeiras
+    sol.respondido_por = equipe.nome
+    sol.respondido_em = datetime.utcnow()
+
+    db.add(Interacao(
+        organizacao_id=org.id,
+        cliente_id=cliente.id,
+        usuario_id=equipe.id,
+        tipo="proposta",
+        resumo=f"Orçamento automático {codigo_prop} gerado ({_format_brl(valor_total_final)} em {n_parcelas}x, impostos {imposto_pct:.1f}%).",
+        proxima_acao="Aguardar aprovação do cliente no Portal",
+    ))
+
+    if cliente.usuario_portal_id:
+        criar_notificacao(
+            db,
+            titulo=f"Orçamento Oficial Disponível ({codigo_prop})",
+            mensagem=f"Seu orçamento para '{titulo_final}' ({_format_brl(valor_total_final)}) está pronto para aprovação.",
+            link_pagina="proposals",
+            usuario_id=cliente.usuario_portal_id,
+            org_id=org.id,
+        )
+
+    corpo_email = f"""
+    <div style="font-family: Arial, sans-serif; color: #0A1D37; max-width: 620px; margin: 0 auto;">
+      <div style="background: #0A1D37; color: #fff; padding: 22px 26px; border-radius: 12px 12px 0 0; border-bottom: 3px solid #00B4D8;">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 2px; color: #00B4D8;">ORÇAMENTO &amp; PROPOSTA COMERCIAL</div>
+        <h2 style="margin: 6px 0 0; font-size: 20px;">{titulo_final} ({codigo_prop})</h2>
+      </div>
+      <div style="padding: 24px; border: 1px solid #e2e8f0; border-top: 0; border-radius: 0 0 12px 12px; background: #ffffff;">
+        <p>Olá, <b>{sol.nome}</b>! Preparamos o orçamento detalhado para sua solicitação junto à <b>{org.nome}</b>:</p>
+        <table style="width:100%; border-collapse: collapse; font-size: 13.5px; margin: 16px 0;">
+          <tr style="background:#f8fafc;"><td style="padding:9px 12px; border:1px solid #e2e8f0;">Custo Base do Projeto</td><td style="padding:9px 12px; border:1px solid #e2e8f0; text-align:right;"><b>{_format_brl(valor_base)}</b></td></tr>
+          {"<tr><td style='padding:9px 12px; border:1px solid #e2e8f0;'>Adicional Urgência (" + dados.urgencia.upper() + f" +{urg_pct:.0f}%)</td><td style='padding:9px 12px; border:1px solid #e2e8f0; text-align:right;'>{_format_brl(valor_urgencia)}</td></tr>" if valor_urgencia > 0 else ""}
+          {"<tr><td style='padding:9px 12px; border:1px solid #e2e8f0;'>Desconto Comercial</td><td style='padding:9px 12px; border:1px solid #e2e8f0; text-align:right; color:#15803d;'>-" + _format_brl(desconto) + "</td></tr>" if desconto > 0 else ""}
+          <tr><td style="padding:9px 12px; border:1px solid #e2e8f0;">Impostos &amp; Tributos ({imposto_pct:.2f}%)</td><td style="padding:9px 12px; border:1px solid #e2e8f0; text-align:right;">{_format_brl(valor_imposto)}</td></tr>
+          <tr style="background:#eff6ff;"><td style="padding:11px 12px; border:1px solid #bae6fd; font-weight:800;">INVESTIMENTO TOTAL ({n_parcelas}x de {_format_brl(valor_parcela)})</td><td style="padding:11px 12px; border:1px solid #bae6fd; text-align:right; font-size:16px; font-weight:900; color:#0284c7;">{_format_brl(valor_total_final)}</td></tr>
+        </table>
+        <p style="font-size: 12px; color: #475569; background: #f8fafc; padding: 10px 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <b>Condições &amp; Multas Contratuais:</b> Prazo estimado de <b>{prazo_dias} dias</b>. Multa por atraso de <b>{multa_atraso_pct:.2f}%</b> + juros de <b>{juros_mensal_pct:.2f}% a.m.</b> Multa rescisória de <b>{multa_rescisao_pct:.2f}%</b> sobre o saldo remanescente.
+        </p>
+        <p style="margin-top: 18px;">Acesse o <b>Portal do Cliente</b> para visualizar o documento completo e aprovar com 1 clique.</p>
+      </div>
+    </div>
+    """
+    background_tasks.add_task(enviar_email, sol.email, f"Orçamento Oficial {codigo_prop} — {titulo_final} ({org.nome})", corpo_email)
+
+    registrar_log(
+        db,
+        equipe.nome,
+        "GERAR_ORCAMENTO_AUTO",
+        f"Gerou orçamento automático {codigo_prop} ({_format_brl(valor_total_final)}) para solicitação #{sol.id}",
+        org_id=org.id,
+    )
+    db.commit()
+    db.refresh(prop)
+    db.refresh(sol)
+    return {
+        "ok": True,
+        "proposta": PropostaOut.model_validate(prop),
+        "solicitacao": SolicitacaoOut.model_validate(sol),
+        "projeto_id": projeto_criado.id if projeto_criado else None,
+        "resumo_financeiro": {
+            "valor_base": valor_base,
+            "valor_urgencia": valor_urgencia,
+            "desconto": desconto,
+            "subtotal_tecnico": subtotal_tecnico,
+            "imposto_percent": imposto_pct,
+            "valor_imposto": valor_imposto,
+            "valor_total": valor_total_final,
+            "parcelas": n_parcelas,
+            "valor_parcela": valor_parcela,
+            "multa_atraso_percent": multa_atraso_pct,
+            "juros_mensal_percent": juros_mensal_pct,
+            "multa_rescisao_percent": multa_rescisao_pct,
+        },
+    }
+
 @router.patch("/orcamentos/{orcamento_id}", response_model=SolicitacaoOut, tags=["Orçamentos"])
 def atualizar_solicitacao(
     orcamento_id: int,
@@ -2232,6 +2610,8 @@ def _executar_bootstrap_painel(db: Session, usuario: Usuario) -> dict:
         "ativos": [AtivoInfraOut.model_validate(at) for at in ativos],
         "notificacoes": [NotificacaoOut.model_validate(n) for n in notificacoes],
         "empresa_config": ConfiguracaoEmpresaOut.model_validate(empresa_cfg) if empresa_cfg else None,
+        "catalogo_servicos": _get_catalogo_servicos_empresa(empresa_cfg),
+        "parametros_orcamento": _get_parametros_orcamento_empresa(empresa_cfg),
         "holerites": [HoleriteListOut.model_validate(h) for h in holerites],
         "informes": [InformeListOut.model_validate(i) for i in informes],
         "produtos_loja": [ProdutoLojaOut.model_validate(pl) for pl in produtos_loja],
@@ -2351,6 +2731,8 @@ def bootstrap_portal_cliente(
         "chamados": [ChamadoOut.model_validate(ch) for ch in chamados],
         "notificacoes": [NotificacaoOut.model_validate(n) for n in notificacoes],
         "pagamento_info": pagamento_info,
+        "catalogo_servicos": [s for s in _get_catalogo_servicos_empresa(empresa_cfg) if s.get("ativo", True)],
+        "parametros_orcamento": _get_parametros_orcamento_empresa(empresa_cfg),
     }
 
 
@@ -3030,6 +3412,8 @@ def obter_configuracao_publica_site(db: Session = Depends(get_db)):
         },
         "produtos": [ProdutoLojaOut.model_validate(p).model_dump(mode="json") for p in produtos],
         "planos_saas": [PlanoSaasOut.model_validate(pl).model_dump(mode="json") for pl in planos],
+        "catalogo_servicos": [s for s in _get_catalogo_servicos_empresa(cfg) if s.get("ativo", True)],
+        "parametros_orcamento": _get_parametros_orcamento_empresa(cfg),
     }
     _SITE_CONFIG_CACHE["data"] = payload
     _SITE_CONFIG_CACHE["ts"] = now_ts
@@ -3849,6 +4233,21 @@ def listar_projetos(
     return query.order_by(Projeto.criado_em.desc()).all()
 
 
+
+
+def _normalizar_url_homologacao_nexus(raw_url: Optional[str], fallback_slug: str) -> str:
+    clean_slug = slugify_repo_name(fallback_slug)[:45] or "projeto"
+    val = (raw_url or "").strip()
+    if not val:
+        return f"https://{clean_slug}.nexuscodebrasil.com.br"
+    val_no_proto = re.sub(r"^https?://", "", val, flags=re.IGNORECASE).strip().rstrip("/")
+    if "." not in val_no_proto:
+        sub = slugify_repo_name(val_no_proto)[:45] or clean_slug
+        return f"https://{sub}.nexuscodebrasil.com.br"
+    if not re.match(r"^https?://", val, flags=re.IGNORECASE):
+        return f"https://{val_no_proto}"
+    return val
+
 @router.post("/projetos", response_model=ProjetoOut, status_code=201, tags=["Projetos"])
 def criar_projeto(
     dados: ProjetoCreate,
@@ -3865,6 +4264,11 @@ def criar_projeto(
     criar_no_github = bool(raw_payload.pop("criar_no_github", False))
     github_repo_nome = raw_payload.pop("github_repo_nome", None)
     github_template = raw_payload.pop("github_template", "fullstack")
+
+    slug_base = github_repo_nome or raw_payload.get("titulo") or "projeto"
+    raw_payload["url_homologacao"] = _normalizar_url_homologacao_nexus(raw_payload.get("url_homologacao"), slug_base)
+    if raw_payload.get("url_producao") and not re.match(r"^https?://", raw_payload["url_producao"].strip(), flags=re.IGNORECASE):
+        raw_payload["url_producao"] = "https://" + raw_payload["url_producao"].strip()
 
     projeto = Projeto(**raw_payload, organizacao_id=org.id)
     db.add(projeto)
@@ -4817,6 +5221,7 @@ from integrations import (
     registrar_dominio_no_provedor,
     provisionar_dominio_vercel,
     verificar_status_dns_vercel,
+    slugify_repo_name,
     extrair_repo_full_name,
     github_testar_conexao,
     github_criar_repositorio_empresa,
@@ -5535,11 +5940,26 @@ def disparar_deploy_projeto_endpoint(
     projeto.vercel_project_id = dep.get("vercel_project_id") or projeto.vercel_project_id
     projeto.ultimo_deploy_status = dep.get("status", "BUILDING")
     projeto.ultimo_deploy_em = datetime.utcnow()
-    if dep.get("url"):
-        if dados.target == "production":
+
+    staging_url = _normalizar_url_homologacao_nexus(projeto.url_homologacao, full_name.split("/")[-1])
+    projeto.url_homologacao = staging_url
+    staging_host = re.sub(r"^https?://", "", staging_url, flags=re.IGNORECASE).split("/")[0]
+    if staging_host.endswith(".nexuscodebrasil.com.br") and projeto.vercel_project_id:
+        try:
+            provisionar_dominio_vercel(cfg.vercel_token, projeto.vercel_project_id, cfg.vercel_team_id, staging_host)
+        except Exception:
+            pass
+
+    if dados.target == "production":
+        if projeto.url_producao and projeto.vercel_project_id:
+            prod_host = re.sub(r"^https?://", "", projeto.url_producao, flags=re.IGNORECASE).split("/")[0]
+            if prod_host and "." in prod_host and not prod_host.endswith(".vercel.app"):
+                try:
+                    provisionar_dominio_vercel(cfg.vercel_token, projeto.vercel_project_id, cfg.vercel_team_id, prod_host)
+                except Exception:
+                    pass
+        elif not projeto.url_producao and dep.get("url"):
             projeto.url_producao = dep["url"]
-        else:
-            projeto.url_homologacao = dep["url"]
 
     registrar_log(db, equipe.nome, "DEPLOY_VERCEL", f"Disparou deploy ({dados.target}) de {full_name}@{branch}", org_id=equipe.organizacao_id)
     db.commit()

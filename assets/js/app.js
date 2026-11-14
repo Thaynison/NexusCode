@@ -54,6 +54,8 @@ let cache = {
   ativos: [],
   notificacoes: [],
   empresa_config: null,
+  catalogo_servicos: [],
+  parametros_orcamento: null,
   holerites: [],
   informes: [],
   produtos_loja: [],
@@ -89,6 +91,8 @@ async function loadBootstrap(force = false) {
     ativos: data.ativos || [],
     notificacoes: data.notificacoes || [],
     empresa_config: data.empresa_config || null,
+    catalogo_servicos: data.catalogo_servicos || [],
+    parametros_orcamento: data.parametros_orcamento || null,
     holerites: data.holerites || [],
     informes: data.informes || [],
     produtos_loja: data.produtos_loja || [],
@@ -830,8 +834,10 @@ async function renderProjects(useCache = false) {
           <div>
             <b>${esc(p.titulo)}</b>
             <div class="muted" style="font-size:12px;">${esc(p.descricao || 'Sem descrição adicional')}</div>
-            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:4px;">
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:4px;">
               ${repoSlug ? `<a href="${esc(p.repositorio_url || 'https://github.com/' + repoSlug)}" target="_blank" rel="noopener" style="font-size:11px; font-weight:700; color:var(--primary); text-decoration:none;">&#9741; ${esc(repoSlug)}</a>` : ''}
+              ${p.url_homologacao ? `<a href="${esc(p.url_homologacao)}" target="_blank" rel="noopener" style="font-size:11px; font-weight:600; color:#0284c7; text-decoration:none;" title="Ambiente de Homologação">&#127760; ${esc(p.url_homologacao.replace(/^https?:\/\//i, ''))}</a>` : ''}
+              ${p.url_producao ? `<a href="${esc(p.url_producao)}" target="_blank" rel="noopener" style="font-size:11px; font-weight:700; color:var(--ok); text-decoration:none;" title="Ambiente de Produção">&#9679; Produção &#8599;</a>` : ''}
               ${p.ultimo_deploy_status ? `<span class="badge ${p.ultimo_deploy_status === 'READY' ? 'ativo' : 'pendente'}" style="font-size:10px;">Deploy: ${esc(p.ultimo_deploy_status)}</span>` : ''}
             </div>
           </div>
@@ -3645,25 +3651,52 @@ function setRecordModalHeader(title, subtitle, iconSvg = ICONS.plus) {
   if (iconEl) iconEl.innerHTML = iconSvg;
 }
 
-function openQuoteReplyModal(quoteObj) {
+async function openQuoteReplyModal(quoteObj) {
   modalMode = 'quote_reply';
   editingId = quoteObj.id;
+  await preloadRefs();
   const box = $('#dynamic-record-fields');
   const saveBtn = $('#record-save-btn');
 
+  const catalogo = (cache.catalogo_servicos || []).filter((s) => s.ativo !== false);
+  const params = cache.parametros_orcamento || {
+    imposto_servico_percent: Number(cache.empresa_config?.imposto_servico_percent ?? 6.0),
+    multa_atraso_percent: Number(cache.empresa_config?.multa_atraso_percent ?? 2.0),
+    juros_mensal_percent: Number(cache.empresa_config?.juros_mensal_percent ?? 1.0),
+    multa_rescisao_percent: Number(cache.empresa_config?.multa_rescisao_percent ?? 10.0)
+  };
+
+  const textoBusca = `${quoteObj.tipo_projeto || ''} ${quoteObj.mensagem || ''}`.toLowerCase();
+  const matchedService = catalogo.find((s) => {
+    if (textoBusca.includes('modpack') || textoBusca.includes('yggdrasil') || textoBusca.includes('servidor')) return s.codigo === 'modpack-server';
+    if (textoBusca.includes('mobile') || textoBusca.includes('android') || textoBusca.includes('ios')) return s.codigo === 'app-mobile';
+    if (textoBusca.includes('commerce') || textoBusca.includes('loja')) return s.codigo === 'ecommerce';
+    if (textoBusca.includes('api') || textoBusca.includes('bot') || textoBusca.includes('integra')) return s.codigo === 'automacao-api';
+    if (textoBusca.includes('cloud') || textoBusca.includes('domínio') || textoBusca.includes('infra')) return s.codigo === 'cloud-devops';
+    if (textoBusca.includes('saas')) return s.codigo === 'portal-saas';
+    if (textoBusca.includes('sistema')) return s.codigo === 'sistema-web';
+    return s.nome.toLowerCase() === (quoteObj.tipo_projeto || '').toLowerCase() || s.codigo === 'web-institucional';
+  }) || catalogo[0] || { codigo: 'custom', nome: quoteObj.tipo_projeto || 'Projeto Personalizado', valor_base: 2500, prazo_dias: 15, parcelas_padrao: 2, entregaveis: [] };
+
+  const detectedUrg = textoBusca.includes('urgência: urgente') ? 'urgente'
+    : textoBusca.includes('urgência: alta') ? 'alta' : 'normal';
+
+  const titleMatch = String(quoteObj.mensagem || '').match(/^\[([^\]]+)\]/);
+  const tituloSugerido = titleMatch ? titleMatch[1] : matchedService.nome;
+
   setRecordModalHeader(
     `Solicitação #${quoteObj.id} — ${quoteObj.nome}`,
-    'Registre o parecer comercial e envie a resposta por e-mail ao cliente',
-    ICONS.reply
+    'Gere o orçamento automático com cálculo de impostos, multas contratuais e proposta oficial',
+    ICONS.dollar
   );
-  saveBtn.textContent = 'Registrar e Enviar E-mail';
+  saveBtn.textContent = 'Gerar Orçamento Oficial & Enviar E-mail';
 
   box.innerHTML = `
     <div class="modal-section-card">
       <div class="modal-section-title"><span class="modal-section-step">1</span> Dados do Solicitante</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:13px;">
         <div><b>Empresa:</b> ${esc(quoteObj.empresa || 'Não informada')}</div>
-        <div><b>Projeto:</b> <span class="badge">${esc(quoteObj.tipo_projeto || 'Geral')}</span></div>
+        <div><b>Categoria:</b> <span class="badge">${esc(quoteObj.tipo_projeto || 'Geral')}</span></div>
         <div><b>E-mail:</b> <a href="mailto:${esc(quoteObj.email)}" style="color:var(--primary);">${esc(quoteObj.email)}</a></div>
         <div><b>Telefone:</b> ${esc(quoteObj.telefone || '-')}</div>
       </div>
@@ -3676,33 +3709,162 @@ function openQuoteReplyModal(quoteObj) {
     ${quoteObj.resposta ? `
       <div class="quote-reply-box" style="margin-bottom:0;">
         <div style="font-size:12px; font-weight:700; color:var(--primary); margin-bottom:4px;">
-          Retorno registrado por ${esc(quoteObj.respondido_por || 'Equipe Comercial')} em ${formatDateTime(quoteObj.respondido_em)}:
+          Último orçamento / retorno por ${esc(quoteObj.respondido_por || 'Equipe Comercial')} em ${formatDateTime(quoteObj.respondido_em)}:
         </div>
         ${esc(quoteObj.resposta)}
       </div>
     ` : ''}
 
-    <div class="modal-section-card">
-      <div class="modal-section-title"><span class="modal-section-step">2</span> Resposta Comercial &amp; Encaminhamento</div>
-      <div class="formgrid">
+    <div class="modal-section-card" style="border-left: 4px solid #00B4D8;">
+      <div class="modal-section-title" style="justify-content:space-between; flex-wrap:wrap; gap:8px;">
+        <span><span class="modal-section-step">2</span> Gerador Automático de Orçamento &amp; Proposta</span>
+        <select name="modo_atendimento" id="orc-modo-sel" style="width:auto; height:32px; font-size:12px; padding:2px 8px;">
+          <option value="orcamento_auto" selected>Orçamento Automático + Proposta Oficial</option>
+          <option value="resposta_simples">Apenas Resposta Textual</option>
+        </select>
+      </div>
+
+      <div id="orc-auto-box" style="display:flex; flex-direction:column; gap:12px;">
+        <div class="formgrid">
+          <label>Serviço do Catálogo Nexus Code *
+            <select name="servico_codigo" id="orc-servico-sel">
+              ${catalogo.map((s) => `<option value="${esc(s.codigo)}" ${s.codigo === matchedService.codigo ? 'selected' : ''}>${esc(s.nome)} (${formatMoney(s.valor_base)})</option>`).join('')}
+              <option value="custom">Projeto Personalizado (Valor Manual)</option>
+            </select>
+          </label>
+          <label>Título da Proposta / Orçamento *
+            <input type="text" name="titulo_proposta" id="orc-titulo" value="${esc(tituloSugerido)}" required>
+          </label>
+          <label>Custo Base do Projeto (R$) *
+            <input type="number" step="0.01" min="0" name="valor_base" id="orc-base" value="${Number(matchedService.valor_base || 0).toFixed(2)}" required>
+          </label>
+          <label>Urgência / Prioridade *
+            <select name="urgencia" id="orc-urgencia">
+              <option value="normal" ${detectedUrg === 'normal' ? 'selected' : ''}>Normal (0% adicional)</option>
+              <option value="alta" ${detectedUrg === 'alta' ? 'selected' : ''}>Alta (+15% prioridade)</option>
+              <option value="urgente" ${detectedUrg === 'urgente' ? 'selected' : ''}>Urgente (+30% regime expresso)</option>
+            </select>
+          </label>
+          <label>Desconto Comercial (R$)
+            <input type="number" step="0.01" min="0" name="desconto" id="orc-desconto" value="0.00">
+          </label>
+          <label>Impostos / Tributos (%) *
+            <input type="number" step="0.01" min="0" max="100" name="imposto_percent" id="orc-imposto" value="${Number(params.imposto_servico_percent ?? 6).toFixed(2)}">
+          </label>
+          <label>Multa por Atraso (%)
+            <input type="number" step="0.01" min="0" max="100" name="multa_atraso_percent" id="orc-multa-atraso" value="${Number(params.multa_atraso_percent ?? 2).toFixed(2)}">
+          </label>
+          <label>Juros Mora (% ao mês)
+            <input type="number" step="0.01" min="0" max="100" name="juros_mensal_percent" id="orc-juros" value="${Number(params.juros_mensal_percent ?? 1).toFixed(2)}">
+          </label>
+          <label>Multa Rescisória Contratual (%)
+            <input type="number" step="0.01" min="0" max="100" name="multa_rescisao_percent" id="orc-multa-resc" value="${Number(params.multa_rescisao_percent ?? 10).toFixed(2)}">
+          </label>
+          <label>Parcelamento (x)
+            <input type="number" min="1" max="24" name="parcelas" id="orc-parcelas" value="${matchedService.parcelas_padrao || 2}">
+          </label>
+          <label>Prazo de Entrega (dias)
+            <input type="number" min="1" max="365" name="prazo_dias" id="orc-prazo" value="${matchedService.prazo_dias || 15}">
+          </label>
+          <label>Validade da Proposta (dias)
+            <input type="number" min="1" max="90" name="validade_dias" value="15">
+          </label>
+        </div>
+
+        <div id="orc-live-summary" style="background:linear-gradient(135deg,#061224,#0A1D37); color:#fff; border:1px solid rgba(0,180,216,0.45); border-radius:12px; padding:14px 16px; font-size:12.5px;"></div>
+
+        <label class="field-full">Escopo Complementar / Observações Técnicas
+          <textarea name="escopo_adicional" id="orc-escopo" rows="2" placeholder="Detalhes específicos alinhados para este cliente...">${esc(matchedService.descricao || '')}</textarea>
+        </label>
+
+        <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700; cursor:pointer;">
+          <input type="checkbox" name="converter_em_projeto" style="width:16px; height:16px; accent-color:#00B4D8;">
+          <span>Já aprovar orçamento e iniciar Projeto + Tarefas no Planner + Faturas agora</span>
+        </label>
+      </div>
+
+      <div id="orc-simple-box" style="display:none; flex-direction:column; gap:10px;">
         <label>Status do Atendimento
           <select name="status">
-            <option value="respondido" ${quoteObj.status === 'respondido' || quoteObj.status === 'novo' ? 'selected' : ''}>Respondido</option>
-            <option value="em_atendimento" ${quoteObj.status === 'em_atendimento' ? 'selected' : ''}>Em Atendimento</option>
-            <option value="convertido" ${quoteObj.status === 'convertido' ? 'selected' : ''}>Convertido em Projeto</option>
-            <option value="arquivado" ${quoteObj.status === 'arquivado' ? 'selected' : ''}>Arquivado</option>
+            <option value="respondido">Respondido</option>
+            <option value="em_atendimento">Em Atendimento</option>
+            <option value="arquivado">Arquivado</option>
           </select>
         </label>
-        <div style="display:flex; align-items:flex-end;">
-          ${quoteObj.cliente_id ? `<button type="button" class="btn secondary" style="width:100%; justify-content:center;" onclick="document.getElementById('record-dialog').close(); window.nexusGo('projects', true);">+ Converter em Projeto</button>` : ''}
-        </div>
+        <label class="field-full">Parecer / Mensagem *
+          <textarea name="resposta" rows="4" placeholder="Escreva sua resposta comercial...">${esc(quoteObj.resposta || '')}</textarea>
+        </label>
       </div>
-      <label class="field-full">
-        <span>Parecer / Proposta Comercial *</span>
-        <textarea name="resposta" rows="4" required placeholder="Descreva a proposta comercial, o retorno técnico ou os próximos passos do atendimento...">${esc(quoteObj.resposta || '')}</textarea>
-      </label>
     </div>
   `;
+
+  setTimeout(() => {
+    const modoSel = document.getElementById('orc-modo-sel');
+    const autoBox = document.getElementById('orc-auto-box');
+    const simpleBox = document.getElementById('orc-simple-box');
+    const servSel = document.getElementById('orc-servico-sel');
+    const summaryEl = document.getElementById('orc-live-summary');
+
+    const recalc = () => {
+      const base = parseFloat(document.getElementById('orc-base')?.value) || 0;
+      const urg = document.getElementById('orc-urgencia')?.value || 'normal';
+      const urgPct = urg === 'urgente' ? 30 : urg === 'alta' ? 15 : 0;
+      const urgVal = base * (urgPct / 100);
+      const desc = parseFloat(document.getElementById('orc-desconto')?.value) || 0;
+      const sub = Math.max(0, base + urgVal - desc);
+      const impPct = parseFloat(document.getElementById('orc-imposto')?.value) || 0;
+      const impVal = sub * (impPct / 100);
+      const total = sub + impVal;
+      const parc = Math.max(1, parseInt(document.getElementById('orc-parcelas')?.value || '1', 10));
+      const valParc = total / parc;
+      const mAtraso = parseFloat(document.getElementById('orc-multa-atraso')?.value) || 0;
+      const juros = parseFloat(document.getElementById('orc-juros')?.value) || 0;
+      const mResc = parseFloat(document.getElementById('orc-multa-resc')?.value) || 0;
+
+      if (summaryEl) {
+        summaryEl.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+            <span style="font-size:11px; font-weight:800; color:#00B4D8; letter-spacing:0.06em;">DEMONSTRATIVO AUTOMÁTICO DO ORÇAMENTO</span>
+            <span style="font-size:18px; font-weight:900; color:#00B4D8;">Total: ${formatMoney(total)} (${parc}x de ${formatMoney(valParc)})</span>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; font-size:12px; color:#cbd5e1;">
+            <div>Custo Base: <b>${formatMoney(base)}</b></div>
+            <div>Urgência (+${urgPct}%): <b>${formatMoney(urgVal)}</b></div>
+            <div>Impostos (${impPct.toFixed(1)}%): <b>+${formatMoney(impVal)}</b></div>
+          </div>
+          <div style="margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.12); font-size:11.5px; color:#94a3b8;">
+            Multas automáticas inclusas: <b>${mAtraso.toFixed(1)}%</b> atraso + <b>${juros.toFixed(1)}% a.m.</b> juros • Rescisão contratual: <b>${mResc.toFixed(1)}%</b>
+          </div>
+        `;
+      }
+    };
+
+    servSel?.addEventListener('change', () => {
+      const found = catalogo.find((s) => s.codigo === servSel.value);
+      if (found) {
+        document.getElementById('orc-base').value = Number(found.valor_base || 0).toFixed(2);
+        document.getElementById('orc-prazo').value = found.prazo_dias || 15;
+        document.getElementById('orc-parcelas').value = found.parcelas_padrao || 2;
+        document.getElementById('orc-escopo').value = found.descricao || '';
+        if (!titleMatch) document.getElementById('orc-titulo').value = found.nome;
+      }
+      recalc();
+    });
+
+    ['orc-base', 'orc-urgencia', 'orc-desconto', 'orc-imposto', 'orc-parcelas', 'orc-multa-atraso', 'orc-juros', 'orc-multa-resc'].forEach((id) => {
+      document.getElementById(id)?.addEventListener('input', recalc);
+      document.getElementById(id)?.addEventListener('change', recalc);
+    });
+
+    modoSel?.addEventListener('change', () => {
+      const isAuto = modoSel.value === 'orcamento_auto';
+      autoBox.style.display = isAuto ? 'flex' : 'none';
+      simpleBox.style.display = isAuto ? 'none' : 'flex';
+      saveBtn.textContent = isAuto ? 'Gerar Orçamento Oficial & Enviar E-mail' : 'Registrar e Enviar E-mail';
+    });
+
+    recalc();
+  }, 20);
 
   recordDialog.showModal();
 }
@@ -3757,11 +3919,19 @@ async function openRecordModal(editObj = null, defaultPerfil = 'colaborador') {
           <label>Status Homologação Cliente<select name="aprovacao_cliente_status">
             ${['pendente', 'aguardando_homologacao', 'aprovado', 'ajuste_solicitado'].map((st) => `<option value="${st}" ${(editObj?.aprovacao_cliente_status || 'pendente') === st ? 'selected' : ''}>${st.replace('_', ' ')}</option>`).join('')}
           </select></label>
-          <label>URL de Homologação (Portal Cliente)<input name="url_homologacao" type="url" placeholder="https://staging..." value="${esc(editObj?.url_homologacao || '')}"></label>
-          <label>URL de Produção<input name="url_producao" type="url" placeholder="https://..." value="${esc(editObj?.url_producao || '')}"></label>
+          <label>URL de Homologação (Subdomínio Nexus Code)
+            <input name="url_homologacao" id="proj-url-homolog" type="text" placeholder="https://teste1.nexuscodebrasil.com.br" value="${esc(editObj?.url_homologacao || '')}">
+            <span class="muted" style="font-size:11px;">Preenchido automaticamente em <code>*.nexuscodebrasil.com.br</code></span>
+          </label>
+          <label>URL de Produção (Domínio Próprio / Cliente)
+            <input name="url_producao" type="url" placeholder="https://www.dominio-do-cliente.com.br" value="${esc(editObj?.url_producao || '')}">
+            <span class="muted" style="font-size:11px;">Informe a URL final do seu domínio ou do cliente</span>
+          </label>
         </div>
-        <label class="field-full">Repositório Git / Observações Técnicas<input name="repositorio_url" placeholder="https://github.com/..." value="${esc(editObj?.repositorio_url || '')}"></label>
-        <label class="field-full">Descrição Detalhada<textarea name="descricao" rows="3">${esc(editObj?.descricao || '')}</textarea></label>
+        <div id="proj-manual-repo-fields" style="display:${editObj ? 'flex' : 'none'}; flex-direction:column; gap:12px;">
+          <label class="field-full">Repositório Git / Observações Técnicas<input name="repositorio_url" placeholder="https://github.com/..." value="${esc(editObj?.repositorio_url || '')}"></label>
+          <label class="field-full">Descrição Detalhada<textarea name="descricao" rows="3">${esc(editObj?.descricao || '')}</textarea></label>
+        </div>
       </div>
       ${!editObj ? `
       <div class="modal-section-card" style="border-left: 4px solid #00B4D8;">
@@ -3770,7 +3940,7 @@ async function openRecordModal(editObj = null, defaultPerfil = 'colaborador') {
           <input type="checkbox" name="criar_no_github" id="proj-criar-gh" checked style="width:16px; height:16px; accent-color:#00B4D8;">
           <span>Criar repositório automaticamente no GitHub da empresa (habilita o botão "Abrir IDE")</span>
         </label>
-        <div class="formgrid">
+        <div id="proj-auto-gh-fields" class="formgrid">
           <label>Nome do Repositório GitHub
             <input name="github_repo_nome" id="proj-gh-repo-nome" placeholder="ex.: portal-cliente-api">
           </label>
@@ -3787,11 +3957,34 @@ async function openRecordModal(editObj = null, defaultPerfil = 'colaborador') {
     setTimeout(() => {
       const tInp = recordForm.querySelector('[name="titulo"]');
       const rInp = document.getElementById('proj-gh-repo-nome');
-      if (tInp && rInp && !editObj) {
+      const hInp = document.getElementById('proj-url-homolog');
+      const ghChk = document.getElementById('proj-criar-gh');
+      const manualFields = document.getElementById('proj-manual-repo-fields');
+      const autoGhFields = document.getElementById('proj-auto-gh-fields');
+
+      let manualHomologEdited = Boolean(editObj?.url_homologacao);
+      hInp?.addEventListener('input', () => { manualHomologEdited = true; });
+
+      const slugify = (val) => val.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9._-]+/g, '-').replace(/^-|-$/g, '').slice(0, 45);
+
+      if (tInp && !editObj) {
         tInp.addEventListener('input', () => {
-          rInp.value = tInp.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9._-]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+          const slug = slugify(tInp.value);
+          if (rInp) rInp.value = slug;
+          if (hInp && !manualHomologEdited) {
+            hInp.value = slug ? `https://${slug}.nexuscodebrasil.com.br` : '';
+          }
         });
       }
+
+      const syncGhToggle = () => {
+        if (!ghChk) return;
+        const isAuto = ghChk.checked;
+        if (manualFields) manualFields.style.display = isAuto ? 'none' : 'flex';
+        if (autoGhFields) autoGhFields.style.display = isAuto ? 'grid' : 'none';
+      };
+      ghChk?.addEventListener('change', syncGhToggle);
+      syncGhToggle();
     }, 20);
   } else if (['customers', 'leads', 'pipeline'].includes(page)) {
     setRecordModalHeader(
@@ -4051,6 +4244,32 @@ recordForm.onsubmit = async (e) => {
 
   try {
     if (modalMode === 'quote_reply') {
+      if (raw.modo_atendimento === 'orcamento_auto') {
+        const resAuto = await apiRequest(`/orcamentos/${editingId}/gerar-orcamento-automatico`, {
+          method: 'POST',
+          body: JSON.stringify({
+            servico_codigo: raw.servico_codigo !== 'custom' ? raw.servico_codigo : null,
+            titulo_proposta: raw.titulo_proposta?.trim() || null,
+            valor_base: Number(raw.valor_base || 0),
+            urgencia: raw.urgencia || 'normal',
+            desconto: Number(raw.desconto || 0),
+            imposto_percent: Number(raw.imposto_percent ?? 6),
+            multa_atraso_percent: Number(raw.multa_atraso_percent ?? 2),
+            juros_mensal_percent: Number(raw.juros_mensal_percent ?? 1),
+            multa_rescisao_percent: Number(raw.multa_rescisao_percent ?? 10),
+            parcelas: Number(raw.parcelas || 2),
+            prazo_dias: Number(raw.prazo_dias || 15),
+            validade_dias: Number(raw.validade_dias || 15),
+            escopo_adicional: raw.escopo_adicional || null,
+            converter_em_projeto: Boolean(recordForm.querySelector('[name="converter_em_projeto"]')?.checked)
+          })
+        });
+        recordDialog.close();
+        invalidateCache();
+        showToast(`Orçamento ${resAuto.proposta?.codigo} gerado e enviado ao cliente!`, 'success');
+        render();
+        return;
+      }
       await apiRequest(`/orcamentos/${editingId}/responder`, {
         method: 'PATCH',
         body: JSON.stringify({
@@ -4070,8 +4289,17 @@ recordForm.onsubmit = async (e) => {
           valor_total: Number(raw.valor_total || 0),
           horas_estimadas: Number(raw.horas_estimadas || 0),
           aprovacao_cliente_status: raw.aprovacao_cliente_status || 'pendente',
-          url_homologacao: raw.url_homologacao || null,
-          url_producao: raw.url_producao || null,
+          url_homologacao: (() => {
+            const v = (raw.url_homologacao || '').trim();
+            if (!v) return null;
+            if (!v.includes('.')) return `https://${v.toLowerCase().replace(/[^a-z0-9-]/g, '')}.nexuscodebrasil.com.br`;
+            return /^https?:\/\//i.test(v) ? v : `https://${v}`;
+          })(),
+          url_producao: (() => {
+            const v = (raw.url_producao || '').trim();
+            if (!v) return null;
+            return /^https?:\/\//i.test(v) ? v : `https://${v}`;
+          })(),
           repositorio_url: raw.repositorio_url || null,
           data_inicio: raw.data_inicio || null,
           data_entrega: raw.data_entrega || null,

@@ -1982,6 +1982,17 @@
                 if (Array.isArray(data.planos_saas) && data.planos_saas.length > 0) {
                     renderDynamicSaasPlans(data.planos_saas);
                 }
+                if (Array.isArray(data.catalogo_servicos) && data.catalogo_servicos.length > 0) {
+                    const sel = document.getElementById('project_type');
+                    if (sel) {
+                        sel.innerHTML = '<option value="" class="bg-[#0A1D37] text-white">Selecione o tipo de projeto (Catálogo Precificado)</option>' +
+                            data.catalogo_servicos.map((s) => {
+                                const precoFmt = Number(s.valor_base || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                                return `<option value="${escHtml(s.nome)}" class="bg-[#0A1D37] text-white">${escHtml(s.nome)} — A partir de ${precoFmt} (${s.prazo_dias} dias)</option>`;
+                            }).join('') +
+                            '<option value="Projeto Personalizado" class="bg-[#0A1D37] text-white">Outro / Projeto Sob Medida</option>';
+                    }
+                }
             } catch (err) {
                 console.warn('Configuração pública indisponível no momento:', err);
             }
