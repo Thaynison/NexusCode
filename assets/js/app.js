@@ -4198,11 +4198,23 @@ async function openRecordModal(editObj = null, defaultPerfil = 'colaborador') {
           <label>Nome Completo *<input name="nome" required value="${esc(editObj?.nome || '')}" placeholder="Ex.: Mariana Silva"></label>
           <label>E-mail de Acesso *<input name="email" type="email" required value="${esc(editObj?.email || '')}" placeholder="nome@empresa.com.br"></label>
           <label>Senha ${editObj ? '(deixe vazio para manter)' : '*'}<input name="senha" type="password" ${editObj ? '' : 'required'} minlength="6" autocomplete="new-password"></label>
-          <label>Tipo de Conta / Perfil *
-            <select name="perfil" id="usr-perfil-select" ${user?.perfil !== 'admin' ? 'disabled' : ''}>
-              ${['colaborador', 'admin'].map((r) => `<option value="${r}" ${activePerfil === r ? 'selected' : ''}>${r === 'admin' ? 'Administrador Interno (Gestão & RH)' : 'Colaborador Interno (Ponto & Tarefas)'}</option>`).join('')}
-            </select>
-          </label>
+          ${isClientAccount
+            ? '<input type="hidden" name="perfil" value="cliente">'
+            : `<div class="field-full" style="grid-column: 1 / -1; background: rgba(0, 180, 216, 0.07); border: 1px solid rgba(0, 180, 216, 0.3); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                <div>
+                  <label for="usr-is-admin-check" style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin: 0; font-weight: 700; font-size: 13.5px; color: var(--text);">
+                    <input type="checkbox" id="usr-is-admin-check" name="is_admin_full" value="true" ${activePerfil === 'admin' ? 'checked' : ''} ${user?.perfil !== 'admin' ? 'disabled' : ''} style="width: 17px; height: 17px; accent-color: #0096B4; margin: 0;">
+                    <span>Acesso Total (Administrador do Sistema)</span>
+                  </label>
+                  <div class="muted" style="font-size: 12px; margin-top: 3px; padding-left: 27px;">
+                    Concede acesso irrestrito a todos os módulos, financeiro, folha, configurações e gestão de usuários. Quando desmarcado, o colaborador segue as permissões do CBO.
+                  </div>
+                </div>
+                <span id="usr-role-pill" class="badge ${activePerfil === 'admin' ? 'em_andamento' : ''}" style="flex-shrink: 0;">
+                  ${activePerfil === 'admin' ? 'Administrador Total' : 'Colaborador (CBO)'}
+                </span>
+              </div>`
+          }
           <label>CPF / Documento<input name="cpf" value="${esc(editObj?.cpf || '')}" placeholder="000.000.000-00"></label>
           <label>Telefone / WhatsApp<input name="telefone" value="${esc(editObj?.telefone || '')}" placeholder="(27) 99999-9999"></label>
           <label>Status da Conta<select name="ativo">
@@ -4303,8 +4315,12 @@ async function openRecordModal(editObj = null, defaultPerfil = 'colaborador') {
         </div>
       </div>
       
-      <div class="modal-section-card">
+      <div class="modal-section-card" id="usr-sec5-card">
         <div class="modal-section-title"><span class="modal-section-step">5</span> Exceções de Acesso (Opcional)</div>
+        <div id="usr-admin-full-banner" style="display:${activePerfil === 'admin' ? 'block' : 'none'}; background:rgba(22,163,74,0.09); border:1px solid rgba(22,163,74,0.3); color:var(--ok); padding:10px 14px; border-radius:8px; font-size:12.5px; font-weight:600;">
+          &#10003; Acesso Total (Administrador) habilitado: este colaborador possui acesso irrestrito a todos os módulos do sistema.
+        </div>
+        <div id="usr-perms-overrides-wrap" style="display:${activePerfil === 'admin' ? 'none' : 'block'};">
         <p class="muted" style="margin:0 0 10px; font-size:12.5px;">As permissões base são geradas automaticamente pelo CBO. Marque abaixo apenas se quiser forçar o acesso ou bloqueio específico deste colaborador.</p>
         <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:10px;">
           ${[
@@ -4329,6 +4345,7 @@ async function openRecordModal(editObj = null, defaultPerfil = 'colaborador') {
               </label>
             `;
           }).join('')}
+        </div>
         </div>
       </div>
       </div>`;
@@ -4385,13 +4402,18 @@ async function openRecordModal(editObj = null, defaultPerfil = 'colaborador') {
         syncPix(); 
       }, 50);
 
-      const perfilSel = document.getElementById('usr-perfil-select');
-      const hrSections = document.getElementById('usr-hr-sections');
-      const clientNotice = document.getElementById('usr-client-notice');
-      perfilSel?.addEventListener('change', () => {
-        const isCli = perfilSel.value === 'cliente';
-        if (hrSections) hrSections.style.display = isCli ? 'none' : 'flex';
-        if (clientNotice) clientNotice.style.display = isCli ? 'flex' : 'none';
+      const adminChk = document.getElementById('usr-is-admin-check');
+      const rolePill = document.getElementById('usr-role-pill');
+      const adminBanner = document.getElementById('usr-admin-full-banner');
+      const overridesWrap = document.getElementById('usr-perms-overrides-wrap');
+      adminChk?.addEventListener('change', () => {
+        const isFull = adminChk.checked;
+        if (rolePill) {
+          rolePill.textContent = isFull ? 'Administrador Total' : 'Colaborador (CBO)';
+          rolePill.className = isFull ? 'badge em_andamento' : 'badge';
+        }
+        if (adminBanner) adminBanner.style.display = isFull ? 'block' : 'none';
+        if (overridesWrap) overridesWrap.style.display = isFull ? 'none' : 'block';
       });
 
       const cboSearch = document.getElementById('usr-cbo-search');
@@ -4578,12 +4600,16 @@ recordForm.onsubmit = async (e) => {
       });
     } else if (page === 'users') {
       const isCli = raw.perfil === 'cliente';
+      const adminChkEl = recordForm.querySelector('#usr-is-admin-check');
+      const isAdminFull = Boolean(adminChkEl?.checked);
+      const resolvedPerfil = isCli ? 'cliente' : (isAdminFull ? 'admin' : 'colaborador');
+      const canEditRole = user?.perfil === 'admin';
       await apiRequest(editingId ? `/usuarios/${editingId}` : '/usuarios', {
         method: editingId ? 'PATCH' : 'POST',
         body: JSON.stringify({
           nome: raw.nome,
           email: raw.email,
-          perfil: raw.perfil,
+          ...(canEditRole ? { perfil: resolvedPerfil } : {}),
           cpf: raw.cpf || null,
           telefone: raw.telefone || null,
           cbo_codigo: isCli ? null : (raw.cbo_codigo || null),

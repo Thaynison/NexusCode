@@ -17,7 +17,13 @@ from models import Usuario, Organizacao
 
 load_dotenv()
 
-SECRET_KEY = os.getenv("SECRET_KEY", "chave_insegura_altere_no_env")
+_RAW_SECRET = (os.getenv("SECRET_KEY") or "").strip()
+if not _RAW_SECRET or _RAW_SECRET == "chave_insegura_altere_no_env":
+    if os.getenv("VERCEL") or os.getenv("ENV") == "production":
+        raise RuntimeError("CRÍTICO: Defina uma variável de ambiente SECRET_KEY forte em produção.")
+    _RAW_SECRET = "dev_only_nexus_ephemeral_secret_change_me_2026"
+
+SECRET_KEY = _RAW_SECRET
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))
 
@@ -35,12 +41,13 @@ def verificar_senha(senha_plana: str, senha_hash: str) -> bool:
 
 def criar_token_acesso(dados: dict, expires_minutes: int | None = None) -> str:
     payload = dados.copy()
+    payload.setdefault("type", "access")
     expira = datetime.utcnow() + timedelta(minutes=expires_minutes or ACCESS_TOKEN_EXPIRE_MINUTES)
     payload.update({"exp": expira})
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def get_usuario_atual(token: str = Depends(oauth2_scheme)):
+def _decodificar_identidade_jwt(token: str) -> SimpleNamespace:
     credenciais_exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Token inválido ou expirado.",
@@ -48,6 +55,8 @@ def get_usuario_atual(token: str = Depends(oauth2_scheme)):
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") == "reset":
+            raise credenciais_exc
         user_id = payload.get("sub")
         perfil = payload.get("perfil")
         if user_id is None or perfil is None:
@@ -61,7 +70,7 @@ def get_usuario_atual(token: str = Depends(oauth2_scheme)):
             email=payload.get("email", ""),
             ativo=True,
         )
-    except (JWTError, ValueError):
+    except (JWTError, ValueError, TypeError):
         raise credenciais_exc
 
 
@@ -69,12 +78,12 @@ def get_usuario_db(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> Usuario:
-    ident = get_usuario_atual(token)
+    ident = _decodificar_identidade_jwt(token)
     usuario = db.query(Usuario).filter(Usuario.id == ident.id).first()
     if not usuario or not usuario.ativo:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Sessão inválida ou usuário desativado.",
+            detail="Sessão inválida, revogada ou usuário desativado.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     org = db.query(Organizacao).filter(Organizacao.id == usuario.organizacao_id).first()
@@ -86,7 +95,13 @@ def get_usuario_db(
     return usuario
 
 
-def exigir_equipe(usuario=Depends(get_usuario_atual)):
+def get_usuario_atual(
+    usuario: Usuario = Depends(get_usuario_db),
+) -> Usuario:
+    return usuario
+
+
+def exigir_equipe(usuario: Usuario = Depends(get_usuario_db)) -> Usuario:
     if usuario.perfil not in ("admin", "colaborador"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -95,7 +110,7 @@ def exigir_equipe(usuario=Depends(get_usuario_atual)):
     return usuario
 
 
-def exigir_admin(usuario=Depends(get_usuario_atual)):
+def exigir_admin(usuario: Usuario = Depends(get_usuario_db)) -> Usuario:
     if usuario.perfil != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -105,14 +120,9 @@ def exigir_admin(usuario=Depends(get_usuario_atual)):
 
 
 def exigir_master_admin(
-    usuario=Depends(get_usuario_atual),
+    usuario: Usuario = Depends(exigir_admin),
     db: Session = Depends(get_db),
-):
-    if usuario.perfil != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acesso restrito ao administrador master da plataforma.",
-        )
+) -> Usuario:
     org = db.query(Organizacao).filter(Organizacao.id == usuario.organizacao_id).first()
     if not org or not org.is_master:
         raise HTTPException(

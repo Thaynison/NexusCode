@@ -702,8 +702,47 @@ class ConfiguracaoEmpresaUpdate(BaseModel):
     dominio_precos_json: Optional[str] = None
 
 
-class ConfiguracaoEmpresaOut(ConfiguracaoEmpresaUpdate):
+class ConfiguracaoEmpresaOut(BaseModel):
     id: int
+    razao_social: Optional[str] = None
+    nome_fantasia: Optional[str] = None
+    cnpj: Optional[str] = None
+    inscricao_estadual: Optional[str] = None
+    email_financeiro: Optional[str] = None
+    telefone: Optional[str] = None
+    endereco: Optional[str] = None
+    cidade: Optional[str] = None
+    estado: Optional[str] = None
+    cep: Optional[str] = None
+    banco_nome: Optional[str] = None
+    agencia: Optional[str] = None
+    conta: Optional[str] = None
+    chave_pix: Optional[str] = None
+    titular_pix: Optional[str] = None
+    multa_atraso_percent: Optional[Decimal] = None
+    juros_mensal_percent: Optional[Decimal] = None
+    multa_rescisao_percent: Optional[Decimal] = None
+    imposto_servico_percent: Optional[Decimal] = None
+    catalogo_servicos_json: Optional[str] = None
+    permissoes_json: Optional[str] = None
+    mp_ativo: Optional[bool] = False
+    mp_api_tipo: Optional[str] = "orders"
+    mp_ambiente: Optional[str] = "producao"
+    mp_public_key: Optional[str] = None
+    mp_token_configurado: bool = False
+    mp_webhook_configurado: bool = False
+    registrar_provedor: Optional[str] = "sandbox"
+    registrar_api_user: Optional[str] = None
+    registrar_key_configurada: bool = False
+    registrar_client_ip: Optional[str] = None
+    github_ativo: Optional[bool] = False
+    github_org: Optional[str] = None
+    github_token_configurado: bool = False
+    github_visibilidade_padrao: Optional[str] = "private"
+    vercel_token_configurado: bool = False
+    vercel_project_id: Optional[str] = None
+    vercel_team_id: Optional[str] = None
+    dominio_precos_json: Optional[str] = None
     atualizado_em: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 

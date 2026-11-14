@@ -523,9 +523,9 @@ def mp_validar_assinatura_webhook(
     data_id: Optional[str],
     secret: Optional[str],
 ) -> bool:
-    """Valida assinatura HMAC-SHA256 do header x-signature do Mercado Pago quando secret está configurado."""
+    """Valida assinatura HMAC-SHA256 do header x-signature do Mercado Pago (exige secret configurado)."""
     if not secret or not secret.strip():
-        return True
+        return False
     if not x_signature:
         return False
     ts_val = None

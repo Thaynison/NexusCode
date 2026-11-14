@@ -1839,28 +1839,30 @@ export async function renderEmpresaView(ctx) {
     btn.disabled = true;
     btn.textContent = 'Salvando Integrações...';
     try {
+      const payloadInt = {
+        mp_ativo: raw.mp_ativo === 'true',
+        mp_api_tipo: raw.mp_api_tipo || 'orders',
+        mp_ambiente: raw.mp_ambiente || 'producao',
+        mp_public_key: (raw.mp_public_key || '').trim() || null,
+        registrar_provedor: raw.registrar_provedor || 'sandbox',
+        registrar_api_user: (raw.registrar_api_user || '').trim() || null,
+        registrar_client_ip: (raw.registrar_client_ip || '').trim() || null,
+        github_ativo: raw.github_ativo === 'true',
+        github_org: (raw.github_org || '').trim() || 'Nexus-Code-Brasil',
+        github_visibilidade_padrao: raw.github_visibilidade_padrao || 'private',
+        vercel_project_id: (raw.vercel_project_id || '').trim() || null,
+        vercel_team_id: (raw.vercel_team_id || '').trim() || null,
+        dominio_precos_json: JSON.stringify(precosMap)
+      };
+      if ((raw.mp_access_token || '').trim()) payloadInt.mp_access_token = raw.mp_access_token.trim();
+      if ((raw.mp_webhook_secret || '').trim()) payloadInt.mp_webhook_secret = raw.mp_webhook_secret.trim();
+      if ((raw.registrar_api_key || '').trim()) payloadInt.registrar_api_key = raw.registrar_api_key.trim();
+      if ((raw.github_token || '').trim()) payloadInt.github_token = raw.github_token.trim();
+      if ((raw.vercel_token || '').trim()) payloadInt.vercel_token = raw.vercel_token.trim();
+
       await apiRequest('/empresa', {
         method: 'PUT',
-        body: JSON.stringify({
-          mp_ativo: raw.mp_ativo === 'true',
-          mp_api_tipo: raw.mp_api_tipo || 'orders',
-          mp_ambiente: raw.mp_ambiente || 'producao',
-          mp_public_key: (raw.mp_public_key || '').trim() || null,
-          mp_access_token: (raw.mp_access_token || '').trim() || null,
-          mp_webhook_secret: (raw.mp_webhook_secret || '').trim() || null,
-          registrar_provedor: raw.registrar_provedor || 'sandbox',
-          registrar_api_user: (raw.registrar_api_user || '').trim() || null,
-          registrar_api_key: (raw.registrar_api_key || '').trim() || null,
-          registrar_client_ip: (raw.registrar_client_ip || '').trim() || null,
-          github_ativo: raw.github_ativo === 'true',
-          github_org: (raw.github_org || '').trim() || 'Nexus-Code-Brasil',
-          github_token: (raw.github_token || '').trim() || null,
-          github_visibilidade_padrao: raw.github_visibilidade_padrao || 'private',
-          vercel_token: (raw.vercel_token || '').trim() || null,
-          vercel_project_id: (raw.vercel_project_id || '').trim() || null,
-          vercel_team_id: (raw.vercel_team_id || '').trim() || null,
-          dominio_precos_json: JSON.stringify(precosMap)
-        })
+        body: JSON.stringify(payloadInt)
       });
       invalidateCache();
       showToast('Integrações e parâmetros de API salvos com sucesso!', 'success');
@@ -2289,11 +2291,11 @@ export async function renderEmpresaView(ctx) {
               <label class="field-full">Public Key
                 <input type="text" name="mp_public_key" value="${esc(cfg?.mp_public_key || '')}" placeholder="APP_USR-..." class="nc-input">
               </label>
-              <label class="field-full">Access Token *
-                <input type="password" name="mp_access_token" value="${esc(cfg?.mp_access_token || '')}" placeholder="APP_USR-..." class="nc-input">
+              <label class="field-full">Access Token * ${cfg?.mp_token_configurado ? '<span class="badge ativo" style="font-size:10px; margin-left:6px;">Configurado</span>' : ''}
+                <input type="password" name="mp_access_token" value="" placeholder="${cfg?.mp_token_configurado ? '•••••••••••••••• (deixe em branco para manter)' : 'APP_USR-...'}" class="nc-input" autocomplete="new-password">
               </label>
-              <label class="field-full">Webhook Secret (Assinatura Secreta HMAC)
-                <input type="password" name="mp_webhook_secret" value="${esc(cfg?.mp_webhook_secret || '')}" placeholder="Cole a assinatura secreta do Webhook" class="nc-input">
+              <label class="field-full">Webhook Secret (Assinatura Secreta HMAC) ${cfg?.mp_webhook_configurado ? '<span class="badge ativo" style="font-size:10px; margin-left:6px;">Configurado</span>' : ''}
+                <input type="password" name="mp_webhook_secret" value="" placeholder="${cfg?.mp_webhook_configurado ? '•••••••••••••••• (deixe em branco para manter)' : 'Cole a assinatura secreta do Webhook'}" class="nc-input" autocomplete="new-password">
               </label>
             </div>
             <div style="background:rgba(0,180,216,0.09); border:1px solid rgba(0,180,216,0.35); border-radius:10px; padding:12px 14px; margin-top:14px; font-size:12px; line-height:1.5;">
@@ -2320,14 +2322,14 @@ export async function renderEmpresaView(ctx) {
               <label class="field-full">API User / Auth-ID (Registrador)
                 <input type="text" name="registrar_api_user" value="${esc(cfg?.registrar_api_user || '')}" class="nc-input">
               </label>
-              <label class="field-full">API Key / Token (Registrador)
-                <input type="password" name="registrar_api_key" value="${esc(cfg?.registrar_api_key || '')}" class="nc-input">
+              <label class="field-full">API Key / Token (Registrador) ${cfg?.registrar_key_configurada ? '<span class="badge ativo" style="font-size:10px; margin-left:6px;">Configurado</span>' : ''}
+                <input type="password" name="registrar_api_key" value="" placeholder="${cfg?.registrar_key_configurada ? '•••••••••••••••• (mantido)' : 'Chave da API'}" class="nc-input" autocomplete="new-password">
               </label>
               <label class="field-full">Client IP Autorizado (Namecheap)
                 <input type="text" name="registrar_client_ip" value="${esc(cfg?.registrar_client_ip || '')}" placeholder="Ex.: 177.x.x.x" class="nc-input">
               </label>
-              <label class="field-full">Vercel API Token (SSL &amp; Deploy Automático)
-                <input type="password" name="vercel_token" value="${esc(cfg?.vercel_token || '')}" class="nc-input">
+              <label class="field-full">Vercel API Token (SSL &amp; Deploy Automático) ${cfg?.vercel_token_configurado ? '<span class="badge ativo" style="font-size:10px; margin-left:6px;">Configurado</span>' : ''}
+                <input type="password" name="vercel_token" value="" placeholder="${cfg?.vercel_token_configurado ? '•••••••••••••••• (mantido)' : 'Token Vercel'}" class="nc-input" autocomplete="new-password">
               </label>
               <label class="field-full">Vercel Project ID
                 <input type="text" name="vercel_project_id" value="${esc(cfg?.vercel_project_id || '')}" placeholder="prj_..." class="nc-input">
@@ -2354,8 +2356,8 @@ export async function renderEmpresaView(ctx) {
               <label class="field-full">Organização / Usuário GitHub da Empresa *
                 <input type="text" name="github_org" id="cfg-gh-org" value="${esc(cfg?.github_org || 'Nexus-Code-Brasil')}" placeholder="Ex.: Nexus-Code-Brasil" class="nc-input">
               </label>
-              <label class="field-full">GitHub Personal Access Token (PAT) *
-                <input type="password" name="github_token" id="cfg-gh-token" value="${esc(cfg?.github_token || '')}" placeholder="ghp_... ou github_pat_..." class="nc-input">
+              <label class="field-full">GitHub Personal Access Token (PAT) * ${cfg?.github_token_configurado ? '<span class="badge ativo" style="font-size:10px; margin-left:6px;">Configurado</span>' : ''}
+                <input type="password" name="github_token" id="cfg-gh-token" value="" placeholder="${cfg?.github_token_configurado ? '•••••••••••••••• (deixe em branco para manter)' : 'ghp_... ou github_pat_...'}" class="nc-input" autocomplete="new-password">
               </label>
               <label class="field-full">Visibilidade Padrão dos Novos Projetos
                 <select name="github_visibilidade_padrao" class="nc-input">

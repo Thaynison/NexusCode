@@ -299,6 +299,78 @@ def _get_parametros_orcamento_empresa(cfg: Optional[ConfiguracaoEmpresa]) -> dic
         },
     }
 
+
+def _serializar_config_empresa_segura(cfg: Optional[ConfiguracaoEmpresa]) -> Optional[ConfiguracaoEmpresaOut]:
+    if not cfg:
+        return None
+    out = ConfiguracaoEmpresaOut.model_validate(cfg)
+    out.mp_token_configurado = bool((cfg.mp_access_token or "").strip())
+    out.mp_webhook_configurado = bool((cfg.mp_webhook_secret or "").strip())
+    out.registrar_key_configurada = bool((cfg.registrar_api_key or "").strip())
+    out.github_token_configurado = bool((cfg.github_token or "").strip())
+    out.vercel_token_configurado = bool((cfg.vercel_token or "").strip())
+    return out
+
+
+def _exigir_permissao_modulo(db: Session, usuario: Usuario, mod_key: str):
+    if usuario.perfil == "admin":
+        return
+    if usuario.perfil != "colaborador":
+        raise HTTPException(status_code=403, detail="Acesso negado.")
+
+    org = _get_org_or_404(db, usuario.organizacao_id)
+    if not org.is_master:
+        mods = _parse_json_dict(org.modulos_json, DEFAULT_MODULOS_TENANT)
+        if mods.get(mod_key) is False:
+            raise HTTPException(status_code=403, detail=f"Módulo '{mod_key}' desabilitado no plano desta empresa.")
+
+    if usuario.permissoes_individuais_json:
+        try:
+            pi = json.loads(usuario.permissoes_individuais_json)
+            if isinstance(pi, dict) and isinstance(pi.get(mod_key), bool):
+                if not pi[mod_key]:
+                    raise HTTPException(status_code=403, detail="Você não possui permissão para acessar este módulo.")
+                return
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+    cbo_text = f"{usuario.cbo_descricao or ''} {usuario.cbo_codigo or ''} {usuario.cargo or ''}".lower()
+    base = {
+        "projetos": True, "tarefas": True, "timesheet": True, "orcamentos": True,
+        "propostas": True, "clientes": True, "chamados": True, "financeiro_dre": False,
+        "faturas": True, "despesas": False, "contratos": False, "ponto": True,
+        "holerite": True, "ativos": True, "usuarios": False, "auditoria": False,
+        "loja": False, "reembolsos": True,
+    }
+    if "administrativo" in cbo_text or "4110" in cbo_text:
+        base.update({"projetos": False, "orcamentos": False, "propostas": False, "clientes": False, "despesas": True, "ativos": False})
+    elif any(x in cbo_text for x in ["financeiro", "contabilidade", "2525", "2522", "4131"]):
+        base.update({"projetos": False, "orcamentos": False, "propostas": False, "clientes": False, "chamados": False, "financeiro_dre": True, "despesas": True, "contratos": True, "ativos": False})
+    elif any(x in cbo_text for x in ["vendas", "comercial", "3541", "1423"]):
+        base.update({"projetos": False, "chamados": False, "faturas": False, "loja": True})
+    elif any(x in cbo_text for x in ["desenvolvedor", "programador", "engenheiro", "designer", "3171", "2624"]):
+        base.update({"orcamentos": False, "propostas": False, "clientes": False, "faturas": False})
+    elif any(x in cbo_text for x in ["recursos humanos", "rh ", "2524"]):
+        base.update({"projetos": False, "orcamentos": False, "propostas": False, "clientes": False, "chamados": False, "faturas": False, "usuarios": True})
+
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first()
+    if cfg and cfg.permissoes_json:
+        try:
+            parsed = json.loads(cfg.permissoes_json)
+            if isinstance(parsed, dict) and isinstance(parsed.get("colaborador"), dict):
+                if parsed["colaborador"].get(mod_key) is False:
+                    raise HTTPException(status_code=403, detail="Acesso restrito pela política da empresa.")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+    if not base.get(mod_key, False):
+        raise HTTPException(status_code=403, detail="Acesso restrito ao seu perfil funcional.")
+
+
 def _slugify_tenant(texto: str) -> str:
     norm = unicodedata.normalize("NFKD", texto or "empresa").encode("ascii", "ignore").decode("ascii")
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", norm.lower()).strip("-")
@@ -2641,7 +2713,7 @@ def _executar_bootstrap_painel(db: Session, usuario: Usuario) -> dict:
         "chamados": [ChamadoOut.model_validate(ch) for ch in chamados],
         "ativos": [AtivoInfraOut.model_validate(at) for at in ativos],
         "notificacoes": [NotificacaoOut.model_validate(n) for n in notificacoes],
-        "empresa_config": ConfiguracaoEmpresaOut.model_validate(empresa_cfg) if empresa_cfg else None,
+        "empresa_config": _serializar_config_empresa_segura(empresa_cfg),
         "catalogo_servicos": _get_catalogo_servicos_empresa(empresa_cfg),
         "parametros_orcamento": _get_parametros_orcamento_empresa(empresa_cfg),
         "holerites": [HoleriteListOut.model_validate(h) for h in holerites],
@@ -3027,6 +3099,7 @@ def remover_proposta(
 # ==================== FINANCEIRO: DESPESAS, MRR, DRE & WEBHOOK ====================
 @router.get("/despesas", response_model=List[DespesaOut], tags=["Financeiro"])
 def listar_despesas(db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
+    _exigir_permissao_modulo(db, equipe, "despesas")
     return db.query(Despesa).filter(Despesa.organizacao_id == equipe.organizacao_id).order_by(Despesa.vencimento.asc()).all()
 
 
@@ -3036,6 +3109,7 @@ def criar_despesa(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
+    _exigir_permissao_modulo(db, equipe, "despesas")
     org = _get_org_or_404(db, equipe.organizacao_id)
     _verificar_modulo(org, "despesas")
     desp = Despesa(**dados.model_dump(), organizacao_id=org.id)
@@ -3084,6 +3158,7 @@ def remover_despesa(
 
 @router.get("/contratos-recorrentes", response_model=List[ContratoRecorrenteOut], tags=["Financeiro"])
 def listar_contratos_recorrentes(db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
+    _exigir_permissao_modulo(db, equipe, "contratos")
     return db.query(ContratoRecorrente).filter(ContratoRecorrente.organizacao_id == equipe.organizacao_id).order_by(ContratoRecorrente.criado_em.desc()).all()
 
 
@@ -3093,6 +3168,7 @@ def criar_contrato_recorrente(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
+    _exigir_permissao_modulo(db, equipe, "contratos")
     org = _get_org_or_404(db, equipe.organizacao_id)
     _verificar_modulo(org, "contratos")
     ct = ContratoRecorrente(**dados.model_dump(), organizacao_id=org.id)
@@ -3194,20 +3270,7 @@ def gerar_faturas_recorrentes_mes(
 
 @router.get("/financeiro/dre", tags=["Financeiro"])
 def obter_dre_gerencial(db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
-    if equipe.perfil != "admin":
-        # Need to check colab perms
-        org = _get_org_or_404(db, equipe.organizacao_id)
-        emp_cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first()
-        cbo_text = ((equipe.cbo_descricao or '') + ' ' + (equipe.cbo_codigo or '') + ' ' + (equipe.cargo or '')).lower()
-        if not any(x in cbo_text for x in ["financeiro", "contabilidade", "2525", "2522", "4131"]):
-            raise HTTPException(status_code=403, detail="Acesso restrito.")
-        if emp_cfg and emp_cfg.permissoes_json:
-            try:
-                p = json.loads(emp_cfg.permissoes_json)
-                if not p.get("colaborador", {}).get("financeiro_dre", False):
-                    raise HTTPException(status_code=403, detail="Acesso restrito.")
-            except:
-                pass
+    _exigir_permissao_modulo(db, equipe, "financeiro_dre")
     org_id = equipe.organizacao_id
     faturas = db.query(Fatura.valor, Fatura.status, Fatura.vencimento).filter(Fatura.organizacao_id == org_id).all()
     despesas = db.query(Despesa.valor, Despesa.status, Despesa.categoria, Despesa.vencimento).filter(Despesa.organizacao_id == org_id).all()
@@ -3336,6 +3399,38 @@ def registrar_pedido_loja(dados: PedidoLojaCreate, req: Request, background_task
         db.add(cliente)
         db.flush()
 
+    try:
+        itens_parsed = json.loads(dados.itens_json or "[]")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Formato de itens do carrinho inválido.")
+    if not isinstance(itens_parsed, list) or not itens_parsed:
+        raise HTTPException(status_code=400, detail="O carrinho está vazio.")
+
+    subtotal_real = Decimal("0.00")
+    for item in itens_parsed:
+        qtd = int(item.get("qtd") or item.get("quantidade") or 1)
+        if qtd < 1 or qtd > 100:
+            raise HTTPException(status_code=400, detail="Quantidade inválida no carrinho.")
+        prod_db = None
+        if item.get("id"):
+            prod_db = db.query(ProdutoLoja).filter(
+                ProdutoLoja.id == int(item["id"]),
+                ProdutoLoja.organizacao_id == org.id,
+                ProdutoLoja.ativo == True,
+            ).first()
+        elif item.get("slug"):
+            prod_db = db.query(ProdutoLoja).filter(
+                ProdutoLoja.slug == str(item["slug"]),
+                ProdutoLoja.organizacao_id == org.id,
+                ProdutoLoja.ativo == True,
+            ).first()
+        if not prod_db:
+            raise HTTPException(status_code=400, detail=f"Produto '{item.get('nome', '')}' indisponível no catálogo.")
+        subtotal_real += Decimal(str(prod_db.preco)) * qtd
+
+    frete_real = max(Decimal("0.00"), Decimal(str(dados.frete or 0)))
+    total_real = (subtotal_real + frete_real).quantize(Decimal("0.01"))
+
     seq = (db.query(func.count(PedidoLoja.id)).scalar() or 0) + 1
     codigo_pedido = f"STORE-{date.today().year}-{seq:05d}"
 
@@ -3347,10 +3442,10 @@ def registrar_pedido_loja(dados: PedidoLojaCreate, req: Request, background_task
         email_comprador=dados.email_comprador,
         telefone_comprador=dados.telefone_comprador,
         itens_json=dados.itens_json,
-        subtotal=dados.subtotal,
-        desconto=dados.desconto,
-        frete=dados.frete,
-        valor_total=dados.valor_total,
+        subtotal=subtotal_real,
+        desconto=Decimal("0.00"),
+        frete=frete_real,
+        valor_total=total_real,
         status="aguardando_pagamento",
     )
     db.add(pedido)
@@ -3551,6 +3646,13 @@ def registrar_apontamento_hora(
 ):
     org = _get_org_or_404(db, equipe.organizacao_id)
     _verificar_modulo(org, "timesheet")
+    proj_ok = db.query(Projeto.id).filter(Projeto.id == dados.projeto_id, Projeto.organizacao_id == org.id).first()
+    if not proj_ok:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado nesta organização.")
+    if dados.tarefa_id:
+        tar_ok = db.query(Tarefa.id).filter(Tarefa.id == dados.tarefa_id, Tarefa.organizacao_id == org.id).first()
+        if not tar_ok:
+            raise HTTPException(status_code=404, detail="Tarefa não encontrada nesta organização.")
     target_uid = dados.usuario_id if (equipe.perfil == "admin" and dados.usuario_id) else equipe.id
     colab = db.query(Usuario.id, Usuario.salario_base, Usuario.carga_horaria_diaria).filter(
         Usuario.id == target_uid,
@@ -3802,7 +3904,13 @@ def mensagem_chamado_cliente(
 # ==================== ATIVOS, DOMÍNIOS & CRON DE VENCIMENTOS ====================
 @router.get("/ativos", response_model=List[AtivoInfraOut], tags=["Infraestrutura"])
 def listar_ativos_infra(db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
-    return db.query(AtivoInfra).filter(AtivoInfra.organizacao_id == equipe.organizacao_id).order_by(AtivoInfra.data_vencimento.asc().nullslast()).all()
+    _exigir_permissao_modulo(db, equipe, "ativos")
+    items = db.query(AtivoInfra).filter(AtivoInfra.organizacao_id == equipe.organizacao_id).order_by(AtivoInfra.data_vencimento.asc().nullslast()).all()
+    if equipe.perfil != "admin":
+        for item in items:
+            if item.segredo_acesso:
+                item.segredo_acesso = "••••••••"
+    return items
 
 
 @router.post("/ativos", response_model=AtivoInfraOut, status_code=201, tags=["Infraestrutura"])
@@ -3910,6 +4018,10 @@ def listar_reembolsos(db: Session = Depends(get_db), usuario: Usuario = Depends(
 
 @router.post("/reembolsos", response_model=ReembolsoOut, status_code=201, tags=["RH"])
 def solicitar_reembolso(dados: ReembolsoCreate, db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
+    if dados.projeto_id:
+        proj_ok = db.query(Projeto.id).filter(Projeto.id == dados.projeto_id, Projeto.organizacao_id == equipe.organizacao_id).first()
+        if not proj_ok:
+            raise HTTPException(status_code=404, detail="Projeto não encontrado nesta organização.")
     r = ReembolsoDespesa(**dados.model_dump(), organizacao_id=equipe.organizacao_id, usuario_id=equipe.id)
     db.add(r)
     criar_notificacao(db, "Nova Solicitação de Reembolso", f"{equipe.nome} solicitou R$ {r.valor} para {r.descricao}.", "despesas", None, "admin", org_id=equipe.organizacao_id)
@@ -3962,7 +4074,7 @@ def obter_configuracoes_empresa(db: Session = Depends(get_db), equipe: Usuario =
         db.add(cfg)
         db.commit()
         db.refresh(cfg)
-    return cfg
+    return _serializar_config_empresa_segura(cfg)
 
 
 @router.put("/empresa", response_model=ConfiguracaoEmpresaOut, tags=["Empresa"])
@@ -3975,15 +4087,22 @@ def salvar_configuracoes_empresa(
     if not cfg:
         cfg = ConfiguracaoEmpresa(organizacao_id=admin.organizacao_id)
         db.add(cfg)
-    for campo, valor in dados.model_dump(exclude_unset=True).items():
+
+    secret_fields = {"mp_access_token", "mp_webhook_secret", "registrar_api_key", "github_token", "vercel_token"}
+    payload = dados.model_dump(exclude_unset=True)
+    for campo, valor in payload.items():
+        if campo in secret_fields:
+            if not valor or set(str(valor).strip()) == {"•"}:
+                continue
         setattr(cfg, campo, valor)
+
     cfg.atualizado_em = datetime.utcnow()
     registrar_log(db, admin.nome, "CONFIG_EMPRESA", "Atualizou parâmetros institucionais, bancários e permissões.", org_id=admin.organizacao_id)
     db.commit()
     if admin.organizacao_id == 1:
         _SITE_CONFIG_CACHE["data"] = None
     db.refresh(cfg)
-    return cfg
+    return _serializar_config_empresa_segura(cfg)
 
 
 @router.put("/empresa/branding", tags=["Empresa"])
@@ -4461,6 +4580,9 @@ def criar_tarefa(
 ):
     org = _get_org_or_404(db, equipe.organizacao_id)
     _verificar_modulo(org, "tarefas")
+    proj_ok = db.query(Projeto.id).filter(Projeto.id == dados.projeto_id, Projeto.organizacao_id == org.id).first()
+    if not proj_ok:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado nesta organização.")
     tarefa = Tarefa(**dados.model_dump(), organizacao_id=org.id)
     db.add(tarefa)
     registrar_log(db, equipe.nome, "CRIAR_TAREFA", f"Criou tarefa '{tarefa.titulo}'", org_id=org.id)
@@ -4521,6 +4643,9 @@ def registrar_interacao(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(exigir_equipe),
 ):
+    cli_ok = db.query(Cliente.id).filter(Cliente.id == dados.cliente_id, Cliente.organizacao_id == usuario.organizacao_id).first()
+    if not cli_ok:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado nesta organização.")
     interacao = Interacao(**dados.model_dump(), organizacao_id=usuario.organizacao_id, usuario_id=usuario.id)
     db.add(interacao)
     db.commit()
@@ -4615,9 +4740,15 @@ def criar_fatura(
 ):
     org = _get_org_or_404(db, equipe.organizacao_id)
     _verificar_modulo(org, "faturas")
+    cliente = db.query(Cliente).filter(Cliente.id == dados.cliente_id, Cliente.organizacao_id == org.id).first()
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado nesta organização.")
+    if dados.projeto_id:
+        proj_ok = db.query(Projeto.id).filter(Projeto.id == dados.projeto_id, Projeto.organizacao_id == org.id).first()
+        if not proj_ok:
+            raise HTTPException(status_code=404, detail="Projeto não encontrado nesta organização.")
     fatura = Fatura(**dados.model_dump(), organizacao_id=org.id)
     db.add(fatura)
-    cliente = db.query(Cliente).filter(Cliente.id == dados.cliente_id, Cliente.organizacao_id == org.id).first()
     if cliente and cliente.usuario_portal_id:
         criar_notificacao(
             db,
@@ -5263,6 +5394,7 @@ def listar_auditoria(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
+    _exigir_permissao_modulo(db, equipe, "auditoria")
     return db.query(LogAuditoria).filter(LogAuditoria.organizacao_id == equipe.organizacao_id).order_by(LogAuditoria.criado_em.desc()).limit(100).all()
 
 
@@ -5820,10 +5952,10 @@ async def webhook_mercadopago(req: Request, background_tasks: BackgroundTasks, o
     if ext_ref.startswith(("DOMINIO-", "DOMINIO:")):
         sep = "-" if "DOMINIO-" in ext_ref else ":"
         dom_id = int(ext_ref.split(sep, 1)[1])
-        pedido = db.query(PedidoDominio).filter(PedidoDominio.id == dom_id).first()
+        pedido = db.query(PedidoDominio).filter(PedidoDominio.id == dom_id, PedidoDominio.organizacao_id == org_id).first()
         if pedido:
             if pedido.fatura_id:
-                fat = db.query(Fatura).filter(Fatura.id == pedido.fatura_id).first()
+                fat = db.query(Fatura).filter(Fatura.id == pedido.fatura_id, Fatura.organizacao_id == org_id).first()
                 if fat and fat.status != "pago":
                     fat.status = "pago"
                     fat.pago_em = datetime.utcnow()
@@ -5832,7 +5964,7 @@ async def webhook_mercadopago(req: Request, background_tasks: BackgroundTasks, o
     elif ext_ref.startswith(("FATURA-", "FATURA:")):
         sep = "-" if "FATURA-" in ext_ref else ":"
         fat_id = int(ext_ref.split(sep, 1)[1])
-        fat = db.query(Fatura).filter(Fatura.id == fat_id).first()
+        fat = db.query(Fatura).filter(Fatura.id == fat_id, Fatura.organizacao_id == org_id).first()
         if fat and fat.status != "pago":
             fat.status = "pago"
             if is_order_event:
@@ -5919,7 +6051,7 @@ def pagar_holerite_via_mercadopago(
 @router.post("/integracoes/github/testar", tags=["DevOps & IDE"])
 def testar_conexao_github_endpoint(
     payload: dict,
-    equipe: Usuario = Depends(exigir_equipe),
+    admin: Usuario = Depends(exigir_admin),
 ):
     try:
         return github_testar_conexao(payload.get("github_token", ""), payload.get("github_org", ""))
@@ -6057,6 +6189,13 @@ def listar_deploys_projeto_endpoint(
     )
 
 
+def _validar_path_ide(raw_path: str) -> str:
+    clean = (raw_path or "").strip().lstrip("/")
+    if not clean or "\x00" in clean or ".." in clean.split("/") or clean.startswith(".git/"):
+        raise HTTPException(status_code=400, detail="Caminho de arquivo inválido ou não permitido na IDE.")
+    return clean
+
+
 def _obter_contexto_ide_projeto(db: Session, projeto_id: int, org_id: int):
     projeto = db.query(Projeto).filter(Projeto.id == projeto_id, Projeto.organizacao_id == org_id).first()
     if not projeto:
@@ -6104,8 +6243,9 @@ def ide_ler_arquivo_projeto(
     equipe: Usuario = Depends(exigir_equipe),
 ):
     _, cfg, full_name = _obter_contexto_ide_projeto(db, projeto_id, equipe.organizacao_id)
+    clean_path = _validar_path_ide(path)
     try:
-        return github_ler_arquivo(cfg.github_token, full_name, path, branch)
+        return github_ler_arquivo(cfg.github_token, full_name, clean_path, branch)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
@@ -6119,11 +6259,12 @@ def ide_salvar_arquivo_projeto(
     equipe: Usuario = Depends(exigir_equipe),
 ):
     _, cfg, full_name = _obter_contexto_ide_projeto(db, projeto_id, equipe.organizacao_id)
+    clean_path = _validar_path_ide(dados.path)
     try:
         res = github_salvar_arquivo(
             token=cfg.github_token,
             full_name=full_name,
-            path=dados.path,
+            path=clean_path,
             content=dados.content,
             message=dados.message or f"feat({dados.path}): commit via Nexus Code Studio por {equipe.nome}",
             branch=dados.branch or "main",
@@ -6144,8 +6285,9 @@ def ide_excluir_arquivo_projeto(
     equipe: Usuario = Depends(exigir_equipe),
 ):
     _, cfg, full_name = _obter_contexto_ide_projeto(db, projeto_id, equipe.organizacao_id)
+    clean_path = _validar_path_ide(dados.path)
     try:
-        res = github_excluir_arquivo(cfg.github_token, full_name, dados.path, dados.sha, dados.message, dados.branch or "main")
+        res = github_excluir_arquivo(cfg.github_token, full_name, clean_path, dados.sha, dados.message, dados.branch or "main")
         registrar_log(db, equipe.nome, "IDE_DELETE_FILE", f"Removeu {full_name}/{dados.path}", org_id=equipe.organizacao_id)
         db.commit()
         return res
