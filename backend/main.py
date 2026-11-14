@@ -4826,6 +4826,7 @@ def gerar_cobranca_mercadopago_fatura(
 @router.get("/faturas/{fatura_id}/mercadopago/status", response_model=FaturaListOut, tags=["Mercado Pago"])
 def verificar_status_pagamento_fatura_mp(
     fatura_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_atual),
 ):
@@ -4835,7 +4836,7 @@ def verificar_status_pagamento_fatura_mp(
     if fat.status == "pago":
         return fat
 
-    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == usuario.organizacao_id).first()
+    cfg = _aplicar_env_fallback_integracoes(db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == usuario.organizacao_id).first())
     if cfg and cfg.mp_access_token and (fat.mp_order_id or fat.mp_payment_id):
         info = (
             mp_consultar_order(cfg.mp_access_token, fat.mp_order_id)
@@ -4845,18 +4846,23 @@ def verificar_status_pagamento_fatura_mp(
         if info.get("status") == "approved":
             fat.status = "pago"
             fat.mp_status_detalhe = info.get("status_detail")
+            if info.get("payment_id") and not fat.mp_payment_id:
+                fat.mp_payment_id = str(info.get("payment_id"))
+            if info.get("ticket_url") and not fat.mp_checkout_url:
+                fat.mp_checkout_url = info.get("ticket_url")
             fat.pago_em = datetime.utcnow()
             ped_loja = db.query(PedidoLoja).filter(PedidoLoja.fatura_gerada_id == fat.id).first()
             if ped_loja:
                 ped_loja.status = "pago"
             db.commit()
             db.refresh(fat)
+            _notificar_pagamento_fatura_confirmado(db, fat, background_tasks)
 
     return fat
 
 
 @router.post("/webhooks/mercadopago", tags=["Mercado Pago"])
-async def webhook_mercadopago(req: Request, org_id: int = 1, db: Session = Depends(get_db)):
+async def webhook_mercadopago(req: Request, background_tasks: BackgroundTasks, org_id: int = 1, db: Session = Depends(get_db)):
     body = await req.json() if req.headers.get("content-type", "").startswith("application/json") else {}
     data_id = str((body.get("data") or {}).get("id") or req.query_params.get("data.id") or req.query_params.get("id") or "")
     topic = str(body.get("type") or req.query_params.get("type") or req.query_params.get("topic") or "").lower()
@@ -4912,6 +4918,10 @@ async def webhook_mercadopago(req: Request, org_id: int = 1, db: Session = Depen
             else:
                 fat.mp_payment_id = str(data_id)
             fat.mp_status_detalhe = info.get("status_detail")
+            if info.get("payment_id") and not fat.mp_payment_id:
+                fat.mp_payment_id = str(info.get("payment_id"))
+            if info.get("ticket_url") and not fat.mp_checkout_url:
+                fat.mp_checkout_url = info.get("ticket_url")
             fat.pago_em = datetime.utcnow()
             ped_loja = db.query(PedidoLoja).filter(PedidoLoja.fatura_gerada_id == fat.id).first()
             if ped_loja:
@@ -4926,6 +4936,8 @@ async def webhook_mercadopago(req: Request, org_id: int = 1, db: Session = Depen
                 org_id=fat.organizacao_id,
             )
             db.commit()
+            db.refresh(fat)
+            _notificar_pagamento_fatura_confirmado(db, fat, background_tasks)
 
     return {"received": True, "processed": ext_ref}
 

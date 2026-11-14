@@ -1067,12 +1067,21 @@ async function renderInvoices(useCache = false) {
       <td><span class="badge ${esc(f.status)}">${esc(f.status)}</span></td>
       <td>${formatDate(f.vencimento)}</td>
       <td>
-        ${f.comprovante_nome
-          ? `<button type="button" class="btn secondary" style="padding:5px 10px; font-size:11.5px; color:var(--ok);" onclick="window.nexusDownloadFaturaComprovante(${f.id})">${ICONS.paperclip}<span>${esc(f.comprovante_nome)}</span></button>`
-          : '<span class="muted" style="font-size:12px;">Sem anexo</span>'}
+        ${f.status === 'pago'
+          ? `
+            <button type="button" class="btn secondary" style="padding:5px 10px; font-size:11.5px; color:var(--ok); border-color:rgba(22,163,74,0.35); font-weight:700;" onclick="window.nexusOpenOfficialReceiptModal(${f.id})">
+              ${ICONS.fileText}<span>Comprovante Digital</span>
+            </button>
+            ${f.comprovante_nome ? `<div style="margin-top:4px;"><button type="button" class="btn secondary" style="padding:3px 8px; font-size:11px;" onclick="window.nexusDownloadFaturaComprovante(${f.id})">${ICONS.paperclip}<span>${esc(f.comprovante_nome)}</span></button></div>` : ''}
+          `
+          : (f.comprovante_nome
+            ? `<button type="button" class="btn secondary" style="padding:5px 10px; font-size:11.5px; color:var(--ok);" onclick="window.nexusDownloadFaturaComprovante(${f.id})">${ICONS.paperclip}<span>${esc(f.comprovante_nome)}</span></button>`
+            : '<span class="muted" style="font-size:12px;">Aguardando pagamento</span>')}
       </td>
       ${isStaff ? `<td style="white-space:nowrap;">
-        ${f.status !== 'pago' ? `<button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--ok);" data-pay="${f.id}">Confirmar Pagamento</button>` : ''}
+        ${f.status === 'pago'
+          ? `<button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--primary); font-weight:700;" onclick="window.nexusOpenOfficialReceiptModal(${f.id})">Recibo / PDF</button>`
+          : `<button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--ok);" data-pay="${f.id}">Confirmar Pagamento</button>`}
         <button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/faturas/${f.id}" data-label="${esc(f.descricao)}">Excluir</button>
       </td>` : ''}
     </tr>`).join('');
@@ -1089,6 +1098,145 @@ async function renderInvoices(useCache = false) {
       </table>
     </div>`;
 }
+
+
+window.nexusOpenOfficialReceiptModal = async (faturaId) => {
+  holeriteContainer.innerHTML = `
+    <div class="modal-header">
+      <div class="modal-header-main">
+        <div class="modal-header-icon">${ICONS.fileText}</div>
+        <div>
+          <h2>Comprovante Oficial de Pagamento</h2>
+          <p class="modal-subtitle">Gerando recibo eletrônico autenticado...</p>
+        </div>
+      </div>
+      <button type="button" class="modal-close-btn" onclick="document.getElementById('holerite-dialog').close()">&times;</button>
+    </div>
+    <div class="modal-body" style="text-align:center; padding:30px;">
+      <div class="muted">Carregando dados da transação...</div>
+    </div>
+  `;
+  if (!holeriteDialog.open) holeriteDialog.showModal();
+
+  try {
+    const rec = await apiRequest(`/faturas/${faturaId}/recibo-digital`);
+    const b = rec.branding || {};
+    const em = rec.emissor || {};
+    const pg = rec.pagador || {};
+    const ft = rec.fatura || {};
+    const txId = ft.mp_order_id || ft.mp_payment_id || rec.numero_comprovante;
+
+    holeriteContainer.innerHTML = `
+      <div class="modal-header">
+        <div class="modal-header-main">
+          <div class="modal-header-icon">${ICONS.fileText}</div>
+          <div>
+            <h2>Comprovante de Pagamento &bull; ${esc(rec.numero_comprovante)}</h2>
+            <p class="modal-subtitle">Recibo eletrônico emitido automaticamente sem necessidade de anexo manual</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="document.getElementById('holerite-dialog').close()">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div id="receipt-printable" class="digital-receipt-card">
+          <div class="digital-receipt-banner">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="width:42px; height:42px; border-radius:11px; background:#061224; border:1.5px solid #00B4D8; display:flex; align-items:center; justify-content:center; padding:6px;">
+                <svg viewBox="0 0 320 220" width="28" height="20"><g transform="translate(160, 110)"><path d="M -80 80 L -80 -80 L 80 80 L 80 -80" fill="none" stroke="#FFFFFF" stroke-width="28" stroke-linecap="square"/><circle cx="0" cy="0" r="20" fill="#00B4D8"/><circle cx="0" cy="0" r="8" fill="#0A1D37"/></g></svg>
+              </div>
+              <div>
+                <div style="font-size:18px; font-weight:900; letter-spacing:0.04em; color:#FFFFFF;">${esc(b.nome_plataforma || 'NEXUS CODE')}</div>
+                <div style="font-size:10px; font-weight:800; letter-spacing:0.28em; color:#00B4D8;">${esc(b.subtitulo_plataforma || 'BRASIL')}</div>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <span class="receipt-badge-paid">&#10003; Pagamento Confirmado</span>
+              <div style="font-size:12px; color:#cbd5e1; margin-top:6px;">Recibo Nº <b>${esc(rec.numero_comprovante)}</b></div>
+            </div>
+          </div>
+
+          <div style="padding:22px 24px;">
+            <div class="receipt-amount-highlight">
+              <div>
+                <div style="font-size:11px; font-weight:800; text-transform:uppercase; color:#0284C7; letter-spacing:0.05em;">Valor Total Liquidado</div>
+                <div style="font-size:28px; font-weight:900; color:#0A1D37;">${esc(ft.valor_formatado)}</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:12px; color:#475569;">Data e Hora da Liquidação</div>
+                <div style="font-size:14px; font-weight:800; color:#0A1D37;">${esc(ft.pago_em)}</div>
+                <div style="font-size:11.5px; color:#0284C7; font-weight:700;">Via ${esc(ft.forma_pagamento)}</div>
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; font-size:12.5px;">
+              <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px;">
+                <div style="font-size:10.5px; font-weight:800; text-transform:uppercase; color:#64748b; margin-bottom:4px;">Recebedor (Favorecido)</div>
+                <div style="font-weight:800; color:#0A1D37;">${esc(em.razao_social)}</div>
+                <div style="color:#475569; margin-top:2px;">CNPJ: ${esc(em.cnpj)}</div>
+                <div style="color:#475569;">${esc(em.localizacao)}</div>
+              </div>
+              <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px;">
+                <div style="font-size:10.5px; font-weight:800; text-transform:uppercase; color:#64748b; margin-bottom:4px;">Pagador (Cliente)</div>
+                <div style="font-weight:800; color:#0A1D37;">${esc(pg.nome_empresa)}</div>
+                <div style="color:#475569; margin-top:2px;">Responsável: ${esc(pg.contato_nome)}</div>
+                <div style="color:#475569;">${esc(pg.email)}</div>
+              </div>
+            </div>
+
+            <table class="holerite-slip-table" style="margin:0;">
+              <thead>
+                <tr>
+                  <th>Descrição do Pagamento</th>
+                  <th>Vencimento</th>
+                  <th>ID Transação</th>
+                  <th>Valor Pago</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><b>${esc(ft.descricao)}</b>${ft.projeto ? `<div style="font-size:11.5px; color:#64748b;">Projeto: ${esc(ft.projeto)}</div>` : ''}</td>
+                  <td>${esc(ft.vencimento)}</td>
+                  <td style="font-family:monospace; font-size:11.5px;">${esc(txId)}</td>
+                  <td style="font-weight:800; color:#15803d;">${esc(ft.valor_formatado)}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="receipt-auth-box">
+              <div>
+                <div style="font-size:11px; font-weight:800; text-transform:uppercase;">Autenticação Eletrônica de Quitação</div>
+                <div style="font-size:11.5px; opacity:0.9;">Documento gerado automaticamente pelo gateway financeiro integrado.</div>
+              </div>
+              <div style="font-family:monospace; font-size:13px; font-weight:900; letter-spacing:0.05em;">
+                ${esc(rec.codigo_autenticacao)}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        ${ft.mp_checkout_url ? `<a href="${esc(ft.mp_checkout_url)}" target="_blank" rel="noopener" class="btn secondary" style="text-decoration:none;">Comprovante Mercado Pago ↗</a>` : ''}
+        <button type="button" class="btn secondary" onclick="window.print()">Imprimir / Salvar PDF</button>
+        <button type="button" class="btn" onclick="document.getElementById('holerite-dialog').close()">Fechar</button>
+      </div>
+    `;
+  } catch (err) {
+    holeriteContainer.innerHTML = `
+      <div class="modal-header">
+        <div class="modal-header-main"><h2>Comprovante de Pagamento</h2></div>
+        <button type="button" class="modal-close-btn" onclick="document.getElementById('holerite-dialog').close()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="color:var(--danger); font-weight:700;">${esc(err.message)}</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn secondary" onclick="document.getElementById('holerite-dialog').close()">Fechar</button>
+      </div>
+    `;
+  }
+};
 
 window.nexusDownloadFaturaComprovante = async (fatId) => {
   try {

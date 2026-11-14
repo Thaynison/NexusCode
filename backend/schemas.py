@@ -434,6 +434,7 @@ class FaturaListOut(FaturaCreate):
     mp_qr_code: Optional[str] = None
     mp_qr_code_base64: Optional[str] = None
     mp_checkout_url: Optional[str] = None
+    mp_status_detalhe: Optional[str] = None
     pago_em: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 

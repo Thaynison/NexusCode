@@ -423,6 +423,10 @@ def mp_consultar_order(access_token: str, order_id: str) -> Dict[str, Any]:
     pay0 = payments_arr[0] if payments_arr and isinstance(payments_arr[0], dict) else {}
     pay_status = str(pay0.get("status") or "").lower()
 
+    pm_obj = pay0.get("payment_method") if isinstance(pay0.get("payment_method"), dict) else {}
+    poi_tx = ((pay0.get("point_of_interaction") or {}).get("transaction_data") or {})
+    tx_det = pay0.get("transaction_details") if isinstance(pay0.get("transaction_details"), dict) else {}
+
     is_paid = raw_status in ("processed", "approved") or pay_status in ("processed", "approved")
     return {
         "order_id": str(data.get("id") or order_id),
@@ -431,6 +435,12 @@ def mp_consultar_order(access_token: str, order_id: str) -> Dict[str, Any]:
         "status_detail": data.get("status_detail") or pay0.get("status_detail") or "",
         "external_reference": data.get("external_reference", ""),
         "transaction_amount": data.get("total_amount", 0),
+        "payment_method_id": pm_obj.get("id") or "",
+        "payment_type_id": pm_obj.get("type") or "",
+        "installments": pm_obj.get("installments") or 1,
+        "end_to_end_id": poi_tx.get("e2e_id") or tx_det.get("transaction_id") or "",
+        "ticket_url": pm_obj.get("ticket_url") or pay0.get("ticket_url") or poi_tx.get("ticket_url") or "",
+        "date_approved": pay0.get("date_approved") or data.get("last_updated_date") or "",
     }
 
 
@@ -488,12 +498,19 @@ def mp_consultar_pagamento(access_token: str, payment_id: str) -> Dict[str, Any]
     )
     if status != 200:
         return {"status": "error", "http_status": status, "detail": data.get("message", "")}
+    poi_tx = ((data.get("point_of_interaction") or {}).get("transaction_data") or {})
+    tx_det = data.get("transaction_details") if isinstance(data.get("transaction_details"), dict) else {}
     return {
         "payment_id": str(data.get("id")),
         "status": data.get("status", "pending"),
         "status_detail": data.get("status_detail", ""),
         "external_reference": data.get("external_reference", ""),
         "transaction_amount": data.get("transaction_amount", 0),
+        "payment_method_id": data.get("payment_method_id") or "",
+        "payment_type_id": data.get("payment_type_id") or "",
+        "installments": data.get("installments") or 1,
+        "end_to_end_id": poi_tx.get("e2e_id") or tx_det.get("transaction_id") or "",
+        "ticket_url": poi_tx.get("ticket_url") or tx_det.get("external_resource_url") or "",
         "date_approved": data.get("date_approved"),
     }
 

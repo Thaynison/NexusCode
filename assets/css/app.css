@@ -2351,14 +2351,81 @@ body.crm-app {
 }
 @media print {
   body * { visibility: hidden; }
-  #holerite-printable, #holerite-printable * { visibility: visible; }
-  #holerite-printable {
+  #holerite-printable, #holerite-printable *,
+  #receipt-printable, #receipt-printable * { visibility: visible; }
+  #holerite-printable,
+  #receipt-printable {
     position: fixed;
     left: 0;
     top: 0;
     width: 100%;
     border: none;
+    box-shadow: none;
   }
+}
+
+.digital-receipt-card {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 16px;
+  overflow: hidden;
+  font-size: 13px;
+  box-shadow: 0 12px 30px rgba(10, 29, 55, 0.08);
+}
+
+.digital-receipt-banner {
+  background: linear-gradient(135deg, #061224 0%, #0A1D37 62%, #0F2E56 100%);
+  color: #ffffff;
+  padding: 22px 26px;
+  border-bottom: 3px solid #00B4D8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.receipt-badge-paid {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(52, 211, 153, 0.55);
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 999px;
+}
+
+.receipt-amount-highlight {
+  background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%);
+  border: 1.5px solid #bae6fd;
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.receipt-auth-box {
+  background: #f0fdf4;
+  border: 1px dashed #16a34a;
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  color: #15803d;
 }
 
 
