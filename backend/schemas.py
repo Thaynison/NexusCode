@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from decimal import Decimal
-from typing import Optional, Literal
+from typing import Optional, Literal, List
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 
 
