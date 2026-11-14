@@ -33,6 +33,7 @@ from models import (
     ConfiguracaoEmpresa, PropostaComercial, Despesa,
     ContratoRecorrente, ApontamentoHora, ChamadoSuporte,
     AtivoInfra, Notificacao, BancoHoras, ReembolsoDespesa, PedidoLoja, ProdutoLoja,
+    PedidoDominio,
 )
 from schemas import (
     LoginRequest, RegisterRequest, ForgotPasswordRequest, ResetPasswordRequest, TokenResponse,
@@ -495,8 +496,12 @@ def ensure_db_initialized(force_sync: bool = False):
                 conn.execute(text("SELECT 1 FROM organizacoes LIMIT 1"))
                 conn.execute(text("SELECT 1 FROM planos_saas LIMIT 1"))
                 conn.execute(text("SELECT 1 FROM produtos_loja LIMIT 1"))
-                conn.execute(text("SELECT 1 FROM pedidos_dominios LIMIT 1"))
-                conn.execute(text("SELECT organizacao_id FROM usuarios LIMIT 1"))
+                conn.execute(text("SELECT organizacao_id, pix_tipo, pix_chave FROM usuarios LIMIT 1"))
+                conn.execute(text("SELECT mp_ativo, mp_api_tipo, dominio_precos_json FROM configuracoes_empresa LIMIT 1"))
+                conn.execute(text("SELECT mp_order_id, mp_payment_id FROM faturas LIMIT 1"))
+                conn.execute(text("SELECT mp_payout_id FROM holerites LIMIT 1"))
+                conn.execute(text("SELECT mp_payout_id FROM reembolsos_despesas LIMIT 1"))
+                conn.execute(text("SELECT mp_order_id FROM pedidos_dominios LIMIT 1"))
             _db_ready = True
             return
         except Exception:
@@ -1333,12 +1338,22 @@ def remover_plano_saas(
 # ==================== AUTENTICAÇÃO ====================
 @router.post("/auth/login", response_model=TokenResponse, tags=["Auth"])
 def login(dados: LoginRequest, db: Session = Depends(get_db)):
-    usuario = (
-        db.query(Usuario)
-        .options(defer(Usuario.foto_url), defer(Usuario.resumo_profissional))
-        .filter(func.lower(Usuario.email) == dados.email.strip().lower())
-        .first()
-    )
+    try:
+        usuario = (
+            db.query(Usuario)
+            .options(defer(Usuario.foto_url), defer(Usuario.resumo_profissional))
+            .filter(func.lower(Usuario.email) == dados.email.strip().lower())
+            .first()
+        )
+    except Exception:
+        db.rollback()
+        ensure_db_initialized(force_sync=True)
+        usuario = (
+            db.query(Usuario)
+            .options(defer(Usuario.foto_url), defer(Usuario.resumo_profissional))
+            .filter(func.lower(Usuario.email) == dados.email.strip().lower())
+            .first()
+        )
     if not usuario or not verificar_senha(dados.senha, usuario.senha_hash):
         raise HTTPException(status_code=401, detail="Credenciais inválidas. Verifique o e-mail e a senha informados.")
     if not usuario.ativo:
@@ -4321,7 +4336,6 @@ def listar_auditoria(
 
 
 
-from models import PedidoDominio
 from schemas import (
     PedidoDominioCreate, PedidoDominioOut,
     MercadoPagoCobrarRequest, MercadoPagoPayoutLoteRequest,
