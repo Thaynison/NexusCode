@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1584 396">
+  <rect width="1584" height="396" fill="#0A1D37"/>
+  <!-- Cyber Patterns -->
+  <path d="M -100 200 L 400 200 L 500 100 L 1600 100" fill="none" stroke="#00B4D8" stroke-width="4" opacity="0.2"/>
+  <path d="M -100 300 L 600 300 L 700 250 L 1600 250" fill="none" stroke="#00B4D8" stroke-width="4" opacity="0.1"/>
+  <circle cx="400" cy="200" r="6" fill="#00B4D8" opacity="0.3"/>
+  <circle cx="500" cy="100" r="6" fill="#00B4D8" opacity="0.3"/>
+  
+  <g transform="translate(1300, 150) scale(0.4)">
+    <path d="M -80 80 L -80 -80 L 80 80 L 80 -80" fill="none" stroke="#FFFFFF" stroke-width="28" stroke-linecap="square" stroke-linejoin="miter"/>
+    <path d="M -80 -80 L -140 -80" fill="none" stroke="#00B4D8" stroke-width="12" stroke-linecap="square"/>
+    <circle cx="-140" cy="-80" r="12" fill="#00B4D8"/>
+    <path d="M -80 0 L -120 0" fill="none" stroke="#00B4D8" stroke-width="12" stroke-linecap="square"/>
+    <circle cx="-120" cy="0" r="12" fill="#00B4D8"/>
+    <path d="M 80 80 L 140 80" fill="none" stroke="#00B4D8" stroke-width="12" stroke-linecap="square"/>
+    <circle cx="140" cy="80" r="12" fill="#00B4D8"/>
+    <path d="M 80 0 L 120 0" fill="none" stroke="#00B4D8" stroke-width="12" stroke-linecap="square"/>
+    <circle cx="120" cy="0" r="12" fill="#00B4D8"/>
+    <circle cx="0" cy="0" r="18" fill="#00B4D8"/>
+    <circle cx="0" cy="0" r="8" fill="#0A1D37"/>
+    <text x="0" y="160" font-family="Montserrat, Arial, sans-serif" font-size="56" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="3">NEXUS CODE</text>
+    <text x="0" y="210" font-family="Montserrat, Arial, sans-serif" font-size="22" font-weight="700" fill="#00B4D8" text-anchor="middle" letter-spacing="18">BRASIL</text>
+  </g>
+  <text x="120" y="190" font-family="Montserrat, Arial, sans-serif" font-size="44" font-weight="bold" fill="#FFFFFF">Engenharia de Software de</text>
+  <text x="120" y="250" font-family="Montserrat, Arial, sans-serif" font-size="44" font-weight="bold" fill="#00B4D8">Alta Performance.</text>
+</svg>

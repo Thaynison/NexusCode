@@ -1,4 +1,4 @@
-import { apiRequest, clearSession, getToken } from './config.js';
+import { apiRequest, clearSession, getToken, applyWhiteLabelBranding } from './config.js';
 import { showConfirmModal, showNoticeModal, showToast } from './ui.js';
 import {
   renderTimesheetView,
@@ -9,6 +9,7 @@ import {
   renderContratosView,
   renderAtivosView,
   renderEmpresaView,
+  renderSaasMasterView,
   renderLojaView
 } from './erp_modules.js';
 
@@ -37,6 +38,7 @@ let pontoCompetencia = `${String(new Date().getMonth() + 1).padStart(2, '0')}/${
 let pontoUserFilter = 'todos';
 let pontoClockTimer = null;
 let cache = {
+  organizacao: null,
   kpi: null,
   clientes: [],
   usuarios: [],
@@ -55,6 +57,7 @@ let cache = {
   informes: [],
   produtos_loja: [],
   pedidos_loja: [],
+  reembolsos: [],
   loadedAt: 0
 };
 const CACHE_TTL_MS = 30000;
@@ -70,6 +73,7 @@ async function loadBootstrap(force = false) {
   }
   const data = await apiRequest('/bootstrap');
   cache = {
+    organizacao: data.organizacao || null,
     kpi: data.kpi,
     clientes: data.clientes || [],
     usuarios: data.usuarios || [],
@@ -88,8 +92,10 @@ async function loadBootstrap(force = false) {
     informes: data.informes || [],
     produtos_loja: data.produtos_loja || [],
     pedidos_loja: data.pedidos_loja || [],
+    reembolsos: data.reembolsos || [],
     loadedAt: Date.now()
   };
+  if (cache.organizacao) applyWhiteLabelBranding(cache.organizacao);
   updateQuotesBadge();
   applyRolePermissions();
   return cache;
@@ -298,15 +304,22 @@ function updateQuotesBadge() {
 }
 
 function applyRolePermissions() {
-  if (!user || user.perfil === 'admin') return;
+  const isMasterAdmin = Boolean(cache.organizacao?.is_master && user?.perfil === 'admin');
+  $$('.saas-master-only').forEach((el) => {
+    el.style.display = isMasterAdmin ? (el.classList.contains('nav-group') ? 'block' : 'flex') : 'none';
+  });
+
+  const tenantMods = cache.organizacao?.modulos || {};
+  const isTenant = cache.organizacao && !cache.organizacao.is_master;
+
   let colabPerms = null;
-  if (cache.empresa_config?.permissoes_json) {
+  if (user && user.perfil !== 'admin' && cache.empresa_config?.permissoes_json) {
     try {
       const parsed = JSON.parse(cache.empresa_config.permissoes_json);
       colabPerms = parsed?.colaborador || null;
     } catch (_) {}
   }
-  if (!colabPerms) return;
+
   const pageToPerm = {
     projects: 'projetos',
     tasks: 'tarefas',
@@ -330,14 +343,23 @@ function applyRolePermissions() {
     empresa: 'empresa',
     audit: 'auditoria'
   };
+
   $$('[data-app-page]').forEach((btn) => {
     const p = btn.dataset.appPage;
-    const permKey = pageToPerm[p];
-    if (permKey && colabPerms[permKey] === false) {
-      btn.style.display = 'none';
-    } else {
-      btn.style.display = 'flex';
+    if (p === 'saas_tenants') {
+      btn.style.display = isMasterAdmin ? 'flex' : 'none';
+      return;
     }
+    const permKey = pageToPerm[p];
+    if (isTenant && permKey && tenantMods[permKey] === false) {
+      btn.style.display = 'none';
+      return;
+    }
+    if (colabPerms && permKey && colabPerms[permKey] === false) {
+      btn.style.display = 'none';
+      return;
+    }
+    btn.style.display = 'flex';
   });
 }
 
@@ -878,6 +900,7 @@ async function renderClients(onlyLeads = false, useCache = false) {
       <td><span class="badge ${esc(c.status_funil)}">${esc(c.status_funil)}</span></td>
       <td>${esc(c.origem || '-')}</td>
       <td style="white-space:nowrap;">
+        <button class="btn secondary" style="padding:6px 10px; font-size:12px;" onclick="window.nexusOpenClientCrmModal(${c.id})">Histórico CRM</button>
         <button class="btn secondary" style="padding:6px 10px; font-size:12px;" data-edit='${JSON.stringify(c).replace(/'/g, "&apos;")}'>Editar</button>
         <button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/clientes/${c.id}" data-label="${esc(c.nome_empresa)}">Excluir</button>
       </td>
@@ -1043,6 +1066,11 @@ async function renderInvoices(useCache = false) {
       <td style="font-weight:700;">${formatMoney(f.valor)}</td>
       <td><span class="badge ${esc(f.status)}">${esc(f.status)}</span></td>
       <td>${formatDate(f.vencimento)}</td>
+      <td>
+        ${f.comprovante_nome
+          ? `<button type="button" class="btn secondary" style="padding:5px 10px; font-size:11.5px; color:var(--ok);" onclick="window.nexusDownloadFaturaComprovante(${f.id})">${ICONS.paperclip}<span>${esc(f.comprovante_nome)}</span></button>`
+          : '<span class="muted" style="font-size:12px;">Sem anexo</span>'}
+      </td>
       ${isStaff ? `<td style="white-space:nowrap;">
         ${f.status !== 'pago' ? `<button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--ok);" data-pay="${f.id}">Confirmar Pagamento</button>` : ''}
         <button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/faturas/${f.id}" data-label="${esc(f.descricao)}">Excluir</button>
@@ -1051,16 +1079,117 @@ async function renderInvoices(useCache = false) {
 
   return `
     <div class="toolbar">
-      <div><h1>Faturas &amp; Cobranças</h1><span class="muted">Controle financeiro, vencimentos e recebimentos</span></div>
+      <div><h1>Faturas &amp; Cobranças</h1><span class="muted">Controle financeiro, vencimentos, comprovantes do portal e recebimentos</span></div>
       ${isStaff ? `<button class="btn" data-new>${ICONS.plus}<span>Nova Fatura</span></button>` : ''}
     </div>
     <div class="card table-wrap">
       <table class="table">
-        <thead><tr><th>Descrição</th><th>Cliente</th><th>Valor</th><th>Status</th><th>Vencimento</th>${isStaff ? '<th>Ações</th>' : ''}</tr></thead>
-        <tbody>${rows || '<tr><td colspan="6" style="text-align:center; padding:32px;" class="muted">Nenhuma fatura lançada.</td></tr>'}</tbody>
+        <thead><tr><th>Descrição</th><th>Cliente</th><th>Valor</th><th>Status</th><th>Vencimento</th><th>Comprovante</th>${isStaff ? '<th>Ações</th>' : ''}</tr></thead>
+        <tbody>${rows || '<tr><td colspan="7" style="text-align:center; padding:32px;" class="muted">Nenhuma fatura lançada.</td></tr>'}</tbody>
       </table>
     </div>`;
 }
+
+window.nexusDownloadFaturaComprovante = async (fatId) => {
+  try {
+    const res = await apiRequest(`/faturas/${fatId}/comprovante`);
+    const a = document.createElement('a');
+    a.href = res.comprovante_data;
+    a.download = res.comprovante_nome || `comprovante_fatura_${fatId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showToast('Comprovante baixado com sucesso!', 'success');
+  } catch (err) {
+    showNoticeModal({ title: 'Comprovante indisponível', message: err.message, variant: 'warning' });
+  }
+};
+
+window.nexusOpenClientCrmModal = async (clienteId) => {
+  const cliente = (cache.clientes || []).find((c) => c.id === clienteId);
+  if (!cliente) return;
+  const interacoes = await apiRequest(`/clientes/${clienteId}/interacoes`).catch(() => []);
+
+  holeriteContainer.innerHTML = `
+    <div class="modal-header">
+      <div class="modal-header-main">
+        <div class="modal-header-icon">${ICONS.users}</div>
+        <div>
+          <h2>Histórico CRM — ${esc(cliente.nome_empresa)}</h2>
+          <p class="modal-subtitle">Contato: ${esc(cliente.contato_nome)} • ${esc(cliente.email)} • Estágio: ${esc(cliente.status_funil).toUpperCase()}</p>
+        </div>
+      </div>
+      <button type="button" class="modal-close-btn" onclick="document.getElementById('holerite-dialog').close()">&times;</button>
+    </div>
+
+    <div class="modal-body">
+      <form id="crm-interacao-form" class="modal-section-card">
+        <div class="modal-section-title">Registrar Novo Contato / Follow-up</div>
+        <div class="formgrid">
+          <label>Canal de Contato *
+            <select name="tipo">
+              <option value="whatsapp">WhatsApp</option>
+              <option value="reuniao">Reunião / Call</option>
+              <option value="email">E-mail</option>
+              <option value="ligacao">Ligação Telefônica</option>
+              <option value="proposta">Apresentação de Proposta</option>
+            </select>
+          </label>
+          <label>Próxima Ação Agendada
+            <input type="text" name="proxima_acao" placeholder="Ex.: Enviar proposta comercial até sexta-feira">
+          </label>
+        </div>
+        <label class="field-full">Resumo da Conversa *
+          <textarea name="resumo" rows="2" required placeholder="Registre os pontos alinhados com o cliente..."></textarea>
+        </label>
+        <div style="display:flex; justify-content:flex-end;">
+          <button type="submit" class="btn" id="crm-int-save-btn">Registrar Interação</button>
+        </div>
+      </form>
+
+      <div class="modal-section-card">
+        <div class="modal-section-title">Linha do Tempo Comercial (${interacoes.length})</div>
+        <div style="display:flex; flex-direction:column; gap:10px; max-height:260px; overflow-y:auto;">
+          ${interacoes.map((it) => `
+            <div style="padding:10px 12px; background:var(--surface); border:1px solid var(--border); border-radius:9px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span class="badge">${esc(it.tipo)}</span>
+                <span class="muted" style="font-size:11.5px;">${formatDateTime(it.data_interacao)}</span>
+              </div>
+              <div style="font-size:13px; line-height:1.45;">${esc(it.resumo)}</div>
+              ${it.proxima_acao ? `<div style="font-size:11.5px; color:var(--primary); font-weight:600; margin-top:4px;">Próxima ação: ${esc(it.proxima_acao)}</div>` : ''}
+            </div>
+          `).join('') || '<p class="muted" style="margin:0; font-size:13px;">Nenhuma interação registrada para este cliente ainda.</p>'}
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('crm-interacao-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('crm-int-save-btn');
+    const raw = Object.fromEntries(new FormData(e.target));
+    btn.disabled = true;
+    try {
+      await apiRequest('/interacoes', {
+        method: 'POST',
+        body: JSON.stringify({
+          cliente_id: clienteId,
+          tipo: raw.tipo,
+          resumo: raw.resumo.trim(),
+          proxima_acao: raw.proxima_acao ? raw.proxima_acao.trim() : null
+        })
+      });
+      showToast('Interação registrada no histórico CRM!', 'success');
+      window.nexusOpenClientCrmModal(clienteId);
+    } catch (err) {
+      showNoticeModal({ title: 'Erro ao registrar interação', message: err.message, variant: 'error' });
+      btn.disabled = false;
+    }
+  };
+
+  holeriteDialog.showModal();
+};
 
 // ==================== GESTÃO DE PONTO & JORNADA ====================
 async function renderTimeClock() {
@@ -2192,8 +2321,8 @@ window.nexusViewHolerite = (id) => {
       <div id="holerite-printable" class="holerite-slip">
         <div class="holerite-slip-header">
           <div>
-            <div style="font-size:18px; font-weight:800; color:#0A1D37;">NEXUS CODE BRASIL TECNOLOGIA LTDA</div>
-            <div style="font-size:12px; color:#475569;">Aracruz - ES • contato@nexuscodebrasil.com.br</div>
+            <div style="font-size:18px; font-weight:800; color:#0A1D37;">${esc((cache.empresa_config?.razao_social || 'NEXUS CODE BRASIL TECNOLOGIA LTDA').toUpperCase())}</div>
+            <div style="font-size:12px; color:#475569;">${cache.empresa_config?.cnpj ? `CNPJ: ${esc(cache.empresa_config.cnpj)} • ` : ''}${esc(cache.empresa_config?.endereco || 'Aracruz - ES')} • ${esc(cache.empresa_config?.email_financeiro || 'contato@nexuscodebrasil.com.br')}</div>
           </div>
           <div style="text-align:right;">
             <div style="font-weight:800; font-size:14px; color:#0A1D37;">RECIBO DE PAGAMENTO</div>
@@ -3599,7 +3728,8 @@ async function render(useCache = false) {
     else if (page === 'despesas') { await preloadRefs(useCache); view.innerHTML = await renderDespesasView({ cache, user, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS }); }
     else if (page === 'contratos') { await preloadRefs(useCache); view.innerHTML = await renderContratosView({ cache, user, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS }); }
     else if (page === 'ativos') { await preloadRefs(useCache); view.innerHTML = await renderAtivosView({ cache, user, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS }); }
-    else if (page === 'empresa') { await preloadRefs(useCache); view.innerHTML = await renderEmpresaView({ cache, user, invalidateCache, render }); }
+    else if (page === 'saas_tenants') { view.innerHTML = await renderSaasMasterView({ matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS }); }
+    else if (page === 'empresa') { await preloadRefs(useCache); view.innerHTML = await renderEmpresaView({ cache, user, invalidateCache, render, ICONS }); }
     else if (page === 'timeclock') view.innerHTML = await renderTimeClock();
     else if (page === 'holerite') view.innerHTML = await renderHolerite(useCache);
     else if (page === 'audit') view.innerHTML = await renderAudit(useCache);

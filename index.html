@@ -207,6 +207,7 @@
                     <a href="#services" class="nav-link text-slate-200 hover:text-[#00B4D8] transition-all duration-300 font-medium text-sm">Serviços</a>
                     <a href="#portfolio" class="nav-link text-slate-200 hover:text-[#00B4D8] transition-all duration-300 font-medium text-sm">Portfólio</a>
                     <a href="#about" class="nav-link text-slate-200 hover:text-[#00B4D8] transition-all duration-300 font-medium text-sm">Sobre</a>
+                    <a href="#portal-saas" class="nav-link text-slate-200 hover:text-[#00B4D8] transition-all duration-300 font-medium text-sm">Portal SaaS</a>
                     <a href="#loja" class="nav-link text-slate-200 hover:text-[#00B4D8] transition-all duration-300 font-medium text-sm">Loja</a>
                     <a href="#contact" class="nav-link text-slate-200 hover:text-[#00B4D8] transition-all duration-300 font-medium text-sm">Contato</a>
                     <button type="button" onclick="window.location.href='login.html'" class="bg-[#00B4D8] hover:bg-[#0096B4] text-[#0A1D37] px-6 py-2.5 rounded-full font-bold text-sm transition-all duration-300 glow-cyan">
@@ -226,6 +227,7 @@
                 <a href="#services" class="block text-slate-200 hover:text-[#00B4D8] transition-colors font-medium">Serviços</a>
                 <a href="#portfolio" class="block text-slate-200 hover:text-[#00B4D8] transition-colors font-medium">Portfólio</a>
                 <a href="#about" class="block text-slate-200 hover:text-[#00B4D8] transition-colors font-medium">Sobre</a>
+                <a href="#portal-saas" class="block text-slate-200 hover:text-[#00B4D8] transition-colors font-medium">Portal SaaS</a>
                 <a href="#loja" class="block text-slate-200 hover:text-[#00B4D8] transition-colors font-medium">Loja</a>
                 <a href="#contact" class="block text-slate-200 hover:text-[#00B4D8] transition-colors font-medium">Contato</a>
                 <button type="button" onclick="window.location.href='login.html'" class="block w-full text-center bg-[#00B4D8] text-[#0A1D37] px-4 py-3 rounded-xl font-bold">
@@ -736,6 +738,90 @@
         </div>
     </section>
 
+    <!-- Portal Nexus SaaS White-Label (Venda Automatizada & Assistida) -->
+    <section id="portal-saas" class="py-20 bg-[#0A1D37] text-white relative overflow-hidden">
+        <div class="absolute inset-0 tech-grid pointer-events-none"></div>
+        <div class="container mx-auto px-6 relative z-10">
+            <div class="text-center mb-14">
+                <span class="inline-flex items-center gap-2 bg-[#00B4D8]/15 text-[#00B4D8] px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider mb-4 border border-[#00B4D8]/35">
+                    Plataforma SaaS White-Label
+                </span>
+                <h2 class="text-4xl sm:text-5xl font-extrabold mb-4">
+                    Seu Próprio Portal <span class="text-cyan-gradient">ERP, CRM &amp; RH</span>
+                </h2>
+                <p class="text-slate-300 max-w-3xl mx-auto text-lg leading-relaxed">
+                    Implante o Portal Nexus na sua empresa com <b>sua logotipo, suas cores e subdomínio exclusivo</b> (<code class="text-[#00B4D8]">suaempresa.nexuscodebrasil.com.br</code>). Ativação imediata com 14 dias grátis ou implantação assistida.
+                </p>
+            </div>
+
+            <div id="saas-plans-grid" class="grid lg:grid-cols-3 gap-8 max-w-6xl mx-auto items-stretch">
+                <div class="glass-panel rounded-2xl p-8 flex flex-col justify-between">
+                    <div>
+                        <span class="text-xs font-bold uppercase tracking-wider text-[#00B4D8]">Starter CRM</span>
+                        <h3 class="text-2xl font-bold mt-1 mb-2">Starter CRM</h3>
+                        <p class="text-slate-300 text-sm mb-5">Ideal para pequenas equipes e agências iniciarem a operação comercial.</p>
+                        <div class="text-3xl font-black text-white mb-6">R$ 197,00<span class="text-sm font-normal text-slate-400">/mês</span></div>
+                        <ul class="space-y-2.5 text-sm text-slate-200 mb-8">
+                            <li>✓ Até 5 usuários internos</li>
+                            <li>✓ CRM, Leads e Funil Kanban</li>
+                            <li>✓ Propostas Comerciais &amp; Faturas</li>
+                            <li>✓ Portal do Cliente White-Label</li>
+                            <li>✓ Subdomínio personalizado incluso</li>
+                        </ul>
+                    </div>
+                    <button type="button" onclick="openSaasTrialModal('starter', 'Starter CRM')" class="w-full bg-white/10 hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] py-3.5 rounded-xl font-bold text-sm transition-all">
+                        Testar 14 Dias Grátis
+                    </button>
+                </div>
+
+                <div class="rounded-2xl p-8 bg-gradient-to-b from-[#0F2E56] to-[#061224] border-2 border-[#00B4D8] shadow-2xl flex flex-col justify-between relative">
+                    <span class="absolute -top-3.5 right-6 bg-[#00B4D8] text-[#0A1D37] text-xs font-extrabold uppercase px-3 py-1 rounded-full">Mais Vendido</span>
+                    <div>
+                        <span class="text-xs font-bold uppercase tracking-wider text-[#00B4D8]">Pro Gestão &amp; Financeiro</span>
+                        <h3 class="text-2xl font-bold mt-1 mb-2">Pro Gestão &amp; Financeiro</h3>
+                        <p class="text-slate-300 text-sm mb-5">Operação completa com DRE gerencial, Timesheet, MRR e Service Desk.</p>
+                        <div class="text-3xl font-black text-[#00B4D8] mb-6">R$ 397,00<span class="text-sm font-normal text-slate-400">/mês</span></div>
+                        <ul class="space-y-2.5 text-sm text-slate-200 mb-8">
+                            <li>✓ Até 15 usuários internos</li>
+                            <li>✓ Tudo do Starter + Timesheet &amp; Horas</li>
+                            <li>✓ DRE Gerencial &amp; Fluxo de Caixa</li>
+                            <li>✓ Contas a Pagar &amp; Contratos MRR</li>
+                            <li>✓ Marca, Cores e Logo 100% próprios</li>
+                        </ul>
+                    </div>
+                    <button type="button" onclick="openSaasTrialModal('pro', 'Pro Gestão & Financeiro')" class="w-full bg-[#00B4D8] hover:bg-[#0096B4] text-[#0A1D37] py-3.5 rounded-xl font-extrabold text-sm transition-all glow-cyan">
+                        Criar Portal Agora (14 Dias Grátis)
+                    </button>
+                </div>
+
+                <div class="glass-panel rounded-2xl p-8 flex flex-col justify-between">
+                    <div>
+                        <span class="text-xs font-bold uppercase tracking-wider text-[#00B4D8]">Enterprise Full ERP + RH</span>
+                        <h3 class="text-2xl font-bold mt-1 mb-2">Enterprise Full ERP + RH</h3>
+                        <p class="text-slate-300 text-sm mb-5">Suite corporativa completa com Ponto Eletrônico e Folha Automática.</p>
+                        <div class="text-3xl font-black text-white mb-6">R$ 697,00<span class="text-sm font-normal text-slate-400">/mês</span></div>
+                        <ul class="space-y-2.5 text-sm text-slate-200 mb-8">
+                            <li>✓ Até 50 usuários internos</li>
+                            <li>✓ Todos os módulos do plano Pro</li>
+                            <li>✓ Gestão de Ponto Eletrônico</li>
+                            <li>✓ Holerite &amp; Folha Automática (INSS/IRRF)</li>
+                            <li>✓ Domínio próprio (CNAME) + Suporte VIP</li>
+                        </ul>
+                    </div>
+                    <button type="button" onclick="openSaasTrialModal('enterprise', 'Enterprise Full ERP + RH')" class="w-full bg-white/10 hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] py-3.5 rounded-xl font-bold text-sm transition-all">
+                        Testar 14 Dias Grátis
+                    </button>
+                </div>
+            </div>
+
+            <div class="text-center mt-10">
+                <a href="#contact" onclick="const s=document.getElementById('project_type'); if(s) s.value='system';" class="text-sm text-[#00B4D8] hover:underline font-semibold">
+                    Precisa de implantação assistida ou limites personalizados para sua operação? Fale com nosso time comercial &rarr;
+                </a>
+            </div>
+        </div>
+    </section>
+
     <!-- Loja Section (Com Estampas Oficiais da Identidade Visual) -->
     <section id="loja" class="py-20 bg-white relative">
         <div class="container mx-auto px-6">
@@ -1060,7 +1146,7 @@
                         <a id="site-footer-email" href="mailto:contato@nexuscodebrasil.com.br" class="w-10 h-10 bg-[#0A1D37] border border-[#00B4D8]/30 rounded-lg flex items-center justify-center text-[#00B4D8] hover:bg-[#00B4D8] hover:text-[#0A1D37] transition-colors">
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"></rect><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path></svg>
                         </a>
-                        <a href="#contact" class="w-10 h-10 bg-[#0A1D37] border border-[#00B4D8]/30 rounded-lg flex items-center justify-center text-[#00B4D8] hover:bg-[#00B4D8] hover:text-[#0A1D37] transition-colors">
+                        <a id="site-footer-phone" href="https://wa.me/5527999999999" target="_blank" rel="noopener" class="w-10 h-10 bg-[#0A1D37] border border-[#00B4D8]/30 rounded-lg flex items-center justify-center text-[#00B4D8] hover:bg-[#00B4D8] hover:text-[#0A1D37] transition-colors">
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect><path d="M12 18h.01"></path></svg>
                         </a>
                         <a href="login.html" class="w-10 h-10 bg-[#0A1D37] border border-[#00B4D8]/30 rounded-lg flex items-center justify-center text-[#00B4D8] hover:bg-[#00B4D8] hover:text-[#0A1D37] transition-colors">
@@ -1102,7 +1188,7 @@
                     </div>
                     <div class="flex space-x-6 text-sm text-slate-400">
                         <button type="button" onclick="openLgpdModal()" class="hover:text-[#00B4D8] transition-colors">Política de Privacidade (LGPD)</button>
-                        <a href="#contact" class="hover:text-[#00B4D8] transition-colors">Termos de Uso</a>
+                        <button type="button" onclick="openTermsModal()" class="hover:text-[#00B4D8] transition-colors">Termos de Uso</button>
                     </div>
                 </div>
             </div>
@@ -1863,10 +1949,18 @@
                     if (phoneEl && emp.telefone) phoneEl.textContent = emp.telefone;
                     if (locEl && emp.localizacao) locEl.textContent = emp.localizacao;
                     if (footerMailEl && emp.email) footerMailEl.href = `mailto:${emp.email}`;
+                    const footerPhoneEl = document.getElementById('site-footer-phone');
+                    if (footerPhoneEl && emp.telefone) {
+                        const digits = String(emp.telefone).replace(/\D/g, '');
+                        if (digits.length >= 10) footerPhoneEl.href = `https://wa.me/${digits.startsWith('55') ? digits : '55' + digits}`;
+                    }
                 }
 
                 if (Array.isArray(data.produtos) && data.produtos.length > 0) {
                     renderDynamicProductsGrid(data.produtos);
+                }
+                if (Array.isArray(data.planos_saas) && data.planos_saas.length > 0) {
+                    renderDynamicSaasPlans(data.planos_saas);
                 }
             } catch (err) {
                 console.warn('Configuração pública indisponível no momento:', err);
@@ -2036,6 +2130,163 @@
                 const sel = document.getElementById('project_type');
                 if (sel) sel.value = item.typeValue;
                 document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+            };
+        }
+
+
+        function openTermsModal() {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl max-w-xl w-full overflow-hidden shadow-2xl border border-slate-200 text-slate-800">
+                    <div class="bg-[#0A1D37] text-white p-6 flex items-center justify-between border-b border-[#00B4D8]/30">
+                        <div>
+                            <span class="inline-block bg-[#00B4D8]/20 text-[#00B4D8] px-3 py-1 rounded-full text-xs font-bold mb-1">Contrato &amp; Uso</span>
+                            <h3 class="text-xl font-bold">Termos de Uso da Plataforma</h3>
+                        </div>
+                        <button type="button" data-close-terms class="text-white hover:text-[#00B4D8] text-2xl font-bold leading-none">&times;</button>
+                    </div>
+                    <div class="p-6 space-y-3 text-sm text-slate-600 leading-relaxed max-h-[70vh] overflow-y-auto">
+                        <p><b class="text-[#0A1D37]">1. Objeto:</b> A plataforma <b>Nexus Code Brasil</b> disponibiliza ambiente digital para solicitação de orçamentos, aquisição de produtos oficiais, acompanhamento de projetos, aprovação de propostas e suporte técnico.</p>
+                        <p><b class="text-[#0A1D37]">2. Credenciais e Acesso:</b> O acesso ao Portal do Cliente e ao painel corporativo é pessoal e intransferível, protegido por autenticação criptografada e auditoria de ações.</p>
+                        <p><b class="text-[#0A1D37]">3. Propriedade Intelectual:</b> Todo código-fonte, marcas, logotipos e materiais exclusivos da Nexus Code Brasil são protegidos pela legislação brasileira de direitos autorais e propriedade industrial.</p>
+                    </div>
+                    <div class="px-6 py-4 bg-slate-50 border-t flex justify-end">
+                        <button type="button" data-close-terms class="bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] px-6 py-2.5 rounded-xl font-bold text-sm transition-colors">Fechar</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            modal.querySelectorAll('[data-close-terms]').forEach((b) => (b.onclick = () => modal.remove()));
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+        }
+
+
+        function renderDynamicSaasPlans(planosList) {
+            const grid = document.getElementById('saas-plans-grid');
+            if (!grid || !Array.isArray(planosList) || !planosList.length) return;
+            grid.innerHTML = planosList.map((pl) => {
+                let recs = [];
+                try { recs = JSON.parse(pl.recursos_json || '[]'); } catch (_) {}
+                const priceFmt = Number(pl.preco_mensal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const isHighlight = Boolean(pl.destaque);
+                return `
+                    <div class="${isHighlight ? 'rounded-2xl p-8 bg-gradient-to-b from-[#0F2E56] to-[#061224] border-2 border-[#00B4D8] shadow-2xl' : 'glass-panel rounded-2xl p-8'} flex flex-col justify-between relative">
+                        ${isHighlight ? '<span class="absolute -top-3.5 right-6 bg-[#00B4D8] text-[#0A1D37] text-xs font-extrabold uppercase px-3 py-1 rounded-full">Mais Vendido</span>' : ''}
+                        <div>
+                            <span class="text-xs font-bold uppercase tracking-wider text-[#00B4D8]">${escHtml(pl.codigo)}</span>
+                            <h3 class="text-2xl font-bold mt-1 mb-2">${escHtml(pl.nome)}</h3>
+                            <p class="text-slate-300 text-sm mb-5">${escHtml(pl.subtitulo || '')}</p>
+                            <div class="text-3xl font-black ${isHighlight ? 'text-[#00B4D8]' : 'text-white'} mb-6">R$ ${priceFmt}<span class="text-sm font-normal text-slate-400">/mês</span></div>
+                            <ul class="space-y-2.5 text-sm text-slate-200 mb-8">
+                                ${recs.map((r) => `<li>✓ ${escHtml(r)}</li>`).join('')}
+                            </ul>
+                        </div>
+                        <button type="button" onclick="openSaasTrialModal('${escHtml(pl.codigo)}', '${escHtml(pl.nome)}')" class="w-full ${isHighlight ? 'bg-[#00B4D8] hover:bg-[#0096B4] text-[#0A1D37] font-extrabold glow-cyan' : 'bg-white/10 hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] font-bold'} py-3.5 rounded-xl text-sm transition-all">
+                            ${isHighlight ? 'Criar Portal Agora (14 Dias Grátis)' : 'Testar 14 Dias Grátis'}
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function openSaasTrialModal(planoCodigo = 'pro', planoNome = 'Pro Gestão & Financeiro') {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4';
+            modal.innerHTML = `
+                <form id="saas-onboarding-form" class="bg-white text-slate-800 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200">
+                    <div class="bg-[#0A1D37] text-white p-6 flex items-center justify-between border-b border-[#00B4D8]/30">
+                        <div>
+                            <span class="inline-block bg-[#00B4D8]/20 text-[#00B4D8] px-3 py-0.5 rounded-full text-xs font-bold mb-1">14 Dias Grátis • White-Label</span>
+                            <h3 class="text-xl font-bold">Ativar Portal — ${escHtml(planoNome)}</h3>
+                        </div>
+                        <button type="button" data-close-ob class="text-white hover:text-[#00B4D8] text-2xl font-bold leading-none">&times;</button>
+                    </div>
+                    <div class="p-6 space-y-4 text-sm">
+                        <div class="grid sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-bold text-[#0A1D37] mb-1">Nome da Empresa *</label>
+                                <input type="text" name="nome_empresa" id="ob-empresa" required placeholder="Ex.: Alpha Soluções" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8]">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-[#0A1D37] mb-1">Subdomínio Exclusivo *</label>
+                                <div class="flex items-center border border-slate-300 rounded-xl overflow-hidden focus-within:border-[#00B4D8]">
+                                    <input type="text" name="slug" id="ob-slug" required placeholder="alpha" class="w-full px-3 py-2 outline-none font-bold text-[#0096B4]">
+                                    <span class="bg-slate-100 px-2 py-2 text-[11px] text-slate-500 whitespace-nowrap">.nexuscodebrasil.com.br</span>
+                                </div>
+                                <div id="ob-slug-status" class="text-[11px] mt-1 text-slate-500"></div>
+                            </div>
+                            <div>
+                                <label class="block font-bold text-[#0A1D37] mb-1">Seu Nome (Administrador) *</label>
+                                <input type="text" name="admin_nome" required placeholder="Nome completo" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8]">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-[#0A1D37] mb-1">E-mail Corporativo *</label>
+                                <input type="email" name="admin_email" required placeholder="admin@suaempresa.com.br" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8]">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-[#0A1D37] mb-1">Senha de Acesso *</label>
+                                <input type="password" name="admin_senha" minlength="6" required placeholder="Mínimo 6 caracteres" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8]">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-[#0A1D37] mb-1">Cor Principal da Marca</label>
+                                <input type="color" name="cor_primaria" value="#0096B4" class="w-full h-10 p-1 border border-slate-300 rounded-xl cursor-pointer">
+                            </div>
+                        </div>
+                        <div id="ob-feedback" class="text-xs font-bold"></div>
+                        <button type="submit" id="ob-submit" class="w-full bg-[#00B4D8] hover:bg-[#0096B4] text-[#0A1D37] font-extrabold py-3.5 rounded-xl transition-colors">
+                            Criar Meu Portal Agora
+                        </button>
+                    </div>
+                </form>
+            `;
+            document.body.appendChild(modal);
+            modal.querySelectorAll('[data-close-ob]').forEach((b) => (b.onclick = () => modal.remove()));
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+            const empInp = modal.querySelector('#ob-empresa');
+            const slugInp = modal.querySelector('#ob-slug');
+            const statusEl = modal.querySelector('#ob-slug-status');
+
+            empInp.addEventListener('input', () => {
+                slugInp.value = empInp.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30);
+            });
+
+            slugInp.addEventListener('blur', async () => {
+                if (slugInp.value.trim().length < 3) return;
+                try {
+                    const r = await fetch(`${NEXUS_API_URL}/public/saas/check-slug?slug=${encodeURIComponent(slugInp.value.trim())}`).then((x) => x.json());
+                    statusEl.textContent = r.motivo;
+                    statusEl.className = r.disponivel ? 'text-[11px] mt-1 text-emerald-600 font-bold' : 'text-[11px] mt-1 text-rose-600 font-bold';
+                } catch (_) {}
+            });
+
+            modal.querySelector('#saas-onboarding-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const btn = modal.querySelector('#ob-submit');
+                const fb = modal.querySelector('#ob-feedback');
+                const raw = Object.fromEntries(new FormData(e.target));
+                btn.disabled = true;
+                btn.textContent = 'Provisionando seu ambiente...';
+                fb.textContent = '';
+                try {
+                    const res = await fetch(`${NEXUS_API_URL}/public/saas/onboarding`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...raw, plano: planoCodigo })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || 'Não foi possível criar o portal.');
+                    localStorage.setItem('nexus_token', data.access_token);
+                    localStorage.setItem('nexus_user', JSON.stringify(data.usuario));
+                    sessionStorage.setItem('nexus_tenant_slug', raw.slug.trim().toLowerCase());
+                    window.location.href = `app/index.html?tenant=${encodeURIComponent(raw.slug.trim().toLowerCase())}`;
+                } catch (err) {
+                    fb.textContent = err.message;
+                    fb.className = 'text-xs font-bold text-rose-600';
+                    btn.disabled = false;
+                    btn.textContent = 'Criar Meu Portal Agora';
+                }
             };
         }
 

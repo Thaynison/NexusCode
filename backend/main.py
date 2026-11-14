@@ -4,6 +4,7 @@ from datetime import datetime, date, timezone, timedelta
 from decimal import Decimal
 from typing import List, Optional
 import calendar
+import hmac
 import json
 import re
 import unicodedata
@@ -25,6 +26,7 @@ from sqlalchemy.orm import Session, defer
 
 from database import Base, engine, get_db, SessionLocal
 from models import (
+    Organizacao, PlanoSaas,
     Usuario, Cliente, SolicitacaoOrcamento, Projeto,
     Tarefa, Interacao, Fatura, Holerite, InformeRendimento,
     RegistroPonto, ModuloRegistro, LogAuditoria,
@@ -56,6 +58,9 @@ from schemas import (
     NotificacaoOut, ReembolsoCreate, ReembolsoUpdate, ReembolsoOut,
     PedidoLojaCreate, PedidoLojaUpdate, PedidoLojaOut,
     ProdutoLojaCreate, ProdutoLojaUpdate, ProdutoLojaOut,
+    OrganizacaoCreate, OrganizacaoUpdate, OrganizacaoOut,
+    PlanoSaasCreate, PlanoSaasUpdate, PlanoSaasOut,
+    SaasOnboardingCreate, BrandingUpdate,
 )
 from payroll_engine import (
     buscar_cbos,
@@ -65,7 +70,7 @@ from payroll_engine import (
 from auth import (
     SECRET_KEY, ALGORITHM,
     gerar_hash_senha, verificar_senha, criar_token_acesso,
-    get_usuario_atual, get_usuario_db, exigir_equipe, exigir_admin,
+    get_usuario_atual, get_usuario_db, exigir_equipe, exigir_admin, exigir_master_admin,
 )
 
 load_dotenv()
@@ -74,6 +79,153 @@ SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASS = os.getenv("SMTP_PASS", "")
+
+RESERVED_SLUGS = {
+    "www", "api", "app", "admin", "mail", "smtp", "ftp", "nexus",
+    "portal", "static", "assets", "root", "suporte", "support", "blog"
+}
+
+DEFAULT_BRANDING_MASTER = {
+    "nome_plataforma": "NEXUS CODE",
+    "subtitulo_plataforma": "BRASIL",
+    "logo_url": "",
+    "favicon_url": "",
+    "cor_primaria": "#0096B4",
+    "cor_secundaria": "#0A1D37",
+    "cor_sidebar": "#0A1D37",
+    "tema_padrao": "light",
+    "ocultar_powered_by": True,
+}
+
+DEFAULT_MODULOS_TENANT = {
+    "dashboard": True,
+    "projetos": True,
+    "tarefas": True,
+    "timesheet": True,
+    "orcamentos": True,
+    "propostas": True,
+    "clientes": True,
+    "chamados": True,
+    "financeiro_dre": True,
+    "faturas": True,
+    "despesas": True,
+    "contratos": True,
+    "ponto": True,
+    "holerite": True,
+    "ativos": True,
+    "usuarios": True,
+    "empresa": True,
+    "auditoria": True,
+    "portal_cliente": True,
+    "loja": False,
+}
+
+DEFAULT_PERMISSOES = {
+    "admin": {
+        "dashboard": True, "projetos": True, "tarefas": True, "timesheet": True,
+        "orcamentos": True, "propostas": True, "clientes": True, "chamados": True,
+        "financeiro_dre": True, "faturas": True, "despesas": True, "contratos": True,
+        "ponto": True, "holerite": True, "ativos": True, "usuarios": True,
+        "empresa": True, "auditoria": True, "loja": True, "reembolsos": True,
+    },
+    "colaborador": {
+        "dashboard": True, "projetos": True, "tarefas": True, "timesheet": True,
+        "orcamentos": True, "propostas": True, "clientes": True, "chamados": True,
+        "financeiro_dre": False, "faturas": True, "despesas": False, "contratos": False,
+        "ponto": True, "holerite": True, "ativos": True, "usuarios": False,
+        "empresa": False, "auditoria": False, "loja": False, "reembolsos": True,
+    },
+}
+
+
+def _slugify_tenant(texto: str) -> str:
+    norm = unicodedata.normalize("NFKD", texto or "empresa").encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", norm.lower()).strip("-")
+    return slug[:50] or "empresa"
+
+
+def _parse_json_dict(raw: Optional[str], fallback: dict) -> dict:
+    if not raw:
+        return dict(fallback)
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            res = dict(fallback)
+            res.update(parsed)
+            return res
+    except Exception:
+        pass
+    return dict(fallback)
+
+
+def _get_org_or_404(db: Session, org_id: int) -> Organizacao:
+    org = db.query(Organizacao).filter(Organizacao.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organização não encontrada.")
+    if not org.is_master and org.status_assinatura == "suspenso":
+        raise HTTPException(
+            status_code=403,
+            detail="A assinatura deste portal encontra-se suspensa. Entre em contato com o suporte.",
+        )
+    return org
+
+
+def _verificar_modulo(org: Organizacao, modulo: str):
+    if org.is_master:
+        return
+    mods = _parse_json_dict(org.modulos_json, DEFAULT_MODULOS_TENANT)
+    if mods.get(modulo) is False:
+        raise HTTPException(
+            status_code=403,
+            detail=f"O módulo '{modulo}' não está habilitado no plano atual desta empresa.",
+        )
+
+
+def _resolver_org_por_request(req: Request, db: Session) -> Organizacao:
+    tenant_hint = (
+        req.headers.get("X-Tenant-Slug")
+        or req.query_params.get("tenant")
+        or ""
+    ).strip().lower()
+
+    if tenant_hint:
+        org = (
+            db.query(Organizacao)
+            .filter(
+                or_(
+                    func.lower(Organizacao.slug) == tenant_hint,
+                    func.lower(Organizacao.dominio_customizado) == tenant_hint,
+                )
+            )
+            .first()
+        )
+        if org:
+            return org
+
+    host_raw = (req.headers.get("X-Forwarded-Host") or req.headers.get("Host") or "").split(":")[0].strip().lower()
+    if host_raw:
+        org_dom = db.query(Organizacao).filter(func.lower(Organizacao.dominio_customizado) == host_raw).first()
+        if org_dom:
+            return org_dom
+
+        parts = host_raw.split(".")
+        if len(parts) >= 3 and parts[0] not in ("www", "app", "api", "nexuscodebrasil"):
+            sub = parts[0]
+            org_sub = db.query(Organizacao).filter(func.lower(Organizacao.slug) == sub).first()
+            if org_sub:
+                return org_sub
+        elif len(parts) == 2 and parts[1] == "localhost" and parts[0] not in ("www", "app", "api"):
+            org_sub = db.query(Organizacao).filter(func.lower(Organizacao.slug) == parts[0]).first()
+            if org_sub:
+                return org_sub
+
+    master = db.query(Organizacao).filter(Organizacao.is_master == True).first()
+    if master:
+        return master
+    first_org = db.query(Organizacao).order_by(Organizacao.id.asc()).first()
+    if first_org:
+        return first_org
+    raise HTTPException(status_code=500, detail="Organização principal não inicializada.")
 
 
 def enviar_email(destinatario: str, assunto: str, mensagem_html: str):
@@ -95,8 +247,8 @@ def enviar_email(destinatario: str, assunto: str, mensagem_html: str):
         return False
 
 
-def registrar_log(db: Session, usuario_nome: str, acao: str, detalhes: str):
-    db.add(LogAuditoria(usuario_nome=usuario_nome, acao=acao, detalhes=detalhes[:250]))
+def registrar_log(db: Session, usuario_nome: str, acao: str, detalhes: str, org_id: int = 1):
+    db.add(LogAuditoria(organizacao_id=org_id, usuario_nome=usuario_nome, acao=acao, detalhes=detalhes[:250]))
 
 
 def criar_notificacao(
@@ -106,9 +258,11 @@ def criar_notificacao(
     link_pagina: str = "dashboard",
     usuario_id: Optional[int] = None,
     perfil_destino: Optional[str] = None,
+    org_id: int = 1,
 ):
     db.add(
         Notificacao(
+            organizacao_id=org_id,
             usuario_id=usuario_id,
             perfil_destino=perfil_destino,
             titulo=titulo[:160],
@@ -122,7 +276,10 @@ def criar_notificacao(
 def _obter_cliente_do_usuario(db: Session, usuario: Usuario) -> Optional[Cliente]:
     return (
         db.query(Cliente)
-        .filter((Cliente.usuario_portal_id == usuario.id) | (Cliente.email == usuario.email))
+        .filter(
+            Cliente.organizacao_id == usuario.organizacao_id,
+            or_(Cliente.usuario_portal_id == usuario.id, Cliente.email == usuario.email),
+        )
         .first()
     )
 
@@ -134,6 +291,7 @@ def _garantir_cliente_para_portal(db: Session, usuario: Usuario) -> Cliente:
             cliente.usuario_portal_id = usuario.id
         return cliente
     cliente = Cliente(
+        organizacao_id=usuario.organizacao_id,
         usuario_portal_id=usuario.id,
         nome_empresa=usuario.nome,
         contato_nome=usuario.nome,
@@ -151,11 +309,17 @@ def _converter_proposta_em_projeto(db: Session, prop: PropostaComercial, autor_n
     if prop.projeto_gerado_id:
         return db.query(Projeto).filter(Projeto.id == prop.projeto_gerado_id).first()
 
-    admin_user = db.query(Usuario).filter(Usuario.perfil == "admin", Usuario.ativo == True).first()
+    org_id = prop.organizacao_id
+    admin_user = (
+        db.query(Usuario)
+        .filter(Usuario.organizacao_id == org_id, Usuario.perfil == "admin", Usuario.ativo == True)
+        .first()
+    )
     hoje = date.today()
     entrega = hoje + timedelta(days=int(prop.prazo_dias or 30))
 
     projeto = Projeto(
+        organizacao_id=org_id,
         cliente_id=prop.cliente_id,
         responsavel_id=prop.criado_por_id or (admin_user.id if admin_user else None),
         titulo=prop.titulo,
@@ -194,6 +358,7 @@ def _converter_proposta_em_projeto(db: Session, prop: PropostaComercial, autor_n
         if t_titulo and t_titulo.strip():
             db.add(
                 Tarefa(
+                    organizacao_id=org_id,
                     projeto_id=projeto.id,
                     responsavel_id=projeto.responsavel_id,
                     titulo=t_titulo.strip()[:180],
@@ -214,6 +379,7 @@ def _converter_proposta_em_projeto(db: Session, prop: PropostaComercial, autor_n
             val_atual = valor_parcela if p_idx < n_parcelas - 1 else round(valor_total_num - valor_parcela * (n_parcelas - 1), 2)
             db.add(
                 Fatura(
+                    organizacao_id=org_id,
                     projeto_id=projeto.id,
                     cliente_id=prop.cliente_id,
                     descricao=f"{prop.titulo} — Parcela {p_idx + 1}/{n_parcelas} ({prop.codigo})",
@@ -224,7 +390,7 @@ def _converter_proposta_em_projeto(db: Session, prop: PropostaComercial, autor_n
                 )
             )
 
-    cliente = db.query(Cliente).filter(Cliente.id == prop.cliente_id).first()
+    cliente = db.query(Cliente).filter(Cliente.id == prop.cliente_id, Cliente.organizacao_id == org_id).first()
     if cliente and cliente.status_funil in ("lead", "proposta", "negociacao"):
         cliente.status_funil = "ativo"
 
@@ -239,28 +405,12 @@ def _converter_proposta_em_projeto(db: Session, prop: PropostaComercial, autor_n
         autor_nome,
         "PROPOSTA_CONVERTIDA",
         f"Proposta {prop.codigo} convertida automaticamente no Projeto #{projeto.id} ({n_parcelas} fatura(s)).",
+        org_id=org_id,
     )
     return projeto
 
 
 _db_ready = False
-
-DEFAULT_PERMISSOES = {
-    "admin": {
-        "dashboard": True, "projetos": True, "tarefas": True, "timesheet": True,
-        "orcamentos": True, "propostas": True, "clientes": True, "chamados": True,
-        "financeiro_dre": True, "faturas": True, "despesas": True, "contratos": True,
-        "ponto": True, "holerite": True, "ativos": True, "usuarios": True,
-        "empresa": True, "auditoria": True, "loja": True, "reembolsos": True,
-    },
-    "colaborador": {
-        "dashboard": True, "projetos": True, "tarefas": True, "timesheet": True,
-        "orcamentos": True, "propostas": True, "clientes": True, "chamados": True,
-        "financeiro_dre": False, "faturas": True, "despesas": False, "contratos": False,
-        "ponto": True, "holerite": True, "ativos": True, "usuarios": False,
-        "empresa": False, "auditoria": False, "loja": False, "reembolsos": True,
-    },
-}
 
 
 def _run_full_schema_sync():
@@ -303,9 +453,10 @@ def ensure_db_initialized(force_sync: bool = False):
     if not force_sync:
         try:
             with engine.connect() as conn:
+                conn.execute(text("SELECT 1 FROM organizacoes LIMIT 1"))
+                conn.execute(text("SELECT 1 FROM planos_saas LIMIT 1"))
                 conn.execute(text("SELECT 1 FROM produtos_loja LIMIT 1"))
-                conn.execute(text("SELECT 1 FROM pedidos_loja LIMIT 1"))
-                conn.execute(text("SELECT 1 FROM configuracoes_empresa LIMIT 1"))
+                conn.execute(text("SELECT organizacao_id FROM usuarios LIMIT 1"))
             _db_ready = True
             return
         except Exception:
@@ -315,9 +466,115 @@ def ensure_db_initialized(force_sync: bool = False):
 
     db = SessionLocal()
     try:
-        if not db.query(ConfiguracaoEmpresa.id).first():
+        master_org = db.query(Organizacao).filter(Organizacao.is_master == True).first()
+        if not master_org:
+            first_org = db.query(Organizacao).filter(Organizacao.id == 1).first()
+            if first_org:
+                first_org.is_master = True
+                master_org = first_org
+            else:
+                master_modulos = dict(DEFAULT_MODULOS_TENANT)
+                master_modulos["loja"] = True
+                master_modulos["saas_tenants"] = True
+                master_org = Organizacao(
+                    nome="Nexus Code Brasil",
+                    slug="nexus",
+                    is_master=True,
+                    plano="enterprise",
+                    status_assinatura="ativo",
+                    valor_mensal=Decimal("0.00"),
+                    limite_usuarios=999,
+                    limite_clientes=9999,
+                    modulos_json=json.dumps(master_modulos, ensure_ascii=False),
+                    branding_json=json.dumps(DEFAULT_BRANDING_MASTER, ensure_ascii=False),
+                )
+                db.add(master_org)
+            db.commit()
+            db.refresh(master_org)
+
+        if not db.query(PlanoSaas.id).first():
+            starter_mods = {
+                "dashboard": True, "projetos": True, "tarefas": True, "timesheet": False,
+                "orcamentos": True, "propostas": True, "clientes": True, "chamados": True,
+                "financeiro_dre": False, "faturas": True, "despesas": False, "contratos": False,
+                "ponto": False, "holerite": False, "ativos": False, "usuarios": True,
+                "empresa": True, "auditoria": False, "portal_cliente": True, "loja": False,
+            }
+            pro_mods = {
+                "dashboard": True, "projetos": True, "tarefas": True, "timesheet": True,
+                "orcamentos": True, "propostas": True, "clientes": True, "chamados": True,
+                "financeiro_dre": True, "faturas": True, "despesas": True, "contratos": True,
+                "ponto": False, "holerite": False, "ativos": True, "usuarios": True,
+                "empresa": True, "auditoria": True, "portal_cliente": True, "loja": False,
+            }
+            ent_mods = dict(DEFAULT_MODULOS_TENANT)
+
+            db.add_all([
+                PlanoSaas(
+                    codigo="starter",
+                    nome="Starter CRM",
+                    subtitulo="Ideal para pequenas equipes e agências iniciarem a operação comercial",
+                    preco_mensal=Decimal("197.00"),
+                    limite_usuarios=5,
+                    limite_clientes=250,
+                    destaque=False,
+                    modulos_json=json.dumps(starter_mods, ensure_ascii=False),
+                    recursos_json=json.dumps([
+                        "Até 5 usuários internos",
+                        "CRM, Leads e Funil Kanban",
+                        "Propostas Comerciais & Faturas",
+                        "Portal do Cliente White-Label",
+                        "Subdomínio personalizado incluso",
+                    ], ensure_ascii=False),
+                    ativo=True,
+                    ordem=1,
+                ),
+                PlanoSaas(
+                    codigo="pro",
+                    nome="Pro Gestão & Financeiro",
+                    subtitulo="Operação completa com DRE gerencial, Timesheet, MRR e Service Desk",
+                    preco_mensal=Decimal("397.00"),
+                    limite_usuarios=15,
+                    limite_clientes=1000,
+                    destaque=True,
+                    modulos_json=json.dumps(pro_mods, ensure_ascii=False),
+                    recursos_json=json.dumps([
+                        "Até 15 usuários internos",
+                        "Tudo do plano Starter + Timesheet",
+                        "DRE Gerencial & Fluxo de Caixa",
+                        "Contas a Pagar & Contratos MRR",
+                        "Central de Chamados & Ativos",
+                        "Marca, Cores e Logo 100% próprios",
+                    ], ensure_ascii=False),
+                    ativo=True,
+                    ordem=2,
+                ),
+                PlanoSaas(
+                    codigo="enterprise",
+                    nome="Enterprise Full ERP + RH",
+                    subtitulo="Suite corporativa completa com Ponto Eletrônico e Folha Automática",
+                    preco_mensal=Decimal("697.00"),
+                    limite_usuarios=50,
+                    limite_clientes=5000,
+                    destaque=False,
+                    modulos_json=json.dumps(ent_mods, ensure_ascii=False),
+                    recursos_json=json.dumps([
+                        "Até 50 usuários internos",
+                        "Todos os módulos do plano Pro",
+                        "Gestão de Ponto Eletrônico",
+                        "Holerite & Folha Automática (INSS/IRRF)",
+                        "Domínio próprio (CNAME) + Suporte VIP",
+                    ], ensure_ascii=False),
+                    ativo=True,
+                    ordem=3,
+                ),
+            ])
+            db.commit()
+
+        if not db.query(ConfiguracaoEmpresa.id).filter(ConfiguracaoEmpresa.organizacao_id == master_org.id).first():
             db.add(
                 ConfiguracaoEmpresa(
+                    organizacao_id=master_org.id,
                     razao_social="Nexus Code Brasil Tecnologia Ltda",
                     nome_fantasia="Nexus Code Brasil",
                     cnpj="00.000.000/0001-00",
@@ -334,9 +591,10 @@ def ensure_db_initialized(force_sync: bool = False):
             )
             db.commit()
 
-        if not db.query(ProdutoLoja.id).first():
+        if not db.query(ProdutoLoja.id).filter(ProdutoLoja.organizacao_id == master_org.id).first():
             db.add_all([
                 ProdutoLoja(
+                    organizacao_id=master_org.id,
                     slug="blusa",
                     nome="Blusa Nexus Code Brasil",
                     descricao="Blusa preta 100% algodão com estampa oficial Negativa Branca & Ciano Digital.",
@@ -351,6 +609,7 @@ def ensure_db_initialized(force_sync: bool = False):
                     ativo=True,
                 ),
                 ProdutoLoja(
+                    organizacao_id=master_org.id,
                     slug="moletom",
                     nome="Moletom Nexus Code Brasil",
                     descricao="Moletom canguru com capuz, tecido premium e monograma circuito em contraste.",
@@ -365,6 +624,7 @@ def ensure_db_initialized(force_sync: bool = False):
                     ativo=True,
                 ),
                 ProdutoLoja(
+                    organizacao_id=master_org.id,
                     slug="garrafinha",
                     nome="Garrafinha Térmica 500ml",
                     descricao="Garrafa térmica inox com estampa padrão Azul Enterprise & Ciano Digital.",
@@ -379,6 +639,7 @@ def ensure_db_initialized(force_sync: bool = False):
                     ativo=True,
                 ),
                 ProdutoLoja(
+                    organizacao_id=master_org.id,
                     slug="mochila",
                     nome="Mochila Executiva Tech",
                     descricao='Mochila executiva para notebook até 15.6" com emblema oficial Nexus Code Brasil.',
@@ -397,6 +658,7 @@ def ensure_db_initialized(force_sync: bool = False):
 
         if not db.query(Usuario.id).first():
             admin = Usuario(
+                organizacao_id=master_org.id,
                 nome="Administrador Nexus",
                 email="admin@nexuscode.com",
                 senha_hash=gerar_hash_senha("Nexus@2026"),
@@ -407,6 +669,7 @@ def ensure_db_initialized(force_sync: bool = False):
             db.flush()
 
             cliente_demo = Cliente(
+                organizacao_id=master_org.id,
                 nome_empresa="TechNova Soluções",
                 contato_nome="Mariana Silva",
                 email="contato@technova.com.br",
@@ -418,6 +681,7 @@ def ensure_db_initialized(force_sync: bool = False):
             db.flush()
 
             projeto_demo = Projeto(
+                organizacao_id=master_org.id,
                 cliente_id=cliente_demo.id,
                 responsavel_id=admin.id,
                 titulo="Plataforma Web & Gestão Integrada",
@@ -433,10 +697,10 @@ def ensure_db_initialized(force_sync: bool = False):
             db.flush()
 
             db.add_all([
-                Tarefa(projeto_id=projeto_demo.id, responsavel_id=admin.id, titulo="Levantamento de requisitos e arquitetura da plataforma", status="concluida"),
-                Tarefa(projeto_id=projeto_demo.id, responsavel_id=admin.id, titulo="Homologação do portal corporativo com o cliente", status="fazendo"),
+                Tarefa(organizacao_id=master_org.id, projeto_id=projeto_demo.id, responsavel_id=admin.id, titulo="Levantamento de requisitos e arquitetura da plataforma", status="concluida"),
+                Tarefa(organizacao_id=master_org.id, projeto_id=projeto_demo.id, responsavel_id=admin.id, titulo="Homologação do portal corporativo com o cliente", status="fazendo"),
             ])
-            registrar_log(db, "Sistema", "INIT", "Ambiente corporativo Nexus Code Enterprise inicializado.")
+            registrar_log(db, "Sistema", "INIT", "Ambiente SaaS Multi-Tenant Nexus Code Enterprise inicializado.", org_id=master_org.id)
             db.commit()
         _db_ready = True
     finally:
@@ -450,8 +714,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title=os.getenv("APP_NAME", "Nexus Code Enterprise ERP & CRM"),
-    version="2.2.0",
+    title=os.getenv("APP_NAME", "Nexus Code Enterprise SaaS ERP & CRM"),
+    version="2.3.0",
     lifespan=lifespan,
 )
 
@@ -486,16 +750,514 @@ router = APIRouter(prefix="/api")
 def raiz():
     return {
         "status": "online",
-        "sistema": "Nexus Code Enterprise ERP & CRM API",
-        "versao": "2.2.0",
+        "sistema": "Nexus Code Enterprise SaaS ERP & CRM API",
+        "versao": "2.3.0",
         "regiao": os.getenv("VERCEL_REGION", "local"),
     }
 
 
 @router.post("/admin/sync-db", tags=["Status"])
-def forcar_migracao_banco(_: Usuario = Depends(exigir_admin)):
+def forcar_migracao_banco(_: Usuario = Depends(exigir_master_admin)):
     ensure_db_initialized(force_sync=True)
-    return {"ok": True, "message": "Estrutura de tabelas e colunas sincronizada com sucesso."}
+    return {"ok": True, "message": "Estrutura Multi-Tenant de tabelas e colunas sincronizada com sucesso."}
+
+
+# ==================== WHITE-LABEL BRANDING & SAAS ONBOARDING PÚBLICO ====================
+@router.get("/public/tenant-branding", tags=["SaaS White-Label"])
+def obter_branding_tenant(req: Request, db: Session = Depends(get_db)):
+    org = _resolver_org_por_request(req, db)
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first()
+    branding = _parse_json_dict(org.branding_json, DEFAULT_BRANDING_MASTER)
+    if not branding.get("nome_plataforma") or (not org.is_master and branding.get("nome_plataforma") == "NEXUS CODE"):
+        branding["nome_plataforma"] = (cfg.nome_fantasia if cfg else org.nome) or org.nome
+        if not org.is_master and branding.get("subtitulo_plataforma") == "BRASIL":
+            branding["subtitulo_plataforma"] = "PORTAL EMPRESARIAL"
+
+    modulos = dict(DEFAULT_MODULOS_TENANT)
+    if org.is_master:
+        modulos["loja"] = True
+        modulos["saas_tenants"] = True
+    else:
+        modulos = _parse_json_dict(org.modulos_json, DEFAULT_MODULOS_TENANT)
+
+    return {
+        "organizacao_id": org.id,
+        "nome": org.nome,
+        "slug": org.slug,
+        "dominio_customizado": org.dominio_customizado,
+        "subdominio_url": f"https://{org.slug}.nexuscodebrasil.com.br",
+        "is_master": bool(org.is_master),
+        "status_assinatura": org.status_assinatura,
+        "branding": branding,
+        "modulos": modulos,
+    }
+
+
+@router.get("/public/saas/check-slug", tags=["SaaS White-Label"])
+def verificar_disponibilidade_subdominio(slug: str, db: Session = Depends(get_db)):
+    clean = _slugify_tenant(slug)
+    if len(clean) < 3 or clean in RESERVED_SLUGS:
+        return {"disponivel": False, "slug": clean, "motivo": "Subdomínio reservado ou muito curto (mínimo 3 letras)."}
+    exists = db.query(Organizacao.id).filter(func.lower(Organizacao.slug) == clean).first()
+    return {
+        "disponivel": not bool(exists),
+        "slug": clean,
+        "url_prevista": f"https://{clean}.nexuscodebrasil.com.br",
+        "motivo": "Subdomínio já está em uso por outra empresa." if exists else "Disponível para ativação imediata!",
+    }
+
+
+def _provisionar_nova_organizacao(
+    db: Session,
+    nome_empresa: str,
+    raw_slug: str,
+    plano_codigo: str,
+    admin_nome: str,
+    admin_email: str,
+    admin_senha: str,
+    status_assinatura: str = "trial",
+    valor_mensal: Optional[Decimal] = None,
+    limite_usuarios: Optional[int] = None,
+    limite_clientes: Optional[int] = None,
+    trial_ate: Optional[date] = None,
+    vencimento_assinatura: Optional[date] = None,
+    modulos_json: Optional[str] = None,
+    branding_json: Optional[str] = None,
+    dominio_customizado: Optional[str] = None,
+    telefone: Optional[str] = None,
+    cnpj: Optional[str] = None,
+    observacoes: Optional[str] = None,
+    gerar_contrato_master: bool = True,
+    dia_vencimento: int = 10,
+) -> tuple[Organizacao, Usuario]:
+    clean_slug = _slugify_tenant(raw_slug)
+    if len(clean_slug) < 3 or clean_slug in RESERVED_SLUGS:
+        raise HTTPException(status_code=400, detail="Subdomínio inválido ou reservado. Escolha outro identificador (ex.: sua-empresa).")
+
+    if db.query(Organizacao.id).filter(func.lower(Organizacao.slug) == clean_slug).first():
+        raise HTTPException(status_code=400, detail=f"O subdomínio '{clean_slug}.nexuscodebrasil.com.br' já está em uso.")
+
+    dom_clean = (dominio_customizado or "").strip().lower() or None
+    if dom_clean:
+        if db.query(Organizacao.id).filter(func.lower(Organizacao.dominio_customizado) == dom_clean).first():
+            raise HTTPException(status_code=400, detail=f"O domínio '{dom_clean}' já está vinculado a outro portal.")
+
+    if db.query(Usuario.id).filter(func.lower(Usuario.email) == admin_email.strip().lower()).first():
+        raise HTTPException(status_code=400, detail="O e-mail do administrador já está cadastrado na plataforma.")
+
+    plano_obj = db.query(PlanoSaas).filter(PlanoSaas.codigo == plano_codigo).first()
+    if not plano_obj:
+        plano_obj = db.query(PlanoSaas).filter(PlanoSaas.ativo == True).order_by(PlanoSaas.ordem.asc()).first()
+
+    final_valor = valor_mensal if valor_mensal is not None else (plano_obj.preco_mensal if plano_obj else Decimal("297.00"))
+    final_lim_users = limite_usuarios if limite_usuarios is not None else (plano_obj.limite_usuarios if plano_obj else 10)
+    final_lim_clients = limite_clientes if limite_clientes is not None else (plano_obj.limite_clientes if plano_obj else 300)
+    final_modulos = modulos_json or (plano_obj.modulos_json if plano_obj and plano_obj.modulos_json else json.dumps(DEFAULT_MODULOS_TENANT, ensure_ascii=False))
+
+    default_brand = {
+        "nome_plataforma": nome_empresa.strip()[:28].upper(),
+        "subtitulo_plataforma": "GESTÃO EMPRESARIAL",
+        "logo_url": "",
+        "favicon_url": "",
+        "cor_primaria": "#0096B4",
+        "cor_secundaria": "#0A1D37",
+        "cor_sidebar": "#0A1D37",
+        "tema_padrao": "light",
+        "ocultar_powered_by": False,
+    }
+    final_branding = branding_json or json.dumps(default_brand, ensure_ascii=False)
+
+    hoje = date.today()
+    if status_assinatura == "trial" and not trial_ate:
+        trial_ate = hoje + timedelta(days=14)
+    if not vencimento_assinatura:
+        vencimento_assinatura = trial_ate or (hoje + timedelta(days=30))
+
+    org = Organizacao(
+        nome=nome_empresa.strip(),
+        slug=clean_slug,
+        dominio_customizado=dom_clean,
+        is_master=False,
+        plano=plano_obj.codigo if plano_obj else plano_codigo,
+        status_assinatura=status_assinatura,
+        valor_mensal=final_valor,
+        limite_usuarios=final_lim_users,
+        limite_clientes=final_lim_clients,
+        trial_ate=trial_ate,
+        vencimento_assinatura=vencimento_assinatura,
+        modulos_json=final_modulos,
+        branding_json=final_branding,
+        observacoes=observacoes,
+    )
+    db.add(org)
+    db.flush()
+
+    db.add(
+        ConfiguracaoEmpresa(
+            organizacao_id=org.id,
+            razao_social=nome_empresa.strip(),
+            nome_fantasia=nome_empresa.strip(),
+            cnpj=cnpj or None,
+            email_financeiro=admin_email.strip().lower(),
+            telefone=telefone or None,
+            chave_pix=admin_email.strip().lower(),
+            titular_pix=nome_empresa.strip(),
+            permissoes_json=json.dumps(DEFAULT_PERMISSOES, ensure_ascii=False),
+        )
+    )
+
+    admin_user = Usuario(
+        organizacao_id=org.id,
+        nome=admin_nome.strip(),
+        email=admin_email.strip().lower(),
+        senha_hash=gerar_hash_senha(admin_senha),
+        perfil="admin",
+        cargo="Administrador Geral",
+        telefone=telefone or None,
+        ativo=True,
+    )
+    db.add(admin_user)
+    db.flush()
+
+    master_org = db.query(Organizacao).filter(Organizacao.is_master == True).first()
+    if master_org and gerar_contrato_master:
+        cli_master = db.query(Cliente).filter(
+            Cliente.organizacao_id == master_org.id,
+            Cliente.email == admin_email.strip().lower(),
+        ).first()
+        if not cli_master:
+            cli_master = Cliente(
+                organizacao_id=master_org.id,
+                nome_empresa=nome_empresa.strip(),
+                contato_nome=admin_nome.strip(),
+                email=admin_email.strip().lower(),
+                telefone=telefone or None,
+                documento=cnpj or None,
+                status_funil="ativo" if status_assinatura == "ativo" else "negociacao",
+                origem=f"Portal SaaS ({clean_slug}.nexuscodebrasil.com.br)",
+                observacoes=f"Assinante Portal Nexus SaaS — Plano {org.plano.upper()} ({status_assinatura}).",
+            )
+            db.add(cli_master)
+            db.flush()
+        org.cliente_master_id = cli_master.id
+
+        if float(final_valor or 0) > 0:
+            ct_master = ContratoRecorrente(
+                organizacao_id=master_org.id,
+                cliente_id=cli_master.id,
+                titulo=f"Licença Portal Nexus SaaS — {org.nome} ({org.plano.upper()})",
+                valor_mensal=final_valor,
+                dia_vencimento=dia_vencimento,
+                data_inicio=trial_ate if status_assinatura == "trial" and trial_ate else hoje,
+                status="ativo" if status_assinatura == "ativo" else "pausado",
+                descricao=f"Subdomínio: {clean_slug}.nexuscodebrasil.com.br | Limite: {final_lim_users} usuários.",
+            )
+            db.add(ct_master)
+            db.flush()
+            org.contrato_master_id = ct_master.id
+
+            if status_assinatura == "ativo":
+                db.add(
+                    Fatura(
+                        organizacao_id=master_org.id,
+                        cliente_id=cli_master.id,
+                        descricao=f"Assinatura Portal Nexus SaaS ({org.plano.upper()}) — {org.nome}",
+                        valor=final_valor,
+                        status="pendente",
+                        forma_pagamento="PIX",
+                        vencimento=vencimento_assinatura or (hoje + timedelta(days=5)),
+                    )
+                )
+
+        criar_notificacao(
+            db,
+            titulo=f"Novo Portal SaaS Ativado: {org.nome}",
+            mensagem=f"Subdomínio {clean_slug}.nexuscodebrasil.com.br ({status_assinatura.upper()}) criado.",
+            link_pagina="saas_tenants",
+            perfil_destino="admin",
+            org_id=master_org.id,
+        )
+
+    registrar_log(db, admin_nome.strip(), "CRIAR_PORTAL_SAAS", f"Portal '{org.nome}' ({clean_slug}) provisionado.", org_id=org.id)
+    return org, admin_user
+
+
+@router.post("/public/saas/onboarding", response_model=TokenResponse, status_code=201, tags=["SaaS White-Label"])
+def onboarding_automatizado_saas(
+    dados: SaasOnboardingCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    brand_init = {
+        "nome_plataforma": dados.nome_empresa.strip()[:28].upper(),
+        "subtitulo_plataforma": "GESTÃO EMPRESARIAL",
+        "logo_url": "",
+        "favicon_url": "",
+        "cor_primaria": dados.cor_primaria or "#0096B4",
+        "cor_secundaria": dados.cor_sidebar or "#0A1D37",
+        "cor_sidebar": dados.cor_sidebar or "#0A1D37",
+        "tema_padrao": "light",
+        "ocultar_powered_by": False,
+    }
+    org, admin_user = _provisionar_nova_organizacao(
+        db=db,
+        nome_empresa=dados.nome_empresa,
+        raw_slug=dados.slug,
+        plano_codigo=dados.plano,
+        admin_nome=dados.admin_nome,
+        admin_email=dados.admin_email,
+        admin_senha=dados.admin_senha,
+        status_assinatura="trial",
+        branding_json=json.dumps(brand_init, ensure_ascii=False),
+        telefone=dados.telefone,
+        cnpj=dados.cnpj,
+        gerar_contrato_master=True,
+    )
+    db.commit()
+    db.refresh(admin_user)
+
+    background_tasks.add_task(
+        enviar_email,
+        admin_user.email,
+        f"Seu Portal Empresarial {org.nome} está pronto!",
+        f"<p>Olá, <b>{admin_user.nome}</b>! Seu ambiente exclusivo foi ativado em <b>https://{org.slug}.nexuscodebrasil.com.br</b> com 14 dias de teste gratuito.</p>",
+    )
+
+    token = criar_token_acesso({
+        "sub": str(admin_user.id),
+        "org_id": org.id,
+        "is_master": False,
+        "perfil": admin_user.perfil,
+        "nome": admin_user.nome,
+        "email": admin_user.email,
+    })
+    return {"access_token": token, "token_type": "bearer", "usuario": admin_user}
+
+
+# ==================== PAINEL MASTER SAAS (GESTÃO DE PORTAIS COMPRADORES & PLANOS) ====================
+@router.get("/saas/dashboard", tags=["SaaS Master"])
+def obter_painel_master_saas(
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(exigir_master_admin),
+):
+    orgs = db.query(Organizacao).order_by(Organizacao.is_master.desc(), Organizacao.criado_em.desc()).all()
+    planos = db.query(PlanoSaas).order_by(PlanoSaas.ordem.asc(), PlanoSaas.id.asc()).all()
+
+    user_counts = dict(db.query(Usuario.organizacao_id, func.count(Usuario.id)).group_by(Usuario.organizacao_id).all())
+    client_counts = dict(db.query(Cliente.organizacao_id, func.count(Cliente.id)).group_by(Cliente.organizacao_id).all())
+
+    orgs_out = []
+    for o in orgs:
+        item = OrganizacaoOut.model_validate(o).model_dump()
+        item["usuarios_count"] = int(user_counts.get(o.id, 0))
+        item["clientes_count"] = int(client_counts.get(o.id, 0))
+        orgs_out.append(item)
+
+    tenants_only = [o for o in orgs if not o.is_master]
+    ativos_count = sum(1 for o in tenants_only if o.status_assinatura == "ativo")
+    trial_count = sum(1 for o in tenants_only if o.status_assinatura == "trial")
+    inad_count = sum(1 for o in tenants_only if o.status_assinatura in ("inadimplente", "suspenso"))
+    mrr_saas = sum(float(o.valor_mensal or 0) for o in tenants_only if o.status_assinatura == "ativo")
+
+    return {
+        "kpi": {
+            "total_portais": len(tenants_only),
+            "portais_ativos": ativos_count,
+            "portais_trial": trial_count,
+            "portais_inadimplentes": inad_count,
+            "mrr_saas": round(mrr_saas, 2),
+        },
+        "organizacoes": orgs_out,
+        "planos": [PlanoSaasOut.model_validate(p).model_dump() for p in planos],
+    }
+
+
+@router.post("/saas/organizacoes", response_model=OrganizacaoOut, status_code=201, tags=["SaaS Master"])
+def criar_portal_comprador_assistido(
+    dados: OrganizacaoCreate,
+    db: Session = Depends(get_db),
+    master_admin: Usuario = Depends(exigir_master_admin),
+):
+    org, _ = _provisionar_nova_organizacao(
+        db=db,
+        nome_empresa=dados.nome,
+        raw_slug=dados.slug,
+        plano_codigo=dados.plano,
+        admin_nome=dados.admin_nome,
+        admin_email=dados.admin_email,
+        admin_senha=dados.admin_senha,
+        status_assinatura=dados.status_assinatura,
+        valor_mensal=dados.valor_mensal,
+        limite_usuarios=dados.limite_usuarios,
+        limite_clientes=dados.limite_clientes,
+        trial_ate=dados.trial_ate,
+        vencimento_assinatura=dados.vencimento_assinatura,
+        modulos_json=dados.modulos_json,
+        branding_json=dados.branding_json,
+        dominio_customizado=dados.dominio_customizado,
+        telefone=dados.telefone,
+        cnpj=dados.cnpj,
+        observacoes=dados.observacoes,
+        gerar_contrato_master=dados.gerar_contrato_master,
+        dia_vencimento=dados.dia_vencimento,
+    )
+    registrar_log(db, master_admin.nome, "VENDA_ASSISTIDA_SAAS", f"Criou portal '{org.nome}' ({org.slug}.nexuscodebrasil.com.br)", org_id=master_admin.organizacao_id)
+    db.commit()
+    db.refresh(org)
+    out = OrganizacaoOut.model_validate(org)
+    out.usuarios_count = 1
+    out.clientes_count = 0
+    return out
+
+
+@router.patch("/saas/organizacoes/{org_id}", response_model=OrganizacaoOut, tags=["SaaS Master"])
+def atualizar_portal_comprador(
+    org_id: int,
+    dados: OrganizacaoUpdate,
+    db: Session = Depends(get_db),
+    master_admin: Usuario = Depends(exigir_master_admin),
+):
+    org = db.query(Organizacao).filter(Organizacao.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Portal não encontrado.")
+
+    payload = dados.model_dump(exclude_unset=True)
+    if "slug" in payload and payload["slug"]:
+        new_slug = _slugify_tenant(payload["slug"])
+        if new_slug != org.slug:
+            if new_slug in RESERVED_SLUGS or db.query(Organizacao.id).filter(func.lower(Organizacao.slug) == new_slug, Organizacao.id != org.id).first():
+                raise HTTPException(status_code=400, detail="Este subdomínio já está em uso ou é reservado.")
+            payload["slug"] = new_slug
+
+    if "dominio_customizado" in payload:
+        dom = (payload["dominio_customizado"] or "").strip().lower() or None
+        if dom and db.query(Organizacao.id).filter(func.lower(Organizacao.dominio_customizado) == dom, Organizacao.id != org.id).first():
+            raise HTTPException(status_code=400, detail="Este domínio customizado já está vinculado a outro portal.")
+        payload["dominio_customizado"] = dom
+
+    for campo, valor in payload.items():
+        setattr(org, campo, valor)
+
+    if org.contrato_master_id:
+        ct = db.query(ContratoRecorrente).filter(ContratoRecorrente.id == org.contrato_master_id).first()
+        if ct:
+            if "valor_mensal" in payload and payload["valor_mensal"] is not None:
+                ct.valor_mensal = payload["valor_mensal"]
+            if "status_assinatura" in payload:
+                ct.status = "ativo" if payload["status_assinatura"] == "ativo" else ("encerrado" if payload["status_assinatura"] == "suspenso" else "pausado")
+
+    registrar_log(db, master_admin.nome, "ATUALIZAR_PORTAL_SAAS", f"Atualizou portal #{org.id} ({org.nome})", org_id=master_admin.organizacao_id)
+    db.commit()
+    db.refresh(org)
+    out = OrganizacaoOut.model_validate(org)
+    out.usuarios_count = db.query(func.count(Usuario.id)).filter(Usuario.organizacao_id == org.id).scalar() or 0
+    out.clientes_count = db.query(func.count(Cliente.id)).filter(Cliente.organizacao_id == org.id).scalar() or 0
+    return out
+
+
+@router.delete("/saas/organizacoes/{org_id}", status_code=204, tags=["SaaS Master"])
+def remover_portal_comprador(
+    org_id: int,
+    db: Session = Depends(get_db),
+    master_admin: Usuario = Depends(exigir_master_admin),
+):
+    org = db.query(Organizacao).filter(Organizacao.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Portal não encontrado.")
+    if org.is_master:
+        raise HTTPException(status_code=400, detail="A organização Master principal não pode ser excluída.")
+    registrar_log(db, master_admin.nome, "EXCLUIR_PORTAL_SAAS", f"Removeu portal '{org.nome}' ({org.slug})", org_id=master_admin.organizacao_id)
+    db.delete(org)
+    db.commit()
+
+
+@router.post("/saas/organizacoes/{org_id}/impersonate", tags=["SaaS Master"])
+def acessar_portal_comprador_como_admin(
+    org_id: int,
+    db: Session = Depends(get_db),
+    master_admin: Usuario = Depends(exigir_master_admin),
+):
+    org = db.query(Organizacao).filter(Organizacao.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Portal não encontrado.")
+    target_admin = (
+        db.query(Usuario)
+        .filter(Usuario.organizacao_id == org.id, Usuario.perfil == "admin", Usuario.ativo == True)
+        .order_by(Usuario.id.asc())
+        .first()
+    )
+    if not target_admin:
+        raise HTTPException(status_code=404, detail="Nenhum administrador ativo encontrado neste portal.")
+
+    token = criar_token_acesso(
+        {
+            "sub": str(target_admin.id),
+            "org_id": org.id,
+            "is_master": bool(org.is_master),
+            "perfil": "admin",
+            "nome": target_admin.nome,
+            "email": target_admin.email,
+        },
+        expires_minutes=120,
+    )
+    registrar_log(db, master_admin.nome, "IMPERSONATE_SAAS", f"Acessou portal '{org.nome}' ({org.slug}) como administrador.", org_id=master_admin.organizacao_id)
+    db.commit()
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "tenant_slug": org.slug,
+        "usuario": UsuarioListOut.model_validate(target_admin),
+    }
+
+
+@router.post("/saas/planos", response_model=PlanoSaasOut, status_code=201, tags=["SaaS Master"])
+def criar_plano_saas(
+    dados: PlanoSaasCreate,
+    db: Session = Depends(get_db),
+    master_admin: Usuario = Depends(exigir_master_admin),
+):
+    cod = _slugify_tenant(dados.codigo)
+    if db.query(PlanoSaas.id).filter(PlanoSaas.codigo == cod).first():
+        raise HTTPException(status_code=400, detail="Já existe um plano com este código.")
+    payload = dados.model_dump()
+    payload["codigo"] = cod
+    pl = PlanoSaas(**payload)
+    db.add(pl)
+    registrar_log(db, master_admin.nome, "CRIAR_PLANO_SAAS", f"Criou plano SaaS '{pl.nome}'", org_id=master_admin.organizacao_id)
+    db.commit()
+    db.refresh(pl)
+    return pl
+
+
+@router.patch("/saas/planos/{plano_id}", response_model=PlanoSaasOut, tags=["SaaS Master"])
+def atualizar_plano_saas(
+    plano_id: int,
+    dados: PlanoSaasUpdate,
+    db: Session = Depends(get_db),
+    master_admin: Usuario = Depends(exigir_master_admin),
+):
+    pl = db.query(PlanoSaas).filter(PlanoSaas.id == plano_id).first()
+    if not pl:
+        raise HTTPException(status_code=404, detail="Plano SaaS não encontrado.")
+    for campo, valor in dados.model_dump(exclude_unset=True).items():
+        setattr(pl, campo, valor)
+    registrar_log(db, master_admin.nome, "EDITAR_PLANO_SAAS", f"Atualizou plano SaaS '{pl.nome}'", org_id=master_admin.organizacao_id)
+    db.commit()
+    db.refresh(pl)
+    return pl
+
+
+@router.delete("/saas/planos/{plano_id}", status_code=204, tags=["SaaS Master"])
+def remover_plano_saas(
+    plano_id: int,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(exigir_master_admin),
+):
+    pl = db.query(PlanoSaas).filter(PlanoSaas.id == plano_id).first()
+    if not pl:
+        raise HTTPException(status_code=404, detail="Plano SaaS não encontrado.")
+    db.delete(pl)
+    db.commit()
 
 
 # ==================== AUTENTICAÇÃO ====================
@@ -504,7 +1266,7 @@ def login(dados: LoginRequest, db: Session = Depends(get_db)):
     usuario = (
         db.query(Usuario)
         .options(defer(Usuario.foto_url), defer(Usuario.resumo_profissional))
-        .filter(Usuario.email == dados.email)
+        .filter(func.lower(Usuario.email) == dados.email.strip().lower())
         .first()
     )
     if not usuario or not verificar_senha(dados.senha, usuario.senha_hash):
@@ -512,18 +1274,34 @@ def login(dados: LoginRequest, db: Session = Depends(get_db)):
     if not usuario.ativo:
         raise HTTPException(status_code=403, detail="Conta desativada. Entre em contato com o administrador.")
 
-    token = criar_token_acesso({"sub": str(usuario.id), "perfil": usuario.perfil, "nome": usuario.nome, "email": usuario.email})
+    org = db.query(Organizacao).filter(Organizacao.id == usuario.organizacao_id).first()
+    if org and not org.is_master and org.status_assinatura == "suspenso":
+        raise HTTPException(status_code=403, detail="A assinatura do portal desta empresa encontra-se suspensa. Entre em contato com o suporte.")
+
+    token = criar_token_acesso({
+        "sub": str(usuario.id),
+        "org_id": usuario.organizacao_id,
+        "is_master": bool(org.is_master if org else False),
+        "perfil": usuario.perfil,
+        "nome": usuario.nome,
+        "email": usuario.email,
+    })
     return {"access_token": token, "token_type": "bearer", "usuario": usuario}
 
 
 @router.post("/auth/register", response_model=TokenResponse, status_code=201, tags=["Auth"])
-def registrar_conta(dados: RegisterRequest, db: Session = Depends(get_db)):
-    if db.query(Usuario.id).filter(Usuario.email == dados.email).first():
+def registrar_conta(dados: RegisterRequest, req: Request, db: Session = Depends(get_db)):
+    if db.query(Usuario.id).filter(func.lower(Usuario.email) == dados.email.strip().lower()).first():
         raise HTTPException(status_code=400, detail="Este endereço de e-mail já está vinculado a uma conta.")
 
+    org = _resolver_org_por_request(req, db)
+    if not org.is_master and org.status_assinatura == "suspenso":
+        raise HTTPException(status_code=403, detail="Este portal está temporariamente suspenso.")
+
     novo = Usuario(
+        organizacao_id=org.id,
         nome=dados.nome,
-        email=dados.email,
+        email=dados.email.strip().lower(),
         senha_hash=gerar_hash_senha(dados.senha),
         perfil="cliente",
         ativo=True,
@@ -531,13 +1309,17 @@ def registrar_conta(dados: RegisterRequest, db: Session = Depends(get_db)):
     db.add(novo)
     db.flush()
 
-    cliente_existente = db.query(Cliente).filter(Cliente.email == novo.email).first()
+    cliente_existente = db.query(Cliente).filter(
+        Cliente.organizacao_id == org.id,
+        Cliente.email == novo.email,
+    ).first()
     if cliente_existente:
         if not cliente_existente.usuario_portal_id:
             cliente_existente.usuario_portal_id = novo.id
     else:
         db.add(
             Cliente(
+                organizacao_id=org.id,
                 usuario_portal_id=novo.id,
                 nome_empresa=novo.nome,
                 contato_nome=novo.nome,
@@ -547,35 +1329,44 @@ def registrar_conta(dados: RegisterRequest, db: Session = Depends(get_db)):
             )
         )
 
-    registrar_log(db, novo.nome, "CADASTRO", f"Nova conta de cliente criada: {novo.email}")
+    registrar_log(db, novo.nome, "CADASTRO", f"Nova conta de cliente criada: {novo.email}", org_id=org.id)
     db.commit()
     db.refresh(novo)
 
-    token = criar_token_acesso({"sub": str(novo.id), "perfil": novo.perfil, "nome": novo.nome, "email": novo.email})
+    token = criar_token_acesso({
+        "sub": str(novo.id),
+        "org_id": org.id,
+        "is_master": bool(org.is_master),
+        "perfil": novo.perfil,
+        "nome": novo.nome,
+        "email": novo.email,
+    })
     return {"access_token": token, "token_type": "bearer", "usuario": novo}
 
 
 @router.post("/auth/forgot-password", tags=["Auth"])
 def recuperar_senha(dados: ForgotPasswordRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    usuario = db.query(Usuario).filter(Usuario.email == dados.email).first()
+    usuario = db.query(Usuario).filter(func.lower(Usuario.email) == dados.email.strip().lower()).first()
     if usuario and usuario.ativo:
+        org = db.query(Organizacao).filter(Organizacao.id == usuario.organizacao_id).first()
+        base_host = "www.nexuscodebrasil.com.br" if (not org or org.is_master) else f"{org.slug}.nexuscodebrasil.com.br"
         reset_token = jwt.encode(
             {"sub": str(usuario.id), "exp": datetime.utcnow() + timedelta(minutes=20), "type": "reset"},
             SECRET_KEY,
             algorithm=ALGORITHM,
         )
-        link = f"https://www.nexuscodebrasil.com.br/login.html?reset_token={reset_token}"
+        link = f"https://{base_host}/login.html?reset_token={reset_token}"
         corpo_email = f"""
         <div style="font-family: Arial, sans-serif; color: #0A1D37;">
             <h2 style="color: #00B4D8;">Recuperação de Senha</h2>
             <p>Olá, {usuario.nome}.</p>
-            <p>Recebemos uma solicitação para redefinir sua senha na plataforma Nexus Code Brasil.</p>
+            <p>Recebemos uma solicitação para redefinir sua senha na plataforma {org.nome if org else 'Nexus Code Brasil'}.</p>
             <p><a href="{link}" style="background-color: #00B4D8; color: #0A1D37; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">Redefinir Minha Senha</a></p>
             <p style="font-size:12px; color:#64748b;">O link expira em 20 minutos. Caso não tenha solicitado, ignore este e-mail.</p>
         </div>
         """
-        background_tasks.add_task(enviar_email, usuario.email, "Redefinição de Senha - Nexus Code Brasil", corpo_email)
-        registrar_log(db, usuario.nome, "RECUPERAR_SENHA", f"Token de recuperação gerado para {usuario.email}")
+        background_tasks.add_task(enviar_email, usuario.email, f"Redefinição de Senha - {org.nome if org else 'Nexus Code'}", corpo_email)
+        registrar_log(db, usuario.nome, "RECUPERAR_SENHA", f"Token de recuperação gerado para {usuario.email}", org_id=usuario.organizacao_id)
         db.commit()
 
     return {
@@ -598,7 +1389,7 @@ def redefinir_senha_com_token(dados: ResetPasswordRequest, db: Session = Depends
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
 
     usuario.senha_hash = gerar_hash_senha(dados.nova_senha)
-    registrar_log(db, usuario.nome, "REDEFINIR_SENHA", "Senha redefinida via link seguro.")
+    registrar_log(db, usuario.nome, "REDEFINIR_SENHA", "Senha redefinida via link seguro.", org_id=usuario.organizacao_id)
     db.commit()
     return {"message": "Senha redefinida com sucesso! Você já pode entrar com sua nova senha."}
 
@@ -623,7 +1414,7 @@ def atualizar_meu_perfil(dados: UsuarioUpdate, db: Session = Depends(get_db), us
 
     usuario.termos_aceitos_em = datetime.utcnow()
 
-    registrar_log(db, usuario.nome, "EDITAR_PERFIL", "Atualizou dados cadastrais, currículo e consentimento LGPD.")
+    registrar_log(db, usuario.nome, "EDITAR_PERFIL", "Atualizou dados cadastrais, currículo e consentimento LGPD.", org_id=usuario.organizacao_id)
     db.commit()
     db.refresh(usuario)
     return usuario
@@ -634,24 +1425,29 @@ def perfil_logado(usuario: Usuario = Depends(get_usuario_db)):
     return usuario
 
 
+
 # ==================== SOLICITAÇÕES DE ORÇAMENTO (SITE & PORTAL -> CRM) ====================
 @router.post("/public/orcamentos", status_code=201, tags=["Orçamentos"])
-def receber_solicitacao_site(dados: SolicitacaoPublicCreate, db: Session = Depends(get_db)):
+def receber_solicitacao_site(dados: SolicitacaoPublicCreate, req: Request, db: Session = Depends(get_db)):
     if dados.website:
         return {"message": "Solicitação recebida com sucesso."}
+
+    org = _resolver_org_por_request(req, db)
 
     tipo_map = {
         "web": "Desenvolvimento Web",
         "mobile": "Aplicativo Mobile",
         "system": "Sistema Personalizado",
         "ecommerce": "E-commerce",
+        "saas": "Portal Nexus Enterprise SaaS",
         "other": "Outro",
     }
     tipo_legivel = tipo_map.get(dados.tipo_projeto or "", dados.tipo_projeto or "Não especificado")
 
-    cliente = db.query(Cliente).filter(Cliente.email == dados.email).first()
+    cliente = db.query(Cliente).filter(Cliente.organizacao_id == org.id, Cliente.email == dados.email).first()
     if not cliente:
         cliente = Cliente(
+            organizacao_id=org.id,
             nome_empresa=(dados.empresa or dados.nome).strip(),
             contato_nome=dados.nome.strip(),
             email=dados.email,
@@ -669,6 +1465,7 @@ def receber_solicitacao_site(dados: SolicitacaoPublicCreate, db: Session = Depen
             cliente.telefone = dados.telefone.strip()
 
     solicitacao = SolicitacaoOrcamento(
+        organizacao_id=org.id,
         cliente_id=cliente.id,
         nome=dados.nome.strip(),
         empresa=dados.empresa.strip() if dados.empresa else None,
@@ -682,6 +1479,7 @@ def receber_solicitacao_site(dados: SolicitacaoPublicCreate, db: Session = Depen
     db.flush()
 
     db.add(Interacao(
+        organizacao_id=org.id,
         cliente_id=cliente.id,
         tipo="proposta",
         resumo=f"Solicitação via site ({tipo_legivel}): {dados.mensagem.strip()}",
@@ -694,6 +1492,7 @@ def receber_solicitacao_site(dados: SolicitacaoPublicCreate, db: Session = Depen
         mensagem=f"{dados.nome.strip()} solicitou orçamento para {tipo_legivel}.",
         link_pagina="quotes",
         perfil_destino="equipe",
+        org_id=org.id,
     )
 
     registrar_log(
@@ -701,6 +1500,7 @@ def receber_solicitacao_site(dados: SolicitacaoPublicCreate, db: Session = Depen
         dados.nome.strip(),
         "SOLICITACAO_SITE",
         f"Nova solicitação de orçamento ({tipo_legivel}) de {dados.email}",
+        org_id=org.id,
     )
     db.commit()
     db.refresh(solicitacao)
@@ -724,6 +1524,7 @@ def solicitar_novo_projeto_portal(
     detalhes += f")\n{dados.mensagem.strip()}"
 
     sol = SolicitacaoOrcamento(
+        organizacao_id=usuario.organizacao_id,
         cliente_id=cliente.id,
         nome=usuario.nome,
         empresa=cliente.nome_empresa,
@@ -742,8 +1543,9 @@ def solicitar_novo_projeto_portal(
         mensagem=f"{cliente.nome_empresa} solicitou: {dados.titulo.strip()} ({dados.tipo_projeto}).",
         link_pagina="quotes",
         perfil_destino="equipe",
+        org_id=usuario.organizacao_id,
     )
-    registrar_log(db, usuario.nome, "SOLICITACAO_PORTAL", f"Solicitou novo projeto via portal: {dados.titulo}")
+    registrar_log(db, usuario.nome, "SOLICITACAO_PORTAL", f"Solicitou novo projeto via portal: {dados.titulo}", org_id=usuario.organizacao_id)
     db.commit()
     db.refresh(sol)
     return sol
@@ -753,9 +1555,9 @@ def solicitar_novo_projeto_portal(
 def listar_solicitacoes(
     status_solicitacao: Optional[str] = None,
     db: Session = Depends(get_db),
-    _: Usuario = Depends(exigir_equipe),
+    equipe: Usuario = Depends(exigir_equipe),
 ):
-    query = db.query(SolicitacaoOrcamento)
+    query = db.query(SolicitacaoOrcamento).filter(SolicitacaoOrcamento.organizacao_id == equipe.organizacao_id)
     if status_solicitacao:
         query = query.filter(SolicitacaoOrcamento.status == status_solicitacao)
     return query.order_by(SolicitacaoOrcamento.criado_em.desc()).all()
@@ -768,7 +1570,10 @@ def listar_solicitacoes_cliente(
 ):
     return (
         db.query(SolicitacaoOrcamento)
-        .filter(SolicitacaoOrcamento.email == usuario.email)
+        .filter(
+            SolicitacaoOrcamento.organizacao_id == usuario.organizacao_id,
+            SolicitacaoOrcamento.email == usuario.email,
+        )
         .order_by(SolicitacaoOrcamento.criado_em.desc())
         .all()
     )
@@ -782,9 +1587,15 @@ def responder_solicitacao(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    sol = db.query(SolicitacaoOrcamento).filter(SolicitacaoOrcamento.id == orcamento_id).first()
+    sol = db.query(SolicitacaoOrcamento).filter(
+        SolicitacaoOrcamento.id == orcamento_id,
+        SolicitacaoOrcamento.organizacao_id == equipe.organizacao_id,
+    ).first()
     if not sol:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+
+    org = db.query(Organizacao).filter(Organizacao.id == equipe.organizacao_id).first()
+    org_nome = org.nome if org else "Nexus Code Brasil"
 
     sol.resposta = dados.resposta.strip()
     sol.status = dados.status
@@ -792,7 +1603,7 @@ def responder_solicitacao(
     sol.respondido_em = datetime.utcnow()
 
     if sol.cliente_id:
-        cliente = db.query(Cliente).filter(Cliente.id == sol.cliente_id).first()
+        cliente = db.query(Cliente).filter(Cliente.id == sol.cliente_id, Cliente.organizacao_id == equipe.organizacao_id).first()
         if cliente:
             if cliente.status_funil == "lead":
                 cliente.status_funil = "proposta"
@@ -803,8 +1614,10 @@ def responder_solicitacao(
                     mensagem=f"{equipe.nome} respondeu à sua solicitação ({sol.tipo_projeto}).",
                     link_pagina="quotes",
                     usuario_id=cliente.usuario_portal_id,
+                    org_id=equipe.organizacao_id,
                 )
         db.add(Interacao(
+            organizacao_id=equipe.organizacao_id,
             cliente_id=sol.cliente_id,
             usuario_id=equipe.id,
             tipo="proposta",
@@ -814,16 +1627,16 @@ def responder_solicitacao(
     corpo_email = f"""
     <div style="font-family: Arial, sans-serif; color: #0A1D37;">
         <h2 style="color: #00B4D8;">Olá, {sol.nome}.</h2>
-        <p>A equipe da <b>Nexus Code Brasil</b> respondeu à sua solicitação de projeto ({sol.tipo_projeto}):</p>
+        <p>A equipe da <b>{org_nome}</b> respondeu à sua solicitação de projeto ({sol.tipo_projeto}):</p>
         <div style="padding: 15px; border-left: 4px solid #00B4D8; background-color: #f8fafc; margin-bottom: 20px;">
             {sol.resposta.replace(chr(10), '<br>')}
         </div>
         <p>Acesse o Portal do Cliente para acompanhar o status e interagir com nossa equipe.</p>
     </div>
     """
-    background_tasks.add_task(enviar_email, sol.email, f"Retorno: {sol.tipo_projeto} - Nexus Code", corpo_email)
+    background_tasks.add_task(enviar_email, sol.email, f"Retorno: {sol.tipo_projeto} - {org_nome}", corpo_email)
 
-    registrar_log(db, equipe.nome, "RESPONDER_ORCAMENTO", f"Respondeu solicitação #{sol.id} ({sol.nome})")
+    registrar_log(db, equipe.nome, "RESPONDER_ORCAMENTO", f"Respondeu solicitação #{sol.id} ({sol.nome})", org_id=equipe.organizacao_id)
     db.commit()
     db.refresh(sol)
     return sol
@@ -836,7 +1649,10 @@ def atualizar_solicitacao(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    sol = db.query(SolicitacaoOrcamento).filter(SolicitacaoOrcamento.id == orcamento_id).first()
+    sol = db.query(SolicitacaoOrcamento).filter(
+        SolicitacaoOrcamento.id == orcamento_id,
+        SolicitacaoOrcamento.organizacao_id == equipe.organizacao_id,
+    ).first()
     if not sol:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
 
@@ -844,7 +1660,7 @@ def atualizar_solicitacao(
     for campo, valor in payload.items():
         setattr(sol, campo, valor)
 
-    registrar_log(db, equipe.nome, "EDITAR_ORCAMENTO", f"Atualizou solicitação #{sol.id}")
+    registrar_log(db, equipe.nome, "EDITAR_ORCAMENTO", f"Atualizou solicitação #{sol.id}", org_id=equipe.organizacao_id)
     db.commit()
     db.refresh(sol)
     return sol
@@ -856,46 +1672,62 @@ def remover_solicitacao(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    sol = db.query(SolicitacaoOrcamento).filter(SolicitacaoOrcamento.id == orcamento_id).first()
+    sol = db.query(SolicitacaoOrcamento).filter(
+        SolicitacaoOrcamento.id == orcamento_id,
+        SolicitacaoOrcamento.organizacao_id == equipe.organizacao_id,
+    ).first()
     if not sol:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
-    registrar_log(db, equipe.nome, "EXCLUIR_ORCAMENTO", f"Removeu solicitação #{sol.id} ({sol.nome})")
+    registrar_log(db, equipe.nome, "EXCLUIR_ORCAMENTO", f"Removeu solicitação #{sol.id} ({sol.nome})", org_id=equipe.organizacao_id)
     db.delete(sol)
     db.commit()
 
 
-# ==================== BOOTSTRAP CONSOLIDADO DE ALTA VELOCIDADE ====================
+# ==================== BOOTSTRAP CONSOLIDADO MULTI-TENANT ====================
 @router.get("/bootstrap", tags=["Dashboard"])
 def bootstrap_painel(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(exigir_equipe),
 ):
-    clientes = db.query(Cliente).order_by(Cliente.criado_em.desc()).all()
+    org_id = usuario.organizacao_id
+    org = _get_org_or_404(db, org_id)
+
+    branding = _parse_json_dict(org.branding_json, DEFAULT_BRANDING_MASTER)
+    modulos = dict(DEFAULT_MODULOS_TENANT)
+    if org.is_master:
+        modulos["loja"] = True
+        modulos["saas_tenants"] = True
+    else:
+        modulos = _parse_json_dict(org.modulos_json, DEFAULT_MODULOS_TENANT)
+
+    clientes = db.query(Cliente).filter(Cliente.organizacao_id == org_id).order_by(Cliente.criado_em.desc()).all()
     usuarios = (
         db.query(Usuario)
         .options(defer(Usuario.foto_url), defer(Usuario.resumo_profissional))
+        .filter(Usuario.organizacao_id == org_id)
         .order_by(Usuario.nome)
         .all()
     )
-    projetos = db.query(Projeto).order_by(Projeto.criado_em.desc()).all()
-    orcamentos = db.query(SolicitacaoOrcamento).order_by(SolicitacaoOrcamento.criado_em.desc()).all()
-    tarefas = db.query(Tarefa).order_by(Tarefa.criado_em.desc()).all()
-    propostas = db.query(PropostaComercial).order_by(PropostaComercial.criado_em.desc()).all()
-    despesas = db.query(Despesa).order_by(Despesa.vencimento.asc()).all()
-    contratos = db.query(ContratoRecorrente).order_by(ContratoRecorrente.criado_em.desc()).all()
-    apontamentos = db.query(ApontamentoHora).order_by(ApontamentoHora.data_trabalho.desc(), ApontamentoHora.id.desc()).all()
-    chamados = db.query(ChamadoSuporte).order_by(ChamadoSuporte.criado_em.desc()).all()
-    ativos = db.query(AtivoInfra).order_by(AtivoInfra.data_vencimento.asc().nullslast()).all()
-    empresa_cfg = db.query(ConfiguracaoEmpresa).first()
+    projetos = db.query(Projeto).filter(Projeto.organizacao_id == org_id).order_by(Projeto.criado_em.desc()).all()
+    orcamentos = db.query(SolicitacaoOrcamento).filter(SolicitacaoOrcamento.organizacao_id == org_id).order_by(SolicitacaoOrcamento.criado_em.desc()).all()
+    tarefas = db.query(Tarefa).filter(Tarefa.organizacao_id == org_id).order_by(Tarefa.criado_em.desc()).all()
+    propostas = db.query(PropostaComercial).filter(PropostaComercial.organizacao_id == org_id).order_by(PropostaComercial.criado_em.desc()).all()
+    despesas = db.query(Despesa).filter(Despesa.organizacao_id == org_id).order_by(Despesa.vencimento.asc()).all()
+    contratos = db.query(ContratoRecorrente).filter(ContratoRecorrente.organizacao_id == org_id).order_by(ContratoRecorrente.criado_em.desc()).all()
+    apontamentos = db.query(ApontamentoHora).filter(ApontamentoHora.organizacao_id == org_id).order_by(ApontamentoHora.data_trabalho.desc(), ApontamentoHora.id.desc()).all()
+    chamados = db.query(ChamadoSuporte).filter(ChamadoSuporte.organizacao_id == org_id).order_by(ChamadoSuporte.criado_em.desc()).all()
+    ativos = db.query(AtivoInfra).filter(AtivoInfra.organizacao_id == org_id).order_by(AtivoInfra.data_vencimento.asc().nullslast()).all()
+    empresa_cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org_id).first()
 
     notificacoes = (
         db.query(Notificacao)
         .filter(
+            Notificacao.organizacao_id == org_id,
             or_(
                 Notificacao.usuario_id == usuario.id,
                 Notificacao.perfil_destino == "equipe",
                 Notificacao.perfil_destino == usuario.perfil,
-            )
+            ),
         )
         .order_by(Notificacao.criado_em.desc())
         .limit(25)
@@ -905,10 +1737,11 @@ def bootstrap_painel(
     agg = db.execute(
         text("""
             SELECT
-                COALESCE((SELECT SUM(valor) FROM faturas WHERE status = 'pago'), 0) AS receita_paga,
-                COALESCE((SELECT SUM(valor) FROM faturas WHERE status IN ('pendente', 'atrasado')), 0) AS receita_pendente,
-                COALESCE((SELECT COUNT(*) FROM registros_ponto WHERE status_ajuste = 'pendente_ajuste'), 0) AS ponto_pendentes
-        """)
+                COALESCE((SELECT SUM(valor) FROM faturas WHERE organizacao_id = :oid AND status = 'pago'), 0) AS receita_paga,
+                COALESCE((SELECT SUM(valor) FROM faturas WHERE organizacao_id = :oid AND status IN ('pendente', 'atrasado')), 0) AS receita_pendente,
+                COALESCE((SELECT COUNT(*) FROM registros_ponto WHERE organizacao_id = :oid AND status_ajuste = 'pendente_ajuste'), 0) AS ponto_pendentes
+        """),
+        {"oid": org_id},
     ).first()
 
     leads_abertos = sum(1 for c in clientes if c.status_funil in ("lead", "proposta", "negociacao"))
@@ -945,18 +1778,38 @@ def bootstrap_painel(
         "horas_totais": round(horas_totais, 2),
     }
 
-    holerite_q = db.query(Holerite).options(defer(Holerite.anexo_data))
-    informe_q = db.query(InformeRendimento).options(defer(InformeRendimento.anexo_data))
+    holerite_q = db.query(Holerite).options(defer(Holerite.anexo_data)).filter(Holerite.organizacao_id == org_id)
+    informe_q = db.query(InformeRendimento).options(defer(InformeRendimento.anexo_data)).filter(InformeRendimento.organizacao_id == org_id)
     if usuario.perfil != "admin":
         holerite_q = holerite_q.filter(Holerite.usuario_id == usuario.id)
         informe_q = informe_q.filter(InformeRendimento.usuario_id == usuario.id)
 
     holerites = holerite_q.order_by(Holerite.criado_em.desc()).all()
     informes = informe_q.order_by(InformeRendimento.ano_calendario.desc(), InformeRendimento.criado_em.desc()).all()
-    produtos_loja = db.query(ProdutoLoja).order_by(ProdutoLoja.ordem.asc(), ProdutoLoja.id.asc()).all()
-    pedidos_loja = db.query(PedidoLoja).order_by(PedidoLoja.criado_em.desc()).limit(50).all()
+    produtos_loja = db.query(ProdutoLoja).filter(ProdutoLoja.organizacao_id == org_id).order_by(ProdutoLoja.ordem.asc(), ProdutoLoja.id.asc()).all()
+    pedidos_loja = db.query(PedidoLoja).filter(PedidoLoja.organizacao_id == org_id).order_by(PedidoLoja.criado_em.desc()).limit(50).all()
+    reembolsos_q = db.query(ReembolsoDespesa).options(defer(ReembolsoDespesa.comprovante_data)).filter(ReembolsoDespesa.organizacao_id == org_id)
+    if usuario.perfil != "admin":
+        reembolsos_q = reembolsos_q.filter(ReembolsoDespesa.usuario_id == usuario.id)
+    reembolsos = reembolsos_q.order_by(ReembolsoDespesa.criado_em.desc()).all()
 
     return {
+        "organizacao": {
+            "id": org.id,
+            "nome": org.nome,
+            "slug": org.slug,
+            "dominio_customizado": org.dominio_customizado,
+            "subdominio_url": f"https://{org.slug}.nexuscodebrasil.com.br",
+            "is_master": bool(org.is_master),
+            "plano": org.plano,
+            "status_assinatura": org.status_assinatura,
+            "limite_usuarios": org.limite_usuarios,
+            "limite_clientes": org.limite_clientes,
+            "trial_ate": org.trial_ate.isoformat() if org.trial_ate else None,
+            "vencimento_assinatura": org.vencimento_assinatura.isoformat() if org.vencimento_assinatura else None,
+            "branding": branding,
+            "modulos": modulos,
+        },
         "kpi": kpi,
         "clientes": [ClienteOut.model_validate(c) for c in clientes],
         "usuarios": [UsuarioListOut.model_validate(u) for u in usuarios],
@@ -975,6 +1828,7 @@ def bootstrap_painel(
         "informes": [InformeListOut.model_validate(i) for i in informes],
         "produtos_loja": [ProdutoLojaOut.model_validate(pl) for pl in produtos_loja],
         "pedidos_loja": [PedidoLojaOut.model_validate(ped) for ped in pedidos_loja],
+        "reembolsos": [ReembolsoOut.model_validate(rb) for rb in reembolsos],
     }
 
 
@@ -992,12 +1846,20 @@ def bootstrap_portal_cliente(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_db),
 ):
+    org_id = usuario.organizacao_id
+    org = _get_org_or_404(db, org_id)
+    branding = _parse_json_dict(org.branding_json, DEFAULT_BRANDING_MASTER)
+    modulos = _parse_json_dict(org.modulos_json, DEFAULT_MODULOS_TENANT) if not org.is_master else dict(DEFAULT_MODULOS_TENANT)
+
     cliente = _obter_cliente_do_usuario(db, usuario)
-    empresa_cfg = db.query(ConfiguracaoEmpresa).first()
+    empresa_cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org_id).first()
 
     orcamentos = (
         db.query(SolicitacaoOrcamento)
-        .filter(SolicitacaoOrcamento.email == usuario.email)
+        .filter(
+            SolicitacaoOrcamento.organizacao_id == org_id,
+            SolicitacaoOrcamento.email == usuario.email,
+        )
         .order_by(SolicitacaoOrcamento.criado_em.desc())
         .all()
     )
@@ -1009,27 +1871,28 @@ def bootstrap_portal_cliente(
     chamados = []
 
     if cliente:
-        projetos = db.query(Projeto).filter(Projeto.cliente_id == cliente.id).order_by(Projeto.criado_em.desc()).all()
+        projetos = db.query(Projeto).filter(Projeto.organizacao_id == org_id, Projeto.cliente_id == cliente.id).order_by(Projeto.criado_em.desc()).all()
         proj_ids = [p.id for p in projetos]
         if proj_ids:
-            tarefas = db.query(Tarefa).filter(Tarefa.projeto_id.in_(proj_ids)).order_by(Tarefa.id.asc()).all()
+            tarefas = db.query(Tarefa).filter(Tarefa.organizacao_id == org_id, Tarefa.projeto_id.in_(proj_ids)).order_by(Tarefa.id.asc()).all()
         faturas = (
             db.query(Fatura)
             .options(defer(Fatura.comprovante_data))
-            .filter(Fatura.cliente_id == cliente.id)
+            .filter(Fatura.organizacao_id == org_id, Fatura.cliente_id == cliente.id)
             .order_by(Fatura.vencimento.asc())
             .all()
         )
-        propostas = db.query(PropostaComercial).filter(PropostaComercial.cliente_id == cliente.id).order_by(PropostaComercial.criado_em.desc()).all()
-        chamados = db.query(ChamadoSuporte).filter(ChamadoSuporte.cliente_id == cliente.id).order_by(ChamadoSuporte.criado_em.desc()).all()
+        propostas = db.query(PropostaComercial).filter(PropostaComercial.organizacao_id == org_id, PropostaComercial.cliente_id == cliente.id).order_by(PropostaComercial.criado_em.desc()).all()
+        chamados = db.query(ChamadoSuporte).filter(ChamadoSuporte.organizacao_id == org_id, ChamadoSuporte.cliente_id == cliente.id).order_by(ChamadoSuporte.criado_em.desc()).all()
 
     notificacoes = (
         db.query(Notificacao)
         .filter(
+            Notificacao.organizacao_id == org_id,
             or_(
                 Notificacao.usuario_id == usuario.id,
                 Notificacao.perfil_destino == "cliente",
-            )
+            ),
         )
         .order_by(Notificacao.criado_em.desc())
         .limit(25)
@@ -1037,16 +1900,24 @@ def bootstrap_portal_cliente(
     )
 
     pagamento_info = {
-        "empresa": empresa_cfg.razao_social if empresa_cfg else "Nexus Code Brasil Tecnologia Ltda",
+        "empresa": empresa_cfg.razao_social if empresa_cfg else org.nome,
         "cnpj": empresa_cfg.cnpj if empresa_cfg else "",
         "banco": empresa_cfg.banco_nome if empresa_cfg else "",
         "agencia": empresa_cfg.agencia if empresa_cfg else "",
         "conta": empresa_cfg.conta if empresa_cfg else "",
-        "chave_pix": empresa_cfg.chave_pix if empresa_cfg else "contato@nexuscodebrasil.com.br",
-        "titular_pix": empresa_cfg.titular_pix if empresa_cfg else "Nexus Code Brasil",
+        "chave_pix": empresa_cfg.chave_pix if empresa_cfg else (empresa_cfg.email_financeiro if empresa_cfg else ""),
+        "titular_pix": empresa_cfg.titular_pix if empresa_cfg else org.nome,
     }
 
     return {
+        "organizacao": {
+            "id": org.id,
+            "nome": org.nome,
+            "slug": org.slug,
+            "is_master": bool(org.is_master),
+            "branding": branding,
+            "modulos": modulos,
+        },
         "cliente": ClienteOut.model_validate(cliente) if cliente else None,
         "projetos": [ProjetoOut.model_validate(p) for p in projetos],
         "tarefas": [TarefaOut.model_validate(t) for t in tarefas],
@@ -1067,7 +1938,10 @@ def cliente_decidir_proposta(
     usuario: Usuario = Depends(get_usuario_db),
 ):
     cliente = _obter_cliente_do_usuario(db, usuario)
-    prop = db.query(PropostaComercial).filter(PropostaComercial.id == proposta_id).first()
+    prop = db.query(PropostaComercial).filter(
+        PropostaComercial.id == proposta_id,
+        PropostaComercial.organizacao_id == usuario.organizacao_id,
+    ).first()
     if not prop or not cliente or prop.cliente_id != cliente.id:
         raise HTTPException(status_code=404, detail="Proposta comercial não encontrada.")
 
@@ -1085,6 +1959,7 @@ def cliente_decidir_proposta(
             mensagem=f"{cliente.nome_empresa} aprovou a proposta '{prop.titulo}'. Projeto #{projeto.id} ativado.",
             link_pagina="propostas",
             perfil_destino="equipe",
+            org_id=usuario.organizacao_id,
         )
     else:
         criar_notificacao(
@@ -1093,9 +1968,10 @@ def cliente_decidir_proposta(
             mensagem=f"{cliente.nome_empresa} marcou a proposta como '{dados.decisao}'.",
             link_pagina="propostas",
             perfil_destino="equipe",
+            org_id=usuario.organizacao_id,
         )
 
-    registrar_log(db, usuario.nome, "DECISAO_PROPOSTA", f"Marcou proposta {prop.codigo} como {dados.decisao}")
+    registrar_log(db, usuario.nome, "DECISAO_PROPOSTA", f"Marcou proposta {prop.codigo} como {dados.decisao}", org_id=usuario.organizacao_id)
     db.commit()
     db.refresh(prop)
     return prop
@@ -1109,7 +1985,10 @@ def cliente_homologar_projeto(
     usuario: Usuario = Depends(get_usuario_db),
 ):
     cliente = _obter_cliente_do_usuario(db, usuario)
-    proj = db.query(Projeto).filter(Projeto.id == projeto_id).first()
+    proj = db.query(Projeto).filter(
+        Projeto.id == projeto_id,
+        Projeto.organizacao_id == usuario.organizacao_id,
+    ).first()
     if not proj or not cliente or proj.cliente_id != cliente.id:
         raise HTTPException(status_code=404, detail="Projeto não encontrado.")
 
@@ -1130,8 +2009,9 @@ def cliente_homologar_projeto(
         mensagem=f"{cliente.nome_empresa} registrou parecer em '{proj.titulo}'.",
         link_pagina="projects",
         perfil_destino="equipe",
+        org_id=usuario.organizacao_id,
     )
-    registrar_log(db, usuario.nome, "HOMOLOGAR_PROJETO", f"Homologou projeto #{proj.id}: {dados.decisao}")
+    registrar_log(db, usuario.nome, "HOMOLOGAR_PROJETO", f"Homologou projeto #{proj.id}: {dados.decisao}", org_id=usuario.organizacao_id)
     db.commit()
     db.refresh(proj)
     return proj
@@ -1145,7 +2025,10 @@ def cliente_anexar_comprovante_fatura(
     usuario: Usuario = Depends(get_usuario_db),
 ):
     cliente = _obter_cliente_do_usuario(db, usuario)
-    fat = db.query(Fatura).filter(Fatura.id == fatura_id).first()
+    fat = db.query(Fatura).filter(
+        Fatura.id == fatura_id,
+        Fatura.organizacao_id == usuario.organizacao_id,
+    ).first()
     if not fat or not cliente or fat.cliente_id != cliente.id:
         raise HTTPException(status_code=404, detail="Fatura não encontrada.")
 
@@ -1160,8 +2043,9 @@ def cliente_anexar_comprovante_fatura(
         mensagem=f"{cliente.nome_empresa} enviou comprovante na fatura '{fat.descricao}'.",
         link_pagina="invoices",
         perfil_destino="equipe",
+        org_id=usuario.organizacao_id,
     )
-    registrar_log(db, usuario.nome, "COMPROVANTE_FATURA", f"Enviou comprovante na fatura #{fat.id}")
+    registrar_log(db, usuario.nome, "COMPROVANTE_FATURA", f"Enviou comprovante na fatura #{fat.id}", org_id=usuario.organizacao_id)
     db.commit()
     db.refresh(fat)
     return fat
@@ -1169,8 +2053,8 @@ def cliente_anexar_comprovante_fatura(
 
 # ==================== PROPOSTAS COMERCIAIS ====================
 @router.get("/propostas", response_model=List[PropostaOut], tags=["Propostas"])
-def listar_propostas(db: Session = Depends(get_db), _: Usuario = Depends(exigir_equipe)):
-    return db.query(PropostaComercial).order_by(PropostaComercial.criado_em.desc()).all()
+def listar_propostas(db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
+    return db.query(PropostaComercial).filter(PropostaComercial.organizacao_id == equipe.organizacao_id).order_by(PropostaComercial.criado_em.desc()).all()
 
 
 @router.post("/propostas", response_model=PropostaOut, status_code=201, tags=["Propostas"])
@@ -1180,14 +2064,18 @@ def criar_proposta(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    cliente = db.query(Cliente).filter(Cliente.id == dados.cliente_id).first()
+    org = _get_org_or_404(db, equipe.organizacao_id)
+    _verificar_modulo(org, "propostas")
+
+    cliente = db.query(Cliente).filter(Cliente.id == dados.cliente_id, Cliente.organizacao_id == org.id).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
 
     seq = (db.query(func.count(PropostaComercial.id)).scalar() or 0) + 1
-    codigo = f"PROP-{date.today().year}-{seq:03d}"
+    codigo = f"PROP-{date.today().year}-{seq:04d}"
 
     prop = PropostaComercial(
+        organizacao_id=org.id,
         codigo=codigo,
         cliente_id=dados.cliente_id,
         solicitacao_id=dados.solicitacao_id,
@@ -1216,16 +2104,17 @@ def criar_proposta(
                 mensagem=f"A proposta '{prop.titulo}' está disponível para análise e aprovação no seu portal.",
                 link_pagina="proposals",
                 usuario_id=cliente.usuario_portal_id,
+                org_id=org.id,
             )
         if cliente.email:
             background_tasks.add_task(
                 enviar_email,
                 cliente.email,
-                f"Proposta Comercial {codigo} — Nexus Code Brasil",
+                f"Proposta Comercial {codigo} — {org.nome}",
                 f"<p>Olá, <b>{cliente.contato_nome}</b>. Sua proposta comercial <b>{codigo} ({prop.titulo})</b> já está disponível para análise e aprovação digital no Portal do Cliente.</p>",
             )
 
-    registrar_log(db, equipe.nome, "CRIAR_PROPOSTA", f"Criou proposta {codigo} para {cliente.nome_empresa}")
+    registrar_log(db, equipe.nome, "CRIAR_PROPOSTA", f"Criou proposta {codigo} para {cliente.nome_empresa}", org_id=org.id)
     db.commit()
     db.refresh(prop)
     return prop
@@ -1238,7 +2127,10 @@ def atualizar_proposta(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    prop = db.query(PropostaComercial).filter(PropostaComercial.id == proposta_id).first()
+    prop = db.query(PropostaComercial).filter(
+        PropostaComercial.id == proposta_id,
+        PropostaComercial.organizacao_id == equipe.organizacao_id,
+    ).first()
     if not prop:
         raise HTTPException(status_code=404, detail="Proposta não encontrada.")
 
@@ -1248,7 +2140,7 @@ def atualizar_proposta(
     if prop.status == "aprovada" and not prop.projeto_gerado_id:
         _converter_proposta_em_projeto(db, prop, equipe.nome)
 
-    registrar_log(db, equipe.nome, "EDITAR_PROPOSTA", f"Atualizou proposta {prop.codigo}")
+    registrar_log(db, equipe.nome, "EDITAR_PROPOSTA", f"Atualizou proposta {prop.codigo}", org_id=equipe.organizacao_id)
     db.commit()
     db.refresh(prop)
     return prop
@@ -1260,7 +2152,10 @@ def aprovar_e_converter_proposta(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    prop = db.query(PropostaComercial).filter(PropostaComercial.id == proposta_id).first()
+    prop = db.query(PropostaComercial).filter(
+        PropostaComercial.id == proposta_id,
+        PropostaComercial.organizacao_id == equipe.organizacao_id,
+    ).first()
     if not prop:
         raise HTTPException(status_code=404, detail="Proposta não encontrada.")
 
@@ -1280,18 +2175,21 @@ def remover_proposta(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    prop = db.query(PropostaComercial).filter(PropostaComercial.id == proposta_id).first()
+    prop = db.query(PropostaComercial).filter(
+        PropostaComercial.id == proposta_id,
+        PropostaComercial.organizacao_id == equipe.organizacao_id,
+    ).first()
     if not prop:
         raise HTTPException(status_code=404, detail="Proposta não encontrada.")
-    registrar_log(db, equipe.nome, "EXCLUIR_PROPOSTA", f"Removeu proposta {prop.codigo}")
+    registrar_log(db, equipe.nome, "EXCLUIR_PROPOSTA", f"Removeu proposta {prop.codigo}", org_id=equipe.organizacao_id)
     db.delete(prop)
     db.commit()
 
 
 # ==================== FINANCEIRO: DESPESAS, MRR, DRE & WEBHOOK ====================
 @router.get("/despesas", response_model=List[DespesaOut], tags=["Financeiro"])
-def listar_despesas(db: Session = Depends(get_db), _: Usuario = Depends(exigir_equipe)):
-    return db.query(Despesa).order_by(Despesa.vencimento.asc()).all()
+def listar_despesas(db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
+    return db.query(Despesa).filter(Despesa.organizacao_id == equipe.organizacao_id).order_by(Despesa.vencimento.asc()).all()
 
 
 @router.post("/despesas", response_model=DespesaOut, status_code=201, tags=["Financeiro"])
@@ -1300,11 +2198,13 @@ def criar_despesa(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    desp = Despesa(**dados.model_dump())
+    org = _get_org_or_404(db, equipe.organizacao_id)
+    _verificar_modulo(org, "despesas")
+    desp = Despesa(**dados.model_dump(), organizacao_id=org.id)
     if desp.status == "pago":
         desp.pago_em = datetime.utcnow()
     db.add(desp)
-    registrar_log(db, equipe.nome, "CRIAR_DESPESA", f"Lançou despesa '{desp.descricao}' ({desp.valor})")
+    registrar_log(db, equipe.nome, "CRIAR_DESPESA", f"Lançou despesa '{desp.descricao}' ({desp.valor})", org_id=org.id)
     db.commit()
     db.refresh(desp)
     return desp
@@ -1317,7 +2217,7 @@ def atualizar_despesa(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    desp = db.query(Despesa).filter(Despesa.id == despesa_id).first()
+    desp = db.query(Despesa).filter(Despesa.id == despesa_id, Despesa.organizacao_id == equipe.organizacao_id).first()
     if not desp:
         raise HTTPException(status_code=404, detail="Despesa não encontrada.")
     payload = dados.model_dump(exclude_unset=True)
@@ -1325,7 +2225,7 @@ def atualizar_despesa(
         desp.pago_em = datetime.utcnow()
     for campo, valor in payload.items():
         setattr(desp, campo, valor)
-    registrar_log(db, equipe.nome, "EDITAR_DESPESA", f"Atualizou despesa #{despesa_id}")
+    registrar_log(db, equipe.nome, "EDITAR_DESPESA", f"Atualizou despesa #{despesa_id}", org_id=equipe.organizacao_id)
     db.commit()
     db.refresh(desp)
     return desp
@@ -1337,7 +2237,7 @@ def remover_despesa(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    desp = db.query(Despesa).filter(Despesa.id == despesa_id).first()
+    desp = db.query(Despesa).filter(Despesa.id == despesa_id, Despesa.organizacao_id == admin.organizacao_id).first()
     if not desp:
         raise HTTPException(status_code=404, detail="Despesa não encontrada.")
     db.delete(desp)
@@ -1345,8 +2245,8 @@ def remover_despesa(
 
 
 @router.get("/contratos-recorrentes", response_model=List[ContratoRecorrenteOut], tags=["Financeiro"])
-def listar_contratos_recorrentes(db: Session = Depends(get_db), _: Usuario = Depends(exigir_equipe)):
-    return db.query(ContratoRecorrente).order_by(ContratoRecorrente.criado_em.desc()).all()
+def listar_contratos_recorrentes(db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
+    return db.query(ContratoRecorrente).filter(ContratoRecorrente.organizacao_id == equipe.organizacao_id).order_by(ContratoRecorrente.criado_em.desc()).all()
 
 
 @router.post("/contratos-recorrentes", response_model=ContratoRecorrenteOut, status_code=201, tags=["Financeiro"])
@@ -1355,9 +2255,11 @@ def criar_contrato_recorrente(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    ct = ContratoRecorrente(**dados.model_dump())
+    org = _get_org_or_404(db, equipe.organizacao_id)
+    _verificar_modulo(org, "contratos")
+    ct = ContratoRecorrente(**dados.model_dump(), organizacao_id=org.id)
     db.add(ct)
-    registrar_log(db, equipe.nome, "CRIAR_CONTRATO_MRR", f"Criou assinatura recorrente '{ct.titulo}'")
+    registrar_log(db, equipe.nome, "CRIAR_CONTRATO_MRR", f"Criou assinatura recorrente '{ct.titulo}'", org_id=org.id)
     db.commit()
     db.refresh(ct)
     return ct
@@ -1370,7 +2272,7 @@ def atualizar_contrato_recorrente(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    ct = db.query(ContratoRecorrente).filter(ContratoRecorrente.id == contrato_id).first()
+    ct = db.query(ContratoRecorrente).filter(ContratoRecorrente.id == contrato_id, ContratoRecorrente.organizacao_id == equipe.organizacao_id).first()
     if not ct:
         raise HTTPException(status_code=404, detail="Contrato recorrente não encontrado.")
     for campo, valor in dados.model_dump(exclude_unset=True).items():
@@ -1386,7 +2288,7 @@ def remover_contrato_recorrente(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    ct = db.query(ContratoRecorrente).filter(ContratoRecorrente.id == contrato_id).first()
+    ct = db.query(ContratoRecorrente).filter(ContratoRecorrente.id == contrato_id, ContratoRecorrente.organizacao_id == admin.organizacao_id).first()
     if not ct:
         raise HTTPException(status_code=404, detail="Contrato recorrente não encontrado.")
     db.delete(ct)
@@ -1398,9 +2300,13 @@ def gerar_faturas_recorrentes_mes(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
+    org_id = equipe.organizacao_id
     hoje = date.today()
     comp = f"{hoje.month:02d}/{hoje.year}"
-    ativos = db.query(ContratoRecorrente).filter(ContratoRecorrente.status == "ativo").all()
+    ativos = db.query(ContratoRecorrente).filter(
+        ContratoRecorrente.organizacao_id == org_id,
+        ContratoRecorrente.status == "ativo",
+    ).all()
     geradas = 0
 
     for ct in ativos:
@@ -1408,9 +2314,10 @@ def gerar_faturas_recorrentes_mes(
             continue
         proj_id = ct.projeto_id
         if not proj_id:
-            proj = db.query(Projeto).filter(Projeto.cliente_id == ct.cliente_id).first()
+            proj = db.query(Projeto).filter(Projeto.organizacao_id == org_id, Projeto.cliente_id == ct.cliente_id).first()
             if not proj:
                 proj = Projeto(
+                    organizacao_id=org_id,
                     cliente_id=ct.cliente_id,
                     responsavel_id=equipe.id,
                     titulo=f"Contrato Recorrente — {ct.titulo}",
@@ -1429,6 +2336,7 @@ def gerar_faturas_recorrentes_mes(
 
         db.add(
             Fatura(
+                organizacao_id=org_id,
                 projeto_id=proj_id,
                 cliente_id=ct.cliente_id,
                 descricao=f"{ct.titulo} — Mensalidade {comp}",
@@ -1441,17 +2349,22 @@ def gerar_faturas_recorrentes_mes(
         ct.ultima_geracao = comp
         geradas += 1
 
-    registrar_log(db, equipe.nome, "FATURAMENTO_MRR", f"Gerou {geradas} fatura(s) recorrente(s) da competência {comp}")
+    registrar_log(db, equipe.nome, "FATURAMENTO_MRR", f"Gerou {geradas} fatura(s) recorrente(s) da competência {comp}", org_id=org_id)
     db.commit()
     return {"competencia": comp, "faturas_geradas": geradas}
 
 
 @router.get("/financeiro/dre", tags=["Financeiro"])
-def obter_dre_gerencial(db: Session = Depends(get_db), _: Usuario = Depends(exigir_equipe)):
-    faturas = db.query(Fatura.valor, Fatura.status, Fatura.vencimento).all()
-    despesas = db.query(Despesa.valor, Despesa.status, Despesa.categoria, Despesa.vencimento).all()
-    holerites = db.query(Holerite.valor_liquido, Holerite.competencia).filter(Holerite.status == "pago").all()
-    mrr_mensal = float(db.query(func.coalesce(func.sum(ContratoRecorrente.valor_mensal), 0)).filter(ContratoRecorrente.status == "ativo").scalar() or 0)
+def obter_dre_gerencial(db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
+    org_id = equipe.organizacao_id
+    faturas = db.query(Fatura.valor, Fatura.status, Fatura.vencimento).filter(Fatura.organizacao_id == org_id).all()
+    despesas = db.query(Despesa.valor, Despesa.status, Despesa.categoria, Despesa.vencimento).filter(Despesa.organizacao_id == org_id).all()
+    holerites = db.query(Holerite.valor_liquido, Holerite.competencia).filter(Holerite.organizacao_id == org_id, Holerite.status == "pago").all()
+    mrr_mensal = float(
+        db.query(func.coalesce(func.sum(ContratoRecorrente.valor_mensal), 0))
+        .filter(ContratoRecorrente.organizacao_id == org_id, ContratoRecorrente.status == "ativo")
+        .scalar() or 0
+    )
 
     receita_bruta_paga = sum(float(f.valor or 0) for f in faturas if f.status == "pago")
     receita_prevista_aberta = sum(float(f.valor or 0) for f in faturas if f.status in ("pendente", "atrasado"))
@@ -1519,10 +2432,18 @@ def obter_dre_gerencial(db: Session = Depends(get_db), _: Usuario = Depends(exig
 
 @router.post("/webhook/pagamento", tags=["Financeiro"])
 def webhook_compensacao_pagamento(req: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    fatura_id = req.query_params.get("fatura_id")
-    status_pg = req.query_params.get("status")
-    if not fatura_id or not status_pg:
-        raise HTTPException(status_code=400, detail="Parâmetros fatura_id e status são obrigatórios.")
+    webhook_secret = os.getenv("WEBHOOK_SECRET", "").strip()
+    if not webhook_secret:
+        raise HTTPException(status_code=503, detail="WEBHOOK_SECRET não configurado no servidor.")
+
+    provided_secret = (req.headers.get("X-Webhook-Secret") or req.query_params.get("secret") or "").strip()
+    if not hmac.compare_digest(provided_secret, webhook_secret):
+        raise HTTPException(status_code=401, detail="Assinatura de webhook inválida ou ausente.")
+
+    fatura_id = (req.query_params.get("fatura_id") or "").strip()
+    status_pg = (req.query_params.get("status") or "").strip()
+    if not fatura_id.isdigit() or not status_pg:
+        raise HTTPException(status_code=400, detail="Parâmetros fatura_id (numérico) e status são obrigatórios.")
 
     fatura = db.query(Fatura).filter(Fatura.id == int(fatura_id)).first()
     if not fatura:
@@ -1545,7 +2466,7 @@ def webhook_compensacao_pagamento(req: Request, background_tasks: BackgroundTask
                 f"Recibo de Pagamento - {fatura.descricao}",
                 f"<p>Olá, <b>{cliente.contato_nome}</b>. Confirmamos o recebimento de <b>R$ {fatura.valor}</b> referente a <b>{fatura.descricao}</b>.</p>",
             )
-        registrar_log(db, "Webhook Gateway", "BAIXA_FATURA_AUTO", f"Fatura #{fatura.id} compensada automaticamente.")
+        registrar_log(db, "Webhook Gateway", "BAIXA_FATURA_AUTO", f"Fatura #{fatura.id} compensada automaticamente.", org_id=fatura.organizacao_id)
         db.commit()
 
     return {"ok": True, "fatura_id": fatura.id, "status": fatura.status}
@@ -1553,10 +2474,12 @@ def webhook_compensacao_pagamento(req: Request, background_tasks: BackgroundTask
 
 # ==================== LOJA VIRTUAL (SITE -> CRM & FATURAMENTO) ====================
 @router.post("/public/loja/pedidos", response_model=PedidoLojaOut, status_code=201, tags=["Loja"])
-def registrar_pedido_loja(dados: PedidoLojaCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    cliente = db.query(Cliente).filter(Cliente.email == dados.email_comprador).first()
+def registrar_pedido_loja(dados: PedidoLojaCreate, req: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    org = _resolver_org_por_request(req, db)
+    cliente = db.query(Cliente).filter(Cliente.organizacao_id == org.id, Cliente.email == dados.email_comprador).first()
     if not cliente:
         cliente = Cliente(
+            organizacao_id=org.id,
             nome_empresa=dados.nome_comprador.strip(),
             contato_nome=dados.nome_comprador.strip(),
             email=dados.email_comprador,
@@ -1571,6 +2494,7 @@ def registrar_pedido_loja(dados: PedidoLojaCreate, background_tasks: BackgroundT
     codigo_pedido = f"STORE-{date.today().year}-{seq:05d}"
 
     pedido = PedidoLoja(
+        organizacao_id=org.id,
         codigo=codigo_pedido,
         cliente_id=cliente.id,
         nome_comprador=dados.nome_comprador.strip(),
@@ -1587,6 +2511,7 @@ def registrar_pedido_loja(dados: PedidoLojaCreate, background_tasks: BackgroundT
     db.flush()
 
     fatura = Fatura(
+        organizacao_id=org.id,
         projeto_id=None,
         cliente_id=cliente.id,
         descricao=f"Pedido Loja {codigo_pedido}",
@@ -1599,38 +2524,38 @@ def registrar_pedido_loja(dados: PedidoLojaCreate, background_tasks: BackgroundT
     db.flush()
     pedido.fatura_gerada_id = fatura.id
 
-    cfg = db.query(ConfiguracaoEmpresa).first()
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first()
     background_tasks.add_task(
         enviar_email,
         pedido.email_comprador,
-        f"Pedido {pedido.codigo} - Nexus Code Store",
+        f"Pedido {pedido.codigo} - {org.nome}",
         f"<p>Olá, <b>{pedido.nome_comprador}</b>. Seu pedido <b>{pedido.codigo}</b> (R$ {pedido.valor_total}) foi registrado. Chave PIX: <b>{cfg.chave_pix if cfg else 'contato@nexuscodebrasil.com.br'}</b>.</p>",
     )
-    criar_notificacao(db, "Novo Pedido na Loja", f"Pedido {pedido.codigo} (R$ {pedido.valor_total}) registrado.", "invoices", None, "equipe")
-    registrar_log(db, pedido.nome_comprador, "NOVO_PEDIDO_LOJA", f"Pedido {pedido.codigo} criado.")
+    criar_notificacao(db, "Novo Pedido na Loja", f"Pedido {pedido.codigo} (R$ {pedido.valor_total}) registrado.", "invoices", None, "equipe", org_id=org.id)
+    registrar_log(db, pedido.nome_comprador, "NOVO_PEDIDO_LOJA", f"Pedido {pedido.codigo} criado.", org_id=org.id)
     db.commit()
     db.refresh(pedido)
     return pedido
 
 
 @router.get("/pedidos-loja", response_model=List[PedidoLojaOut], tags=["Loja"])
-def listar_pedidos_loja(db: Session = Depends(get_db), _: Usuario = Depends(exigir_equipe)):
-    return db.query(PedidoLoja).order_by(PedidoLoja.criado_em.desc()).all()
+def listar_pedidos_loja(db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
+    return db.query(PedidoLoja).filter(PedidoLoja.organizacao_id == equipe.organizacao_id).order_by(PedidoLoja.criado_em.desc()).all()
 
 
 @router.patch("/pedidos-loja/{pedido_id}", response_model=PedidoLojaOut, tags=["Loja"])
 def atualizar_pedido_loja(pedido_id: int, dados: PedidoLojaUpdate, db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
-    ped = db.query(PedidoLoja).filter(PedidoLoja.id == pedido_id).first()
+    ped = db.query(PedidoLoja).filter(PedidoLoja.id == pedido_id, PedidoLoja.organizacao_id == equipe.organizacao_id).first()
     if not ped:
         raise HTTPException(status_code=404, detail="Pedido não encontrado.")
     ped.status = dados.status
-    registrar_log(db, equipe.nome, "EDITAR_PEDIDO_LOJA", f"Atualizou pedido {ped.codigo} para {dados.status}")
+    registrar_log(db, equipe.nome, "EDITAR_PEDIDO_LOJA", f"Atualizou pedido {ped.codigo} para {dados.status}", org_id=equipe.organizacao_id)
     db.commit()
     db.refresh(ped)
     return ped
 
 
-# ==================== VITRINE PÚBLICA & CATÁLOGO DA LOJA (SITE <-> PAINEL) ====================
+# ==================== VITRINE PÚBLICA, LOJA & PLANOS SAAS (SITE <-> PAINEL) ====================
 _SITE_CONFIG_CACHE = {"data": None, "ts": 0.0}
 
 
@@ -1643,14 +2568,23 @@ def _slugify_produto(texto: str) -> str:
 @router.get("/public/site-config", tags=["Site & Loja"])
 def obter_configuracao_publica_site(db: Session = Depends(get_db)):
     now_ts = datetime.utcnow().timestamp()
-    if _SITE_CONFIG_CACHE["data"] is not None and (now_ts - _SITE_CONFIG_CACHE["ts"]) < 30:
+    if _SITE_CONFIG_CACHE["data"] is not None and (now_ts - _SITE_CONFIG_CACHE["ts"]) < 20:
         return _SITE_CONFIG_CACHE["data"]
 
-    cfg = db.query(ConfiguracaoEmpresa).first()
+    master_org = db.query(Organizacao).filter(Organizacao.is_master == True).first()
+    master_id = master_org.id if master_org else 1
+
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == master_id).first()
     produtos = (
         db.query(ProdutoLoja)
-        .filter(ProdutoLoja.ativo == True)
+        .filter(ProdutoLoja.organizacao_id == master_id, ProdutoLoja.ativo == True)
         .order_by(ProdutoLoja.ordem.asc(), ProdutoLoja.id.asc())
+        .all()
+    )
+    planos = (
+        db.query(PlanoSaas)
+        .filter(PlanoSaas.ativo == True)
+        .order_by(PlanoSaas.ordem.asc(), PlanoSaas.id.asc())
         .all()
     )
 
@@ -1677,6 +2611,7 @@ def obter_configuracao_publica_site(db: Session = Depends(get_db)):
             "chave_pix": (cfg.chave_pix or "contato@nexuscodebrasil.com.br") if cfg else "contato@nexuscodebrasil.com.br",
         },
         "produtos": [ProdutoLojaOut.model_validate(p).model_dump(mode="json") for p in produtos],
+        "planos_saas": [PlanoSaasOut.model_validate(pl).model_dump(mode="json") for pl in planos],
     }
     _SITE_CONFIG_CACHE["data"] = payload
     _SITE_CONFIG_CACHE["ts"] = now_ts
@@ -1684,8 +2619,8 @@ def obter_configuracao_publica_site(db: Session = Depends(get_db)):
 
 
 @router.get("/loja/produtos", response_model=List[ProdutoLojaOut], tags=["Site & Loja"])
-def listar_produtos_loja_admin(db: Session = Depends(get_db), _: Usuario = Depends(exigir_equipe)):
-    return db.query(ProdutoLoja).order_by(ProdutoLoja.ordem.asc(), ProdutoLoja.id.asc()).all()
+def listar_produtos_loja_admin(db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
+    return db.query(ProdutoLoja).filter(ProdutoLoja.organizacao_id == equipe.organizacao_id).order_by(ProdutoLoja.ordem.asc(), ProdutoLoja.id.asc()).all()
 
 
 @router.post("/loja/produtos", response_model=ProdutoLojaOut, status_code=201, tags=["Site & Loja"])
@@ -1694,18 +2629,19 @@ def criar_produto_loja(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
+    org_id = equipe.organizacao_id
     base_slug = _slugify_produto(dados.slug or dados.nome)
     slug = base_slug
     idx = 2
-    while db.query(ProdutoLoja.id).filter(ProdutoLoja.slug == slug).first():
+    while db.query(ProdutoLoja.id).filter(ProdutoLoja.organizacao_id == org_id, ProdutoLoja.slug == slug).first():
         slug = f"{base_slug}-{idx}"
         idx += 1
 
     payload = dados.model_dump()
     payload["slug"] = slug
-    prod = ProdutoLoja(**payload)
+    prod = ProdutoLoja(**payload, organizacao_id=org_id)
     db.add(prod)
-    registrar_log(db, equipe.nome, "CRIAR_PRODUTO_LOJA", f"Adicionou produto '{prod.nome}' na loja do site")
+    registrar_log(db, equipe.nome, "CRIAR_PRODUTO_LOJA", f"Adicionou produto '{prod.nome}' na loja", org_id=org_id)
     db.commit()
     db.refresh(prod)
     _SITE_CONFIG_CACHE["data"] = None
@@ -1719,12 +2655,12 @@ def atualizar_produto_loja(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    prod = db.query(ProdutoLoja).filter(ProdutoLoja.id == produto_id).first()
+    prod = db.query(ProdutoLoja).filter(ProdutoLoja.id == produto_id, ProdutoLoja.organizacao_id == equipe.organizacao_id).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
     for campo, valor in dados.model_dump(exclude_unset=True).items():
         setattr(prod, campo, valor)
-    registrar_log(db, equipe.nome, "EDITAR_PRODUTO_LOJA", f"Atualizou produto '{prod.nome}' (#{produto_id})")
+    registrar_log(db, equipe.nome, "EDITAR_PRODUTO_LOJA", f"Atualizou produto '{prod.nome}' (#{produto_id})", org_id=equipe.organizacao_id)
     db.commit()
     db.refresh(prod)
     _SITE_CONFIG_CACHE["data"] = None
@@ -1737,10 +2673,10 @@ def remover_produto_loja(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    prod = db.query(ProdutoLoja).filter(ProdutoLoja.id == produto_id).first()
+    prod = db.query(ProdutoLoja).filter(ProdutoLoja.id == produto_id, ProdutoLoja.organizacao_id == admin.organizacao_id).first()
     if not prod:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
-    registrar_log(db, admin.nome, "EXCLUIR_PRODUTO_LOJA", f"Removeu produto '{prod.nome}'")
+    registrar_log(db, admin.nome, "EXCLUIR_PRODUTO_LOJA", f"Removeu produto '{prod.nome}'", org_id=admin.organizacao_id)
     db.delete(prod)
     db.commit()
     _SITE_CONFIG_CACHE["data"] = None
@@ -1751,9 +2687,9 @@ def remover_produto_loja(
 def listar_apontamentos_horas(
     projeto_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    _: Usuario = Depends(exigir_equipe),
+    equipe: Usuario = Depends(exigir_equipe),
 ):
-    q = db.query(ApontamentoHora)
+    q = db.query(ApontamentoHora).filter(ApontamentoHora.organizacao_id == equipe.organizacao_id)
     if projeto_id:
         q = q.filter(ApontamentoHora.projeto_id == projeto_id)
     return q.order_by(ApontamentoHora.data_trabalho.desc(), ApontamentoHora.id.desc()).all()
@@ -1765,8 +2701,13 @@ def registrar_apontamento_hora(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
+    org = _get_org_or_404(db, equipe.organizacao_id)
+    _verificar_modulo(org, "timesheet")
     target_uid = dados.usuario_id if (equipe.perfil == "admin" and dados.usuario_id) else equipe.id
-    colab = db.query(Usuario.id, Usuario.salario_base, Usuario.carga_horaria_diaria).filter(Usuario.id == target_uid).first()
+    colab = db.query(Usuario.id, Usuario.salario_base, Usuario.carga_horaria_diaria).filter(
+        Usuario.id == target_uid,
+        Usuario.organizacao_id == org.id,
+    ).first()
     if not colab:
         raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
 
@@ -1776,6 +2717,7 @@ def registrar_apontamento_hora(
     custo_hora = round(sal / divisor, 2) if sal > 0 else 50.0
 
     ap = ApontamentoHora(
+        organizacao_id=org.id,
         projeto_id=dados.projeto_id,
         tarefa_id=dados.tarefa_id,
         usuario_id=target_uid,
@@ -1786,7 +2728,7 @@ def registrar_apontamento_hora(
         custo_hora_snapshot=Decimal(str(custo_hora)),
     )
     db.add(ap)
-    registrar_log(db, equipe.nome, "APONTAR_HORAS", f"Registrou {dados.horas}h no projeto #{dados.projeto_id}")
+    registrar_log(db, equipe.nome, "APONTAR_HORAS", f"Registrou {dados.horas}h no projeto #{dados.projeto_id}", org_id=org.id)
     db.commit()
     db.refresh(ap)
     return ap
@@ -1798,7 +2740,7 @@ def remover_apontamento_hora(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    ap = db.query(ApontamentoHora).filter(ApontamentoHora.id == apontamento_id).first()
+    ap = db.query(ApontamentoHora).filter(ApontamentoHora.id == apontamento_id, ApontamentoHora.organizacao_id == equipe.organizacao_id).first()
     if not ap:
         raise HTTPException(status_code=404, detail="Apontamento não encontrado.")
     if equipe.perfil != "admin" and ap.usuario_id != equipe.id:
@@ -1831,8 +2773,8 @@ def _append_mensagem_chamado(chamado: ChamadoSuporte, autor_nome: str, autor_per
 
 
 @router.get("/chamados", response_model=List[ChamadoOut], tags=["Chamados"])
-def listar_chamados_equipe(db: Session = Depends(get_db), _: Usuario = Depends(exigir_equipe)):
-    return db.query(ChamadoSuporte).order_by(ChamadoSuporte.criado_em.desc()).all()
+def listar_chamados_equipe(db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
+    return db.query(ChamadoSuporte).filter(ChamadoSuporte.organizacao_id == equipe.organizacao_id).order_by(ChamadoSuporte.criado_em.desc()).all()
 
 
 @router.post("/chamados", response_model=ChamadoOut, status_code=201, tags=["Chamados"])
@@ -1841,16 +2783,19 @@ def criar_chamado_equipe(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
+    org = _get_org_or_404(db, equipe.organizacao_id)
+    _verificar_modulo(org, "chamados")
     if not dados.cliente_id:
         raise HTTPException(status_code=400, detail="Selecione o cliente vinculado ao chamado.")
-    cliente = db.query(Cliente).filter(Cliente.id == dados.cliente_id).first()
+    cliente = db.query(Cliente).filter(Cliente.id == dados.cliente_id, Cliente.organizacao_id == org.id).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
 
     seq = (db.query(func.count(ChamadoSuporte.id)).scalar() or 0) + 1
-    protocolo = f"CHM-{date.today().year}-{seq:04d}"
+    protocolo = f"CHM-{date.today().year}-{seq:05d}"
 
     ch = ChamadoSuporte(
+        organizacao_id=org.id,
         protocolo=protocolo,
         cliente_id=dados.cliente_id,
         projeto_id=dados.projeto_id,
@@ -1865,7 +2810,7 @@ def criar_chamado_equipe(
     )
     _append_mensagem_chamado(ch, equipe.nome, equipe.perfil, dados.descricao, dados.anexo_nome, dados.anexo_data)
     db.add(ch)
-    registrar_log(db, equipe.nome, "ABRIR_CHAMADO", f"Abriu chamado {protocolo} ({ch.titulo})")
+    registrar_log(db, equipe.nome, "ABRIR_CHAMADO", f"Abriu chamado {protocolo} ({ch.titulo})", org_id=org.id)
     db.commit()
     db.refresh(ch)
     return ch
@@ -1878,7 +2823,7 @@ def responder_chamado_equipe(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    ch = db.query(ChamadoSuporte).filter(ChamadoSuporte.id == chamado_id).first()
+    ch = db.query(ChamadoSuporte).filter(ChamadoSuporte.id == chamado_id, ChamadoSuporte.organizacao_id == equipe.organizacao_id).first()
     if not ch:
         raise HTTPException(status_code=404, detail="Chamado não encontrado.")
 
@@ -1896,9 +2841,10 @@ def responder_chamado_equipe(
             mensagem=f"{equipe.nome} respondeu no chamado '{ch.titulo}'.",
             link_pagina="tickets",
             usuario_id=cliente.usuario_portal_id,
+            org_id=equipe.organizacao_id,
         )
 
-    registrar_log(db, equipe.nome, "RESPONDER_CHAMADO", f"Respondeu no chamado {ch.protocolo}")
+    registrar_log(db, equipe.nome, "RESPONDER_CHAMADO", f"Respondeu no chamado {ch.protocolo}", org_id=equipe.organizacao_id)
     db.commit()
     db.refresh(ch)
     return ch
@@ -1911,7 +2857,7 @@ def atualizar_chamado_equipe(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    ch = db.query(ChamadoSuporte).filter(ChamadoSuporte.id == chamado_id).first()
+    ch = db.query(ChamadoSuporte).filter(ChamadoSuporte.id == chamado_id, ChamadoSuporte.organizacao_id == equipe.organizacao_id).first()
     if not ch:
         raise HTTPException(status_code=404, detail="Chamado não encontrado.")
     for campo, valor in dados.model_dump(exclude_unset=True).items():
@@ -1928,7 +2874,7 @@ def remover_chamado_equipe(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    ch = db.query(ChamadoSuporte).filter(ChamadoSuporte.id == chamado_id).first()
+    ch = db.query(ChamadoSuporte).filter(ChamadoSuporte.id == chamado_id, ChamadoSuporte.organizacao_id == admin.organizacao_id).first()
     if not ch:
         raise HTTPException(status_code=404, detail="Chamado não encontrado.")
     db.delete(ch)
@@ -1943,10 +2889,11 @@ def abrir_chamado_cliente(
 ):
     cliente = _garantir_cliente_para_portal(db, usuario)
     seq = (db.query(func.count(ChamadoSuporte.id)).scalar() or 0) + 1
-    protocolo = f"CHM-{date.today().year}-{seq:04d}"
+    protocolo = f"CHM-{date.today().year}-{seq:05d}"
 
     sla_map = {"critica": 4, "alta": 8, "media": 24, "baixa": 48}
     ch = ChamadoSuporte(
+        organizacao_id=usuario.organizacao_id,
         protocolo=protocolo,
         cliente_id=cliente.id,
         projeto_id=dados.projeto_id,
@@ -1967,8 +2914,9 @@ def abrir_chamado_cliente(
         mensagem=f"{cliente.nome_empresa} abriu o chamado '{ch.titulo}' ({ch.prioridade.upper()}).",
         link_pagina="chamados",
         perfil_destino="equipe",
+        org_id=usuario.organizacao_id,
     )
-    registrar_log(db, usuario.nome, "ABRIR_CHAMADO_PORTAL", f"Cliente abriu chamado {protocolo}")
+    registrar_log(db, usuario.nome, "ABRIR_CHAMADO_PORTAL", f"Cliente abriu chamado {protocolo}", org_id=usuario.organizacao_id)
     db.commit()
     db.refresh(ch)
     return ch
@@ -1982,7 +2930,7 @@ def mensagem_chamado_cliente(
     usuario: Usuario = Depends(get_usuario_db),
 ):
     cliente = _obter_cliente_do_usuario(db, usuario)
-    ch = db.query(ChamadoSuporte).filter(ChamadoSuporte.id == chamado_id).first()
+    ch = db.query(ChamadoSuporte).filter(ChamadoSuporte.id == chamado_id, ChamadoSuporte.organizacao_id == usuario.organizacao_id).first()
     if not ch or not cliente or ch.cliente_id != cliente.id:
         raise HTTPException(status_code=404, detail="Chamado não encontrado.")
 
@@ -1996,6 +2944,7 @@ def mensagem_chamado_cliente(
         mensagem=f"{cliente.nome_empresa} respondeu no ticket '{ch.titulo}'.",
         link_pagina="chamados",
         perfil_destino="equipe",
+        org_id=usuario.organizacao_id,
     )
     db.commit()
     db.refresh(ch)
@@ -2004,8 +2953,8 @@ def mensagem_chamado_cliente(
 
 # ==================== ATIVOS, DOMÍNIOS & CRON DE VENCIMENTOS ====================
 @router.get("/ativos", response_model=List[AtivoInfraOut], tags=["Infraestrutura"])
-def listar_ativos_infra(db: Session = Depends(get_db), _: Usuario = Depends(exigir_equipe)):
-    return db.query(AtivoInfra).order_by(AtivoInfra.data_vencimento.asc().nullslast()).all()
+def listar_ativos_infra(db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
+    return db.query(AtivoInfra).filter(AtivoInfra.organizacao_id == equipe.organizacao_id).order_by(AtivoInfra.data_vencimento.asc().nullslast()).all()
 
 
 @router.post("/ativos", response_model=AtivoInfraOut, status_code=201, tags=["Infraestrutura"])
@@ -2014,9 +2963,11 @@ def criar_ativo_infra(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    ativo = AtivoInfra(**dados.model_dump())
+    org = _get_org_or_404(db, equipe.organizacao_id)
+    _verificar_modulo(org, "ativos")
+    ativo = AtivoInfra(**dados.model_dump(), organizacao_id=org.id)
     db.add(ativo)
-    registrar_log(db, equipe.nome, "CRIAR_ATIVO", f"Cadastrou ativo '{ativo.nome}' ({ativo.tipo})")
+    registrar_log(db, equipe.nome, "CRIAR_ATIVO", f"Cadastrou ativo '{ativo.nome}' ({ativo.tipo})", org_id=org.id)
     db.commit()
     db.refresh(ativo)
     return ativo
@@ -2029,7 +2980,7 @@ def atualizar_ativo_infra(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    ativo = db.query(AtivoInfra).filter(AtivoInfra.id == ativo_id).first()
+    ativo = db.query(AtivoInfra).filter(AtivoInfra.id == ativo_id, AtivoInfra.organizacao_id == equipe.organizacao_id).first()
     if not ativo:
         raise HTTPException(status_code=404, detail="Ativo não encontrado.")
     for campo, valor in dados.model_dump(exclude_unset=True).items():
@@ -2045,7 +2996,7 @@ def remover_ativo_infra(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    ativo = db.query(AtivoInfra).filter(AtivoInfra.id == ativo_id).first()
+    ativo = db.query(AtivoInfra).filter(AtivoInfra.id == ativo_id, AtivoInfra.organizacao_id == admin.organizacao_id).first()
     if not ativo:
         raise HTTPException(status_code=404, detail="Ativo não encontrado.")
     db.delete(ativo)
@@ -2053,7 +3004,14 @@ def remover_ativo_infra(
 
 
 @router.get("/cron/verificar-vencimentos", tags=["Infraestrutura"])
-def cron_verificar_vencimentos(db: Session = Depends(get_db)):
+def cron_verificar_vencimentos(req: Request, db: Session = Depends(get_db)):
+    cron_secret = os.getenv("CRON_SECRET", "").strip()
+    if cron_secret:
+        auth_header = (req.headers.get("Authorization") or "").strip()
+        expected = f"Bearer {cron_secret}"
+        if not hmac.compare_digest(auth_header, expected):
+            raise HTTPException(status_code=401, detail="Token de execução Cron inválido.")
+
     hoje = date.today()
     ativos = db.query(AtivoInfra).filter(AtivoInfra.status.in_(["ativo", "vencendo"])).all()
     notificados = 0
@@ -2063,20 +3021,40 @@ def cron_verificar_vencimentos(db: Session = Depends(get_db)):
         delta = (a.data_vencimento - hoje).days
         if delta < 0 and a.status != "expirado":
             a.status = "expirado"
-            criar_notificacao(db, f"Ativo Expirado: {a.nome}", f"O ativo {a.tipo} expirou em {a.data_vencimento}.", "ativos", None, "equipe")
+            criar_notificacao(db, f"Ativo Expirado: {a.nome}", f"O ativo {a.tipo} expirou em {a.data_vencimento}.", "ativos", None, "equipe", org_id=a.organizacao_id)
             notificados += 1
         elif delta in (30, 15, 5):
             a.status = "vencendo"
-            criar_notificacao(db, f"Renovação Próxima: {a.nome}", f"O ativo {a.tipo} vence em {delta} dias ({a.data_vencimento}).", "ativos", None, "equipe")
+            criar_notificacao(db, f"Renovação Próxima: {a.nome}", f"O ativo {a.tipo} vence em {delta} dias ({a.data_vencimento}).", "ativos", None, "equipe", org_id=a.organizacao_id)
             notificados += 1
+
+    faturas_vencidas = db.query(Fatura).filter(Fatura.status == "pendente", Fatura.vencimento < hoje).all()
+    for fat in faturas_vencidas:
+        fat.status = "atrasado"
+
+    # Verifica trials expirados
+    trials_expirados = db.query(Organizacao).filter(
+        Organizacao.is_master == False,
+        Organizacao.status_assinatura == "trial",
+        Organizacao.trial_ate != None,
+        Organizacao.trial_ate < hoje,
+    ).all()
+    for org_exp in trials_expirados:
+        org_exp.status_assinatura = "inadimplente"
+
     db.commit()
-    return {"ok": True, "ativos_alertados": notificados}
+    return {
+        "ok": True,
+        "ativos_alertados": notificados,
+        "faturas_vencidas_atualizadas": len(faturas_vencidas),
+        "trials_atualizados": len(trials_expirados),
+    }
 
 
 # ==================== REEMBOLSOS (RH AVANÇADO) ====================
 @router.get("/reembolsos", response_model=List[ReembolsoOut], tags=["RH"])
 def listar_reembolsos(db: Session = Depends(get_db), usuario: Usuario = Depends(get_usuario_atual)):
-    query = db.query(ReembolsoDespesa)
+    query = db.query(ReembolsoDespesa).filter(ReembolsoDespesa.organizacao_id == usuario.organizacao_id)
     if usuario.perfil != "admin":
         query = query.filter(ReembolsoDespesa.usuario_id == usuario.id)
     return query.order_by(ReembolsoDespesa.criado_em.desc()).all()
@@ -2084,10 +3062,10 @@ def listar_reembolsos(db: Session = Depends(get_db), usuario: Usuario = Depends(
 
 @router.post("/reembolsos", response_model=ReembolsoOut, status_code=201, tags=["RH"])
 def solicitar_reembolso(dados: ReembolsoCreate, db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
-    r = ReembolsoDespesa(**dados.model_dump(), usuario_id=equipe.id)
+    r = ReembolsoDespesa(**dados.model_dump(), organizacao_id=equipe.organizacao_id, usuario_id=equipe.id)
     db.add(r)
-    criar_notificacao(db, "Nova Solicitação de Reembolso", f"{equipe.nome} solicitou R$ {r.valor} para {r.descricao}.", "despesas", None, "admin")
-    registrar_log(db, equipe.nome, "SOLICITAR_REEMBOLSO", f"Solicitou reembolso de R$ {r.valor}")
+    criar_notificacao(db, "Nova Solicitação de Reembolso", f"{equipe.nome} solicitou R$ {r.valor} para {r.descricao}.", "despesas", None, "admin", org_id=equipe.organizacao_id)
+    registrar_log(db, equipe.nome, "SOLICITAR_REEMBOLSO", f"Solicitou reembolso de R$ {r.valor}", org_id=equipe.organizacao_id)
     db.commit()
     db.refresh(r)
     return r
@@ -2095,7 +3073,7 @@ def solicitar_reembolso(dados: ReembolsoCreate, db: Session = Depends(get_db), e
 
 @router.patch("/reembolsos/{reembolso_id}", response_model=ReembolsoOut, tags=["RH"])
 def julgar_reembolso(reembolso_id: int, dados: ReembolsoUpdate, db: Session = Depends(get_db), admin: Usuario = Depends(exigir_admin)):
-    r = db.query(ReembolsoDespesa).filter(ReembolsoDespesa.id == reembolso_id).first()
+    r = db.query(ReembolsoDespesa).filter(ReembolsoDespesa.id == reembolso_id, ReembolsoDespesa.organizacao_id == admin.organizacao_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Reembolso não encontrado.")
     r.status = dados.status
@@ -2103,6 +3081,7 @@ def julgar_reembolso(reembolso_id: int, dados: ReembolsoUpdate, db: Session = De
         r.observacoes_gestor = dados.observacoes_gestor
     if dados.status == "aprovado" and not r.despesa_gerada_id:
         desp = Despesa(
+            organizacao_id=admin.organizacao_id,
             descricao=f"Reembolso: {r.descricao}",
             categoria="folha_rh",
             projeto_id=r.projeto_id,
@@ -2113,19 +3092,25 @@ def julgar_reembolso(reembolso_id: int, dados: ReembolsoUpdate, db: Session = De
         db.add(desp)
         db.flush()
         r.despesa_gerada_id = desp.id
-    criar_notificacao(db, f"Reembolso {dados.status.capitalize()}", f"Sua solicitação de R$ {r.valor} foi {dados.status}.", "dashboard", r.usuario_id, None)
-    registrar_log(db, admin.nome, "JULGAR_REEMBOLSO", f"Marcou reembolso #{r.id} como {dados.status}")
+    criar_notificacao(db, f"Reembolso {dados.status.capitalize()}", f"Sua solicitação de R$ {r.valor} foi {dados.status}.", "dashboard", r.usuario_id, None, org_id=admin.organizacao_id)
+    registrar_log(db, admin.nome, "JULGAR_REEMBOLSO", f"Marcou reembolso #{r.id} como {dados.status}", org_id=admin.organizacao_id)
     db.commit()
     db.refresh(r)
     return r
 
 
-# ==================== CONFIGURAÇÕES DA EMPRESA & PERMISSÕES ====================
+# ==================== CONFIGURAÇÕES DA EMPRESA, PERMISSÕES & WHITE-LABEL ====================
 @router.get("/empresa", response_model=ConfiguracaoEmpresaOut, tags=["Empresa"])
-def obter_configuracoes_empresa(db: Session = Depends(get_db), _: Usuario = Depends(exigir_equipe)):
-    cfg = db.query(ConfiguracaoEmpresa).first()
+def obter_configuracoes_empresa(db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == equipe.organizacao_id).first()
     if not cfg:
-        cfg = ConfiguracaoEmpresa(permissoes_json=json.dumps(DEFAULT_PERMISSOES))
+        org = db.query(Organizacao).filter(Organizacao.id == equipe.organizacao_id).first()
+        cfg = ConfiguracaoEmpresa(
+            organizacao_id=equipe.organizacao_id,
+            razao_social=org.nome if org else "Empresa",
+            nome_fantasia=org.nome if org else "Empresa",
+            permissoes_json=json.dumps(DEFAULT_PERMISSOES),
+        )
         db.add(cfg)
         db.commit()
         db.refresh(cfg)
@@ -2138,18 +3123,40 @@ def salvar_configuracoes_empresa(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    cfg = db.query(ConfiguracaoEmpresa).first()
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == admin.organizacao_id).first()
     if not cfg:
-        cfg = ConfiguracaoEmpresa()
+        cfg = ConfiguracaoEmpresa(organizacao_id=admin.organizacao_id)
         db.add(cfg)
     for campo, valor in dados.model_dump(exclude_unset=True).items():
         setattr(cfg, campo, valor)
     cfg.atualizado_em = datetime.utcnow()
-    registrar_log(db, admin.nome, "CONFIG_EMPRESA", "Atualizou parâmetros institucionais, bancários e permissões.")
+    registrar_log(db, admin.nome, "CONFIG_EMPRESA", "Atualizou parâmetros institucionais, bancários e permissões.", org_id=admin.organizacao_id)
     db.commit()
-    _SITE_CONFIG_CACHE["data"] = None
+    if admin.organizacao_id == 1:
+        _SITE_CONFIG_CACHE["data"] = None
     db.refresh(cfg)
     return cfg
+
+
+@router.put("/empresa/branding", tags=["Empresa"])
+def salvar_branding_empresa(
+    dados: BrandingUpdate,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(exigir_admin),
+):
+    org = db.query(Organizacao).filter(Organizacao.id == admin.organizacao_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organização não encontrada.")
+
+    cur_brand = _parse_json_dict(org.branding_json, DEFAULT_BRANDING_MASTER)
+    for k, v in dados.model_dump(exclude_unset=True).items():
+        if v is not None:
+            cur_brand[k] = v
+
+    org.branding_json = json.dumps(cur_brand, ensure_ascii=False)
+    registrar_log(db, admin.nome, "WHITE_LABEL_BRANDING", "Atualizou identidade visual White-Label (cores, logo e nome do portal).", org_id=org.id)
+    db.commit()
+    return {"ok": True, "branding": cur_brand}
 
 
 # ==================== CENTRAL DE NOTIFICAÇÕES ====================
@@ -2159,7 +3166,7 @@ def marcar_notificacao_lida(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_atual),
 ):
-    n = db.query(Notificacao).filter(Notificacao.id == notif_id).first()
+    n = db.query(Notificacao).filter(Notificacao.id == notif_id, Notificacao.organizacao_id == usuario.organizacao_id).first()
     if n:
         n.lida = True
         db.commit()
@@ -2173,11 +3180,13 @@ def marcar_todas_notificacoes_lidas(
 ):
     if usuario.perfil == "cliente":
         db.query(Notificacao).filter(
+            Notificacao.organizacao_id == usuario.organizacao_id,
             or_(Notificacao.usuario_id == usuario.id, Notificacao.perfil_destino == "cliente"),
             Notificacao.lida == False,
         ).update({"lida": True}, synchronize_session=False)
     else:
         db.query(Notificacao).filter(
+            Notificacao.organizacao_id == usuario.organizacao_id,
             or_(
                 Notificacao.usuario_id == usuario.id,
                 Notificacao.perfil_destino == "equipe",
@@ -2191,10 +3200,11 @@ def marcar_todas_notificacoes_lidas(
 
 # ==================== USUÁRIOS ====================
 @router.get("/usuarios", response_model=List[UsuarioListOut], tags=["Usuários"])
-def listar_usuarios(db: Session = Depends(get_db), _: Usuario = Depends(exigir_equipe)):
+def listar_usuarios(db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
     return (
         db.query(Usuario)
         .options(defer(Usuario.foto_url), defer(Usuario.resumo_profissional))
+        .filter(Usuario.organizacao_id == equipe.organizacao_id)
         .order_by(Usuario.nome)
         .all()
     )
@@ -2206,12 +3216,26 @@ def criar_usuario(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    if db.query(Usuario.id).filter(Usuario.email == dados.email).first():
+    org = _get_org_or_404(db, admin.organizacao_id)
+    if dados.perfil in ("admin", "colaborador") and not org.is_master:
+        qtd_staff = (
+            db.query(func.count(Usuario.id))
+            .filter(Usuario.organizacao_id == org.id, Usuario.perfil != "cliente", Usuario.ativo == True)
+            .scalar() or 0
+        )
+        if qtd_staff >= org.limite_usuarios:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Limite de {org.limite_usuarios} usuário(s) internos do plano {org.plano.upper()} atingido.",
+            )
+
+    if db.query(Usuario.id).filter(func.lower(Usuario.email) == dados.email.strip().lower()).first():
         raise HTTPException(status_code=400, detail="E-mail já cadastrado.")
     cargo_final = dados.cargo or dados.cbo_descricao
     novo = Usuario(
+        organizacao_id=org.id,
         nome=dados.nome,
-        email=dados.email,
+        email=dados.email.strip().lower(),
         senha_hash=gerar_hash_senha(dados.senha),
         perfil=dados.perfil,
         ativo=dados.ativo,
@@ -2233,7 +3257,7 @@ def criar_usuario(
         telefone=dados.telefone,
     )
     db.add(novo)
-    registrar_log(db, admin.nome, "CRIAR_USUARIO", f"Criou usuário {novo.email} ({novo.perfil})")
+    registrar_log(db, admin.nome, "CRIAR_USUARIO", f"Criou usuário {novo.email} ({novo.perfil})", org_id=org.id)
     db.commit()
     db.refresh(novo)
     return novo
@@ -2246,17 +3270,19 @@ def atualizar_usuario(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id, Usuario.organizacao_id == admin.organizacao_id).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
 
     payload = dados.model_dump(exclude_unset=True)
     if "senha" in payload:
-        usuario.senha_hash = gerar_hash_senha(payload.pop("senha"))
+        nova_senha = payload.pop("senha")
+        if nova_senha:
+            usuario.senha_hash = gerar_hash_senha(nova_senha)
     for campo, valor in payload.items():
         setattr(usuario, campo, valor)
 
-    registrar_log(db, admin.nome, "EDITAR_USUARIO", f"Atualizou usuário #{usuario_id}")
+    registrar_log(db, admin.nome, "EDITAR_USUARIO", f"Atualizou usuário #{usuario_id}", org_id=admin.organizacao_id)
     db.commit()
     db.refresh(usuario)
     return usuario
@@ -2270,10 +3296,10 @@ def remover_usuario(
 ):
     if usuario_id == admin.id:
         raise HTTPException(status_code=400, detail="Você não pode excluir sua própria conta.")
-    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id, Usuario.organizacao_id == admin.organizacao_id).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
-    registrar_log(db, admin.nome, "EXCLUIR_USUARIO", f"Removeu usuário {usuario.email}")
+    registrar_log(db, admin.nome, "EXCLUIR_USUARIO", f"Removeu usuário {usuario.email}", org_id=admin.organizacao_id)
     db.delete(usuario)
     db.commit()
 
@@ -2283,9 +3309,9 @@ def remover_usuario(
 def listar_clientes(
     status_funil: Optional[str] = None,
     db: Session = Depends(get_db),
-    _: Usuario = Depends(exigir_equipe),
+    equipe: Usuario = Depends(exigir_equipe),
 ):
-    query = db.query(Cliente)
+    query = db.query(Cliente).filter(Cliente.organizacao_id == equipe.organizacao_id)
     if status_funil:
         query = query.filter(Cliente.status_funil == status_funil)
     return query.order_by(Cliente.criado_em.desc()).all()
@@ -2297,9 +3323,19 @@ def criar_cliente(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    cliente = Cliente(**dados.model_dump())
+    org = _get_org_or_404(db, equipe.organizacao_id)
+    _verificar_modulo(org, "clientes")
+    if not org.is_master:
+        qtd_cli = db.query(func.count(Cliente.id)).filter(Cliente.organizacao_id == org.id).scalar() or 0
+        if qtd_cli >= org.limite_clientes:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Limite de {org.limite_clientes} clientes/leads do plano {org.plano.upper()} atingido.",
+            )
+
+    cliente = Cliente(**dados.model_dump(), organizacao_id=org.id)
     db.add(cliente)
-    registrar_log(db, equipe.nome, "CRIAR_CLIENTE", f"Cadastrou {cliente.nome_empresa}")
+    registrar_log(db, equipe.nome, "CRIAR_CLIENTE", f"Cadastrou {cliente.nome_empresa}", org_id=org.id)
     db.commit()
     db.refresh(cliente)
     return cliente
@@ -2312,12 +3348,12 @@ def atualizar_cliente(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id, Cliente.organizacao_id == equipe.organizacao_id).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
     for campo, valor in dados.model_dump(exclude_unset=True).items():
         setattr(cliente, campo, valor)
-    registrar_log(db, equipe.nome, "EDITAR_CLIENTE", f"Atualizou cliente #{cliente_id}")
+    registrar_log(db, equipe.nome, "EDITAR_CLIENTE", f"Atualizou cliente #{cliente_id}", org_id=equipe.organizacao_id)
     db.commit()
     db.refresh(cliente)
     return cliente
@@ -2329,10 +3365,10 @@ def remover_cliente(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id, Cliente.organizacao_id == admin.organizacao_id).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
-    registrar_log(db, admin.nome, "EXCLUIR_CLIENTE", f"Removeu cliente {cliente.nome_empresa}")
+    registrar_log(db, admin.nome, "EXCLUIR_CLIENTE", f"Removeu cliente {cliente.nome_empresa}", org_id=admin.organizacao_id)
     db.delete(cliente)
     db.commit()
 
@@ -2344,7 +3380,7 @@ def listar_projetos(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_atual),
 ):
-    query = db.query(Projeto)
+    query = db.query(Projeto).filter(Projeto.organizacao_id == usuario.organizacao_id)
     if usuario.perfil == "cliente":
         query = query.join(Cliente).filter(
             (Cliente.usuario_portal_id == usuario.id) | (Cliente.email == usuario.email)
@@ -2360,10 +3396,12 @@ def criar_projeto(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    cliente = db.query(Cliente).filter(Cliente.id == dados.cliente_id).first()
+    org = _get_org_or_404(db, equipe.organizacao_id)
+    _verificar_modulo(org, "projetos")
+    cliente = db.query(Cliente).filter(Cliente.id == dados.cliente_id, Cliente.organizacao_id == org.id).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente informado não existe.")
-    projeto = Projeto(**dados.model_dump())
+    projeto = Projeto(**dados.model_dump(), organizacao_id=org.id)
     db.add(projeto)
     if cliente.usuario_portal_id:
         criar_notificacao(
@@ -2372,8 +3410,9 @@ def criar_projeto(
             mensagem=f"O projeto '{projeto.titulo}' já está disponível para acompanhamento no seu portal.",
             link_pagina="projects",
             usuario_id=cliente.usuario_portal_id,
+            org_id=org.id,
         )
-    registrar_log(db, equipe.nome, "CRIAR_PROJETO", f"Criou projeto '{projeto.titulo}'")
+    registrar_log(db, equipe.nome, "CRIAR_PROJETO", f"Criou projeto '{projeto.titulo}'", org_id=org.id)
     db.commit()
     db.refresh(projeto)
     return projeto
@@ -2386,7 +3425,7 @@ def atualizar_projeto(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    projeto = db.query(Projeto).filter(Projeto.id == projeto_id).first()
+    projeto = db.query(Projeto).filter(Projeto.id == projeto_id, Projeto.organizacao_id == equipe.organizacao_id).first()
     if not projeto:
         raise HTTPException(status_code=404, detail="Projeto não encontrado.")
     payload = dados.model_dump(exclude_unset=True)
@@ -2403,9 +3442,10 @@ def atualizar_projeto(
                 mensagem=f"O projeto '{projeto.titulo}' foi liberado para sua validação no Portal do Cliente.",
                 link_pagina="projects",
                 usuario_id=cliente.usuario_portal_id,
+                org_id=equipe.organizacao_id,
             )
 
-    registrar_log(db, equipe.nome, "EDITAR_PROJETO", f"Atualizou projeto #{projeto_id}")
+    registrar_log(db, equipe.nome, "EDITAR_PROJETO", f"Atualizou projeto #{projeto_id}", org_id=equipe.organizacao_id)
     db.commit()
     db.refresh(projeto)
     return projeto
@@ -2417,10 +3457,10 @@ def remover_projeto(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    projeto = db.query(Projeto).filter(Projeto.id == projeto_id).first()
+    projeto = db.query(Projeto).filter(Projeto.id == projeto_id, Projeto.organizacao_id == admin.organizacao_id).first()
     if not projeto:
         raise HTTPException(status_code=404, detail="Projeto não encontrado.")
-    registrar_log(db, admin.nome, "EXCLUIR_PROJETO", f"Removeu projeto '{projeto.titulo}'")
+    registrar_log(db, admin.nome, "EXCLUIR_PROJETO", f"Removeu projeto '{projeto.titulo}'", org_id=admin.organizacao_id)
     db.delete(projeto)
     db.commit()
 
@@ -2429,18 +3469,18 @@ def remover_projeto(
 @router.get("/tarefas", response_model=List[TarefaOut], tags=["Tarefas"])
 def listar_todas_tarefas(
     db: Session = Depends(get_db),
-    _: Usuario = Depends(exigir_equipe),
+    equipe: Usuario = Depends(exigir_equipe),
 ):
-    return db.query(Tarefa).order_by(Tarefa.criado_em.desc()).all()
+    return db.query(Tarefa).filter(Tarefa.organizacao_id == equipe.organizacao_id).order_by(Tarefa.criado_em.desc()).all()
 
 
 @router.get("/projetos/{projeto_id}/tarefas", response_model=List[TarefaOut], tags=["Tarefas"])
 def listar_tarefas_projeto(
     projeto_id: int,
     db: Session = Depends(get_db),
-    _: Usuario = Depends(get_usuario_atual),
+    usuario: Usuario = Depends(get_usuario_atual),
 ):
-    return db.query(Tarefa).filter(Tarefa.projeto_id == projeto_id).all()
+    return db.query(Tarefa).filter(Tarefa.projeto_id == projeto_id, Tarefa.organizacao_id == usuario.organizacao_id).all()
 
 
 @router.post("/tarefas", response_model=TarefaOut, status_code=201, tags=["Tarefas"])
@@ -2449,9 +3489,11 @@ def criar_tarefa(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    tarefa = Tarefa(**dados.model_dump())
+    org = _get_org_or_404(db, equipe.organizacao_id)
+    _verificar_modulo(org, "tarefas")
+    tarefa = Tarefa(**dados.model_dump(), organizacao_id=org.id)
     db.add(tarefa)
-    registrar_log(db, equipe.nome, "CRIAR_TAREFA", f"Criou tarefa '{tarefa.titulo}'")
+    registrar_log(db, equipe.nome, "CRIAR_TAREFA", f"Criou tarefa '{tarefa.titulo}'", org_id=org.id)
     db.commit()
     db.refresh(tarefa)
     return tarefa
@@ -2464,12 +3506,12 @@ def atualizar_tarefa(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    tarefa = db.query(Tarefa).filter(Tarefa.id == tarefa_id).first()
+    tarefa = db.query(Tarefa).filter(Tarefa.id == tarefa_id, Tarefa.organizacao_id == equipe.organizacao_id).first()
     if not tarefa:
         raise HTTPException(status_code=404, detail="Tarefa não encontrada.")
     for campo, valor in dados.model_dump(exclude_unset=True).items():
         setattr(tarefa, campo, valor)
-    registrar_log(db, equipe.nome, "EDITAR_TAREFA", f"Atualizou tarefa #{tarefa_id}")
+    registrar_log(db, equipe.nome, "EDITAR_TAREFA", f"Atualizou tarefa #{tarefa_id}", org_id=equipe.organizacao_id)
     db.commit()
     db.refresh(tarefa)
     return tarefa
@@ -2481,7 +3523,7 @@ def remover_tarefa(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    tarefa = db.query(Tarefa).filter(Tarefa.id == tarefa_id).first()
+    tarefa = db.query(Tarefa).filter(Tarefa.id == tarefa_id, Tarefa.organizacao_id == equipe.organizacao_id).first()
     if not tarefa:
         raise HTTPException(status_code=404, detail="Tarefa não encontrada.")
     db.delete(tarefa)
@@ -2493,11 +3535,11 @@ def remover_tarefa(
 def listar_interacoes(
     cliente_id: int,
     db: Session = Depends(get_db),
-    _: Usuario = Depends(exigir_equipe),
+    equipe: Usuario = Depends(exigir_equipe),
 ):
     return (
         db.query(Interacao)
-        .filter(Interacao.cliente_id == cliente_id)
+        .filter(Interacao.cliente_id == cliente_id, Interacao.organizacao_id == equipe.organizacao_id)
         .order_by(Interacao.data_interacao.desc())
         .all()
     )
@@ -2509,7 +3551,7 @@ def registrar_interacao(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(exigir_equipe),
 ):
-    interacao = Interacao(**dados.model_dump(), usuario_id=usuario.id)
+    interacao = Interacao(**dados.model_dump(), organizacao_id=usuario.organizacao_id, usuario_id=usuario.id)
     db.add(interacao)
     db.commit()
     db.refresh(interacao)
@@ -2522,7 +3564,7 @@ def listar_faturas(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_atual),
 ):
-    query = db.query(Fatura).options(defer(Fatura.comprovante_data))
+    query = db.query(Fatura).options(defer(Fatura.comprovante_data)).filter(Fatura.organizacao_id == usuario.organizacao_id)
     if usuario.perfil == "cliente":
         query = query.join(Cliente).filter(
             (Cliente.usuario_portal_id == usuario.id) | (Cliente.email == usuario.email)
@@ -2534,9 +3576,12 @@ def listar_faturas(
 def baixar_comprovante_fatura(
     fatura_id: int,
     db: Session = Depends(get_db),
-    _: Usuario = Depends(get_usuario_atual),
+    usuario: Usuario = Depends(get_usuario_atual),
 ):
-    fat = db.query(Fatura.id, Fatura.comprovante_nome, Fatura.comprovante_data).filter(Fatura.id == fatura_id).first()
+    fat = db.query(Fatura.id, Fatura.comprovante_nome, Fatura.comprovante_data).filter(
+        Fatura.id == fatura_id,
+        Fatura.organizacao_id == usuario.organizacao_id,
+    ).first()
     if not fat or not fat.comprovante_data:
         raise HTTPException(status_code=404, detail="Comprovante não encontrado.")
     return {"id": fat.id, "comprovante_nome": fat.comprovante_nome, "comprovante_data": fat.comprovante_data}
@@ -2548,9 +3593,11 @@ def criar_fatura(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    fatura = Fatura(**dados.model_dump())
+    org = _get_org_or_404(db, equipe.organizacao_id)
+    _verificar_modulo(org, "faturas")
+    fatura = Fatura(**dados.model_dump(), organizacao_id=org.id)
     db.add(fatura)
-    cliente = db.query(Cliente).filter(Cliente.id == dados.cliente_id).first()
+    cliente = db.query(Cliente).filter(Cliente.id == dados.cliente_id, Cliente.organizacao_id == org.id).first()
     if cliente and cliente.usuario_portal_id:
         criar_notificacao(
             db,
@@ -2558,8 +3605,9 @@ def criar_fatura(
             mensagem=f"Fatura '{fatura.descricao}' disponível no seu portal.",
             link_pagina="invoices",
             usuario_id=cliente.usuario_portal_id,
+            org_id=org.id,
         )
-    registrar_log(db, equipe.nome, "CRIAR_FATURA", f"Lançou fatura '{fatura.descricao}'")
+    registrar_log(db, equipe.nome, "CRIAR_FATURA", f"Lançou fatura '{fatura.descricao}'", org_id=org.id)
     db.commit()
     db.refresh(fatura)
     return fatura
@@ -2572,7 +3620,7 @@ def atualizar_fatura(
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
-    fatura = db.query(Fatura).filter(Fatura.id == fatura_id).first()
+    fatura = db.query(Fatura).filter(Fatura.id == fatura_id, Fatura.organizacao_id == equipe.organizacao_id).first()
     if not fatura:
         raise HTTPException(status_code=404, detail="Fatura não encontrada.")
     payload = dados.model_dump(exclude_unset=True)
@@ -2580,7 +3628,7 @@ def atualizar_fatura(
         fatura.pago_em = datetime.utcnow()
     for campo, valor in payload.items():
         setattr(fatura, campo, valor)
-    registrar_log(db, equipe.nome, "EDITAR_FATURA", f"Atualizou fatura #{fatura_id}")
+    registrar_log(db, equipe.nome, "EDITAR_FATURA", f"Atualizou fatura #{fatura_id}", org_id=equipe.organizacao_id)
     db.commit()
     db.refresh(fatura)
     return fatura
@@ -2592,7 +3640,7 @@ def remover_fatura(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    fatura = db.query(Fatura).filter(Fatura.id == fatura_id).first()
+    fatura = db.query(Fatura).filter(Fatura.id == fatura_id, Fatura.organizacao_id == admin.organizacao_id).first()
     if not fatura:
         raise HTTPException(status_code=404, detail="Fatura não encontrada.")
     db.delete(fatura)
@@ -2606,7 +3654,7 @@ def listar_holerites(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_atual),
 ):
-    query = db.query(Holerite).options(defer(Holerite.anexo_data))
+    query = db.query(Holerite).options(defer(Holerite.anexo_data)).filter(Holerite.organizacao_id == usuario.organizacao_id)
     if usuario.perfil != "admin":
         query = query.filter(Holerite.usuario_id == usuario.id)
     elif usuario_id:
@@ -2620,7 +3668,10 @@ def baixar_anexo_holerite(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_atual),
 ):
-    h = db.query(Holerite.id, Holerite.usuario_id, Holerite.anexo_nome, Holerite.anexo_data).filter(Holerite.id == holerite_id).first()
+    h = db.query(Holerite.id, Holerite.usuario_id, Holerite.anexo_nome, Holerite.anexo_data).filter(
+        Holerite.id == holerite_id,
+        Holerite.organizacao_id == usuario.organizacao_id,
+    ).first()
     if not h or not h.anexo_data:
         raise HTTPException(status_code=404, detail="Anexo não encontrado.")
     if usuario.perfil != "admin" and h.usuario_id != usuario.id:
@@ -2634,7 +3685,9 @@ def criar_holerite(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    colaborador = db.query(Usuario).filter(Usuario.id == dados.usuario_id).first()
+    org = _get_org_or_404(db, admin.organizacao_id)
+    _verificar_modulo(org, "holerite")
+    colaborador = db.query(Usuario).filter(Usuario.id == dados.usuario_id, Usuario.organizacao_id == org.id).first()
     if not colaborador:
         raise HTTPException(status_code=404, detail="Colaborador informado não encontrado.")
 
@@ -2643,13 +3696,14 @@ def criar_holerite(
     if not payload.get("valor_liquido") or payload["valor_liquido"] == 0:
         payload["valor_liquido"] = liquido_calc
 
-    item = Holerite(**payload, publicado_por=admin.nome)
+    item = Holerite(**payload, organizacao_id=org.id, publicado_por=admin.nome)
     db.add(item)
     registrar_log(
         db,
         admin.nome,
         "PUBLICAR_HOLERITE",
         f"Publicou holerite ({item.competencia} - {item.tipo}) para {colaborador.nome}",
+        org_id=org.id,
     )
     db.commit()
     db.refresh(item)
@@ -2663,7 +3717,7 @@ def atualizar_holerite(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    item = db.query(Holerite).filter(Holerite.id == holerite_id).first()
+    item = db.query(Holerite).filter(Holerite.id == holerite_id, Holerite.organizacao_id == admin.organizacao_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Holerite não encontrado.")
 
@@ -2674,7 +3728,7 @@ def atualizar_holerite(
     if any(k in payload for k in ("salario_base", "proventos", "descontos")) and "valor_liquido" not in payload:
         item.valor_liquido = (item.salario_base or 0) + (item.proventos or 0) - (item.descontos or 0)
 
-    registrar_log(db, admin.nome, "EDITAR_HOLERITE", f"Atualizou holerite #{holerite_id} ({item.competencia})")
+    registrar_log(db, admin.nome, "EDITAR_HOLERITE", f"Atualizou holerite #{holerite_id} ({item.competencia})", org_id=admin.organizacao_id)
     db.commit()
     db.refresh(item)
     return item
@@ -2686,10 +3740,10 @@ def remover_holerite(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    item = db.query(Holerite).filter(Holerite.id == holerite_id).first()
+    item = db.query(Holerite).filter(Holerite.id == holerite_id, Holerite.organizacao_id == admin.organizacao_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Holerite não encontrado.")
-    registrar_log(db, admin.nome, "EXCLUIR_HOLERITE", f"Removeu holerite #{holerite_id} ({item.competencia})")
+    registrar_log(db, admin.nome, "EXCLUIR_HOLERITE", f"Removeu holerite #{holerite_id} ({item.competencia})", org_id=admin.organizacao_id)
     db.delete(item)
     db.commit()
 
@@ -2700,7 +3754,7 @@ def listar_informes_rendimentos(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_atual),
 ):
-    query = db.query(InformeRendimento).options(defer(InformeRendimento.anexo_data))
+    query = db.query(InformeRendimento).options(defer(InformeRendimento.anexo_data)).filter(InformeRendimento.organizacao_id == usuario.organizacao_id)
     if usuario.perfil != "admin":
         query = query.filter(InformeRendimento.usuario_id == usuario.id)
     elif usuario_id:
@@ -2714,7 +3768,10 @@ def baixar_anexo_informe(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_atual),
 ):
-    inf = db.query(InformeRendimento.id, InformeRendimento.usuario_id, InformeRendimento.anexo_nome, InformeRendimento.anexo_data).filter(InformeRendimento.id == informe_id).first()
+    inf = db.query(InformeRendimento.id, InformeRendimento.usuario_id, InformeRendimento.anexo_nome, InformeRendimento.anexo_data).filter(
+        InformeRendimento.id == informe_id,
+        InformeRendimento.organizacao_id == usuario.organizacao_id,
+    ).first()
     if not inf or not inf.anexo_data:
         raise HTTPException(status_code=404, detail="Anexo não encontrado.")
     if usuario.perfil != "admin" and inf.usuario_id != usuario.id:
@@ -2728,17 +3785,18 @@ def criar_informe_rendimento(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    colaborador = db.query(Usuario).filter(Usuario.id == dados.usuario_id).first()
+    colaborador = db.query(Usuario).filter(Usuario.id == dados.usuario_id, Usuario.organizacao_id == admin.organizacao_id).first()
     if not colaborador:
         raise HTTPException(status_code=404, detail="Colaborador informado não encontrado.")
 
-    item = InformeRendimento(**dados.model_dump(), publicado_por=admin.nome)
+    item = InformeRendimento(**dados.model_dump(), organizacao_id=admin.organizacao_id, publicado_por=admin.nome)
     db.add(item)
     registrar_log(
         db,
         admin.nome,
         "PUBLICAR_INFORME_IR",
         f"Publicou Informe de Rendimentos ({item.ano_calendario}) para {colaborador.nome}",
+        org_id=admin.organizacao_id,
     )
     db.commit()
     db.refresh(item)
@@ -2751,10 +3809,10 @@ def remover_informe_rendimento(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    item = db.query(InformeRendimento).filter(InformeRendimento.id == informe_id).first()
+    item = db.query(InformeRendimento).filter(InformeRendimento.id == informe_id, InformeRendimento.organizacao_id == admin.organizacao_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Informe de rendimentos não encontrado.")
-    registrar_log(db, admin.nome, "EXCLUIR_INFORME_IR", f"Removeu Informe de Rendimentos #{informe_id}")
+    registrar_log(db, admin.nome, "EXCLUIR_INFORME_IR", f"Removeu Informe de Rendimentos #{informe_id}", org_id=admin.organizacao_id)
     db.delete(item)
     db.commit()
 
@@ -2780,7 +3838,7 @@ def listar_registros_ponto(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(exigir_equipe),
 ):
-    query = db.query(RegistroPonto)
+    query = db.query(RegistroPonto).filter(RegistroPonto.organizacao_id == usuario.organizacao_id)
     if usuario.perfil != "admin":
         query = query.filter(RegistroPonto.usuario_id == usuario.id)
     elif usuario_id:
@@ -2811,17 +3869,25 @@ def registrar_batida_ponto(
     if usuario.perfil == "cliente":
         raise HTTPException(status_code=403, detail="Acesso restrito a colaboradores e administradores.")
 
+    org = _get_org_or_404(db, usuario.organizacao_id)
+    _verificar_modulo(org, "ponto")
+
     agora = _agora_brasilia()
     hoje = agora.date()
     hora_atual = dados.hora_manual.strip() if dados.hora_manual else agora.strftime("%H:%M")
 
     reg = (
         db.query(RegistroPonto)
-        .filter(RegistroPonto.usuario_id == usuario.id, RegistroPonto.data_ponto == hoje)
+        .filter(
+            RegistroPonto.organizacao_id == org.id,
+            RegistroPonto.usuario_id == usuario.id,
+            RegistroPonto.data_ponto == hoje,
+        )
         .first()
     )
     if not reg:
         reg = RegistroPonto(
+            organizacao_id=org.id,
             usuario_id=usuario.id,
             data_ponto=hoje,
             tipo_dia="normal",
@@ -2856,7 +3922,7 @@ def registrar_batida_ponto(
     reg.minutos_atraso = calc["minutos_atraso"]
     reg.eh_feriado_ou_domingo = calc["eh_feriado_ou_domingo"]
 
-    registrar_log(db, usuario.nome, "BATER_PONTO", f"Registrou {campo} às {hora_atual} ({hoje.isoformat()})")
+    registrar_log(db, usuario.nome, "BATER_PONTO", f"Registrou {campo} às {hora_atual} ({hoje.isoformat()})", org_id=org.id)
     db.commit()
     db.refresh(reg)
     return reg
@@ -2871,13 +3937,21 @@ def solicitar_ajuste_ponto(
     if usuario.perfil == "cliente":
         raise HTTPException(status_code=403, detail="Acesso restrito à equipe.")
 
+    org = _get_org_or_404(db, usuario.organizacao_id)
+    _verificar_modulo(org, "ponto")
+
     reg = (
         db.query(RegistroPonto)
-        .filter(RegistroPonto.usuario_id == usuario.id, RegistroPonto.data_ponto == dados.data_ponto)
+        .filter(
+            RegistroPonto.organizacao_id == org.id,
+            RegistroPonto.usuario_id == usuario.id,
+            RegistroPonto.data_ponto == dados.data_ponto,
+        )
         .first()
     )
     if not reg:
         reg = RegistroPonto(
+            organizacao_id=org.id,
             usuario_id=usuario.id,
             data_ponto=dados.data_ponto,
             tipo_dia=dados.tipo_dia,
@@ -2920,7 +3994,7 @@ def solicitar_ajuste_ponto(
         reg.justificativa_ajuste = dados.justificativa.strip()
         reg.ajuste_solicitado_json = json.dumps(ajuste_payload, ensure_ascii=False)
 
-    registrar_log(db, usuario.nome, "AJUSTE_PONTO", f"Solicitou ajuste de ponto em {dados.data_ponto.isoformat()}")
+    registrar_log(db, usuario.nome, "AJUSTE_PONTO", f"Solicitou ajuste de ponto em {dados.data_ponto.isoformat()}", org_id=org.id)
     db.commit()
     db.refresh(reg)
     return reg
@@ -2933,7 +4007,7 @@ def decidir_ajuste_ponto(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
-    reg = db.query(RegistroPonto).filter(RegistroPonto.id == ponto_id).first()
+    reg = db.query(RegistroPonto).filter(RegistroPonto.id == ponto_id, RegistroPonto.organizacao_id == admin.organizacao_id).first()
     if not reg:
         raise HTTPException(status_code=404, detail="Registro de ponto não encontrado.")
 
@@ -2981,6 +4055,7 @@ def decidir_ajuste_ponto(
         admin.nome,
         "DECISAO_AJUSTE_PONTO",
         f"Marcou ajuste #{ponto_id} como {dados.decisao}",
+        org_id=admin.organizacao_id,
     )
     db.commit()
     db.refresh(reg)
@@ -2992,9 +4067,9 @@ def pre_calcular_folha_colaborador(
     usuario_id: int,
     competencia: str,
     db: Session = Depends(get_db),
-    _: Usuario = Depends(exigir_admin),
+    admin: Usuario = Depends(exigir_admin),
 ):
-    colaborador = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    colaborador = db.query(Usuario).filter(Usuario.id == usuario_id, Usuario.organizacao_id == admin.organizacao_id).first()
     if not colaborador:
         raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
 
@@ -3008,6 +4083,7 @@ def pre_calcular_folha_colaborador(
     pontos = (
         db.query(RegistroPonto)
         .filter(
+            RegistroPonto.organizacao_id == admin.organizacao_id,
             RegistroPonto.usuario_id == usuario_id,
             RegistroPonto.data_ponto >= date(ano, mes, 1),
             RegistroPonto.data_ponto <= date(ano, mes, ult_dia),
@@ -3024,6 +4100,9 @@ def gerar_holerite_automatico_endpoint(
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
+    org = _get_org_or_404(db, admin.organizacao_id)
+    _verificar_modulo(org, "holerite")
+
     try:
         mes_str, ano_str = dados.competencia.strip().split("/")
         mes, ano = int(mes_str), int(ano_str)
@@ -3034,14 +4113,14 @@ def gerar_holerite_automatico_endpoint(
     if dados.gerar_todos:
         colaboradores = (
             db.query(Usuario)
-            .filter(Usuario.ativo == True, Usuario.perfil != "cliente")
+            .filter(Usuario.organizacao_id == org.id, Usuario.ativo == True, Usuario.perfil != "cliente")
             .order_by(Usuario.nome)
             .all()
         )
     else:
         if not dados.usuario_id:
             raise HTTPException(status_code=400, detail="Selecione um colaborador ou marque 'Gerar para toda a equipe'.")
-        colab = db.query(Usuario).filter(Usuario.id == dados.usuario_id).first()
+        colab = db.query(Usuario).filter(Usuario.id == dados.usuario_id, Usuario.organizacao_id == org.id).first()
         if not colab:
             raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
         colaboradores = [colab]
@@ -3053,6 +4132,7 @@ def gerar_holerite_automatico_endpoint(
         pontos = (
             db.query(RegistroPonto)
             .filter(
+                RegistroPonto.organizacao_id == org.id,
                 RegistroPonto.usuario_id == colab.id,
                 RegistroPonto.data_ponto >= date(ano, mes, 1),
                 RegistroPonto.data_ponto <= date(ano, mes, ult_dia),
@@ -3070,6 +4150,7 @@ def gerar_holerite_automatico_endpoint(
             obs_auto = f"{dados.observacoes.strip()} | {obs_auto}"
 
         item = Holerite(
+            organizacao_id=org.id,
             usuario_id=colab.id,
             competencia=dados.competencia.strip(),
             tipo=dados.tipo,
@@ -3093,6 +4174,7 @@ def gerar_holerite_automatico_endpoint(
         admin.nome,
         "GERAR_FOLHA_AUTOMATICA",
         f"Gerou {len(gerados)} holerite(s) automático(s) da competência {dados.competencia}",
+        org_id=org.id,
     )
     db.commit()
     for g in gerados:
@@ -3109,11 +4191,11 @@ def gerar_holerite_automatico_endpoint(
 def listar_modulo(
     modulo: str,
     db: Session = Depends(get_db),
-    _: Usuario = Depends(get_usuario_atual),
+    usuario: Usuario = Depends(get_usuario_atual),
 ):
     return (
         db.query(ModuloRegistro)
-        .filter(ModuloRegistro.modulo == modulo)
+        .filter(ModuloRegistro.organizacao_id == usuario.organizacao_id, ModuloRegistro.modulo == modulo)
         .order_by(ModuloRegistro.criado_em.desc())
         .all()
     )
@@ -3126,9 +4208,9 @@ def criar_registro_modulo(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_atual),
 ):
-    item = ModuloRegistro(modulo=modulo, **dados.model_dump())
+    item = ModuloRegistro(organizacao_id=usuario.organizacao_id, modulo=modulo, **dados.model_dump())
     db.add(item)
-    registrar_log(db, usuario.nome, f"CRIAR_{modulo.upper()}", f"Criou '{item.titulo}'")
+    registrar_log(db, usuario.nome, f"CRIAR_{modulo.upper()}", f"Criou '{item.titulo}'", org_id=usuario.organizacao_id)
     db.commit()
     db.refresh(item)
     return item
@@ -3139,9 +4221,13 @@ def remover_registro_modulo(
     modulo: str,
     item_id: int,
     db: Session = Depends(get_db),
-    _: Usuario = Depends(exigir_equipe),
+    equipe: Usuario = Depends(exigir_equipe),
 ):
-    item = db.query(ModuloRegistro).filter(ModuloRegistro.id == item_id, ModuloRegistro.modulo == modulo).first()
+    item = db.query(ModuloRegistro).filter(
+        ModuloRegistro.id == item_id,
+        ModuloRegistro.organizacao_id == equipe.organizacao_id,
+        ModuloRegistro.modulo == modulo,
+    ).first()
     if not item:
         raise HTTPException(status_code=404, detail="Registro não encontrado.")
     db.delete(item)
@@ -3151,9 +4237,9 @@ def remover_registro_modulo(
 @router.get("/auditoria", response_model=List[LogAuditoriaOut], tags=["Auditoria"])
 def listar_auditoria(
     db: Session = Depends(get_db),
-    _: Usuario = Depends(exigir_equipe),
+    equipe: Usuario = Depends(exigir_equipe),
 ):
-    return db.query(LogAuditoria).order_by(LogAuditoria.criado_em.desc()).limit(100).all()
+    return db.query(LogAuditoria).filter(LogAuditoria.organizacao_id == equipe.organizacao_id).order_by(LogAuditoria.criado_em.desc()).limit(100).all()
 
 
 app.include_router(router)

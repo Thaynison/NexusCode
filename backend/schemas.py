@@ -143,6 +143,7 @@ class UsuarioUpdate(BaseModel):
 
 class UsuarioOut(UsuarioBase):
     id: int
+    organizacao_id: int = 1
     criado_em: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -150,6 +151,7 @@ class UsuarioOut(UsuarioBase):
 class UsuarioListOut(BaseModel):
     """Schema enxuto sem foto_url Base64 para respostas instantâneas em listas e login."""
     id: int
+    organizacao_id: int = 1
     nome: str
     email: str
     perfil: str
@@ -983,3 +985,138 @@ class ProdutoLojaOut(BaseModel):
     ativo: bool
     criado_em: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== SAAS WHITE-LABEL & MULTI-TENANT ====================
+class OrganizacaoCreate(BaseModel):
+    nome: str = Field(..., min_length=2, max_length=150)
+    slug: str = Field(..., min_length=2, max_length=80)
+    dominio_customizado: Optional[str] = None
+    plano: str = "pro"
+    status_assinatura: Literal["trial", "ativo", "inadimplente", "suspenso"] = "ativo"
+    valor_mensal: Decimal = Decimal("0.00")
+    limite_usuarios: int = Field(default=10, ge=1, le=5000)
+    limite_clientes: int = Field(default=200, ge=1, le=50000)
+    trial_ate: Optional[date] = None
+    vencimento_assinatura: Optional[date] = None
+    modulos_json: Optional[str] = None
+    branding_json: Optional[str] = None
+    observacoes: Optional[str] = None
+    # Dados do administrador inicial da empresa compradora
+    admin_nome: str = Field(..., min_length=2, max_length=120)
+    admin_email: EmailStr
+    admin_senha: str = Field(..., min_length=6)
+    telefone: Optional[str] = None
+    cnpj: Optional[str] = None
+    # Integração com CRM/Financeiro Master (Venda Assistida)
+    gerar_contrato_master: bool = True
+    dia_vencimento: int = Field(default=10, ge=1, le=28)
+
+
+class OrganizacaoUpdate(BaseModel):
+    nome: Optional[str] = None
+    slug: Optional[str] = None
+    dominio_customizado: Optional[str] = None
+    plano: Optional[str] = None
+    status_assinatura: Optional[Literal["trial", "ativo", "inadimplente", "suspenso"]] = None
+    valor_mensal: Optional[Decimal] = None
+    limite_usuarios: Optional[int] = Field(default=None, ge=1, le=5000)
+    limite_clientes: Optional[int] = Field(default=None, ge=1, le=50000)
+    trial_ate: Optional[date] = None
+    vencimento_assinatura: Optional[date] = None
+    modulos_json: Optional[str] = None
+    branding_json: Optional[str] = None
+    observacoes: Optional[str] = None
+
+
+class OrganizacaoOut(BaseModel):
+    id: int
+    nome: str
+    slug: str
+    dominio_customizado: Optional[str] = None
+    is_master: bool = False
+    plano: str
+    status_assinatura: str
+    valor_mensal: Decimal
+    limite_usuarios: int
+    limite_clientes: int
+    trial_ate: Optional[date] = None
+    vencimento_assinatura: Optional[date] = None
+    modulos_json: Optional[str] = None
+    branding_json: Optional[str] = None
+    cliente_master_id: Optional[int] = None
+    contrato_master_id: Optional[int] = None
+    observacoes: Optional[str] = None
+    criado_em: datetime
+    usuarios_count: int = 0
+    clientes_count: int = 0
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlanoSaasCreate(BaseModel):
+    codigo: str = Field(..., min_length=2, max_length=40)
+    nome: str = Field(..., min_length=2, max_length=100)
+    subtitulo: Optional[str] = None
+    preco_mensal: Decimal = Field(default=Decimal("0.00"), ge=0)
+    limite_usuarios: int = Field(default=5, ge=1)
+    limite_clientes: int = Field(default=100, ge=1)
+    destaque: bool = False
+    modulos_json: Optional[str] = None
+    recursos_json: Optional[str] = None
+    ativo: bool = True
+    ordem: int = 1
+
+
+class PlanoSaasUpdate(BaseModel):
+    nome: Optional[str] = None
+    subtitulo: Optional[str] = None
+    preco_mensal: Optional[Decimal] = Field(default=None, ge=0)
+    limite_usuarios: Optional[int] = Field(default=None, ge=1)
+    limite_clientes: Optional[int] = Field(default=None, ge=1)
+    destaque: Optional[bool] = None
+    modulos_json: Optional[str] = None
+    recursos_json: Optional[str] = None
+    ativo: Optional[bool] = None
+    ordem: Optional[int] = None
+
+
+class PlanoSaasOut(BaseModel):
+    id: int
+    codigo: str
+    nome: str
+    subtitulo: Optional[str] = None
+    preco_mensal: Decimal
+    limite_usuarios: int
+    limite_clientes: int
+    destaque: bool
+    modulos_json: Optional[str] = None
+    recursos_json: Optional[str] = None
+    ativo: bool
+    ordem: int
+    criado_em: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SaasOnboardingCreate(BaseModel):
+    nome_empresa: str = Field(..., min_length=2, max_length=150)
+    slug: str = Field(..., min_length=2, max_length=60)
+    plano: str = "pro"
+    admin_nome: str = Field(..., min_length=2, max_length=120)
+    admin_email: EmailStr
+    admin_senha: str = Field(..., min_length=6)
+    telefone: Optional[str] = None
+    cnpj: Optional[str] = None
+    cor_primaria: Optional[str] = "#0096B4"
+    cor_sidebar: Optional[str] = "#0A1D37"
+
+
+class BrandingUpdate(BaseModel):
+    nome_plataforma: Optional[str] = None
+    subtitulo_plataforma: Optional[str] = None
+    logo_url: Optional[str] = None
+    favicon_url: Optional[str] = None
+    cor_primaria: Optional[str] = None
+    cor_secundaria: Optional[str] = None
+    cor_sidebar: Optional[str] = None
+    tema_padrao: Optional[Literal["light", "dark"]] = "light"
+    ocultar_powered_by: Optional[bool] = False

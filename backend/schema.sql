@@ -1,7 +1,45 @@
--- Schema PostgreSQL (Neon) - Nexus Code ERP, CRM & Portal do Cliente
+-- Schema PostgreSQL (Neon) - Nexus Code Enterprise SaaS White-Label Multi-Tenant
+
+CREATE TABLE IF NOT EXISTS organizacoes (
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(150) NOT NULL,
+    slug VARCHAR(80) NOT NULL UNIQUE,
+    dominio_customizado VARCHAR(180) NULL UNIQUE,
+    is_master BOOLEAN NOT NULL DEFAULT FALSE,
+    plano VARCHAR(40) NOT NULL DEFAULT 'pro',
+    status_assinatura VARCHAR(30) NOT NULL DEFAULT 'ativo',
+    valor_mensal NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    limite_usuarios INTEGER NOT NULL DEFAULT 10,
+    limite_clientes INTEGER NOT NULL DEFAULT 200,
+    trial_ate DATE NULL,
+    vencimento_assinatura DATE NULL,
+    modulos_json TEXT NULL,
+    branding_json TEXT NULL,
+    cliente_master_id INTEGER NULL,
+    contrato_master_id INTEGER NULL,
+    observacoes TEXT NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS planos_saas (
+    id SERIAL PRIMARY KEY,
+    codigo VARCHAR(40) NOT NULL UNIQUE,
+    nome VARCHAR(100) NOT NULL,
+    subtitulo VARCHAR(200) NULL,
+    preco_mensal NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    limite_usuarios INTEGER NOT NULL DEFAULT 5,
+    limite_clientes INTEGER NOT NULL DEFAULT 100,
+    destaque BOOLEAN NOT NULL DEFAULT FALSE,
+    modulos_json TEXT NULL,
+    recursos_json TEXT NULL,
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    ordem INTEGER NOT NULL DEFAULT 1,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 CREATE TABLE IF NOT EXISTS usuarios (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     nome VARCHAR(120) NOT NULL,
     email VARCHAR(150) NOT NULL UNIQUE,
     senha_hash VARCHAR(255) NOT NULL,
@@ -40,6 +78,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
 
 CREATE TABLE IF NOT EXISTS clientes (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     usuario_portal_id INTEGER NULL REFERENCES usuarios(id) ON DELETE SET NULL,
     nome_empresa VARCHAR(150) NOT NULL,
     contato_nome VARCHAR(120) NOT NULL,
@@ -54,6 +93,7 @@ CREATE TABLE IF NOT EXISTS clientes (
 
 CREATE TABLE IF NOT EXISTS solicitacoes_orcamento (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     cliente_id INTEGER NULL REFERENCES clientes(id) ON DELETE SET NULL,
     nome VARCHAR(120) NOT NULL,
     empresa VARCHAR(150) NULL,
@@ -70,6 +110,7 @@ CREATE TABLE IF NOT EXISTS solicitacoes_orcamento (
 
 CREATE TABLE IF NOT EXISTS projetos (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
     responsavel_id INTEGER NULL REFERENCES usuarios(id) ON DELETE SET NULL,
     titulo VARCHAR(180) NOT NULL,
@@ -92,7 +133,8 @@ CREATE TABLE IF NOT EXISTS projetos (
 
 CREATE TABLE IF NOT EXISTS tarefas (
     id SERIAL PRIMARY KEY,
-    projeto_id INTEGER NOT NULL REFERENCES projetos(id) ON DELETE CASCADE,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
+    projeto_id INTEGER NULL REFERENCES projetos(id) ON DELETE CASCADE,
     responsavel_id INTEGER NULL REFERENCES usuarios(id) ON DELETE SET NULL,
     titulo VARCHAR(180) NOT NULL,
     descricao TEXT NULL,
@@ -108,6 +150,7 @@ CREATE TABLE IF NOT EXISTS tarefas (
 
 CREATE TABLE IF NOT EXISTS holerites (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     competencia VARCHAR(20) NOT NULL,
     tipo VARCHAR(50) NOT NULL DEFAULT 'Salário Mensal',
@@ -129,6 +172,7 @@ CREATE TABLE IF NOT EXISTS holerites (
 
 CREATE TABLE IF NOT EXISTS informes_rendimentos (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     ano_calendario VARCHAR(10) NOT NULL,
     ano_exercicio VARCHAR(10) NOT NULL,
@@ -146,6 +190,7 @@ CREATE TABLE IF NOT EXISTS informes_rendimentos (
 
 CREATE TABLE IF NOT EXISTS interacoes (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
     usuario_id INTEGER NULL REFERENCES usuarios(id) ON DELETE SET NULL,
     tipo VARCHAR(20) NOT NULL DEFAULT 'whatsapp' CHECK (tipo IN ('reuniao', 'email', 'whatsapp', 'ligacao', 'proposta')),
@@ -156,7 +201,8 @@ CREATE TABLE IF NOT EXISTS interacoes (
 
 CREATE TABLE IF NOT EXISTS faturas (
     id SERIAL PRIMARY KEY,
-    projeto_id INTEGER NOT NULL REFERENCES projetos(id) ON DELETE CASCADE,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
+    projeto_id INTEGER NULL REFERENCES projetos(id) ON DELETE CASCADE,
     cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
     descricao VARCHAR(200) NOT NULL,
     valor NUMERIC(12, 2) NOT NULL,
@@ -171,6 +217,7 @@ CREATE TABLE IF NOT EXISTS faturas (
 
 CREATE TABLE IF NOT EXISTS modulos_registros (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     modulo VARCHAR(60) NOT NULL,
     titulo VARCHAR(180) NOT NULL,
     subtitulo VARCHAR(180) NULL,
@@ -183,6 +230,7 @@ CREATE TABLE IF NOT EXISTS modulos_registros (
 
 CREATE TABLE IF NOT EXISTS logs_auditoria (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     usuario_nome VARCHAR(120) NOT NULL,
     acao VARCHAR(80) NOT NULL,
     detalhes VARCHAR(255) NOT NULL,
@@ -191,6 +239,7 @@ CREATE TABLE IF NOT EXISTS logs_auditoria (
 
 CREATE TABLE IF NOT EXISTS registros_ponto (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     data_ponto DATE NOT NULL,
     entrada VARCHAR(10) NULL,
@@ -213,6 +262,7 @@ CREATE TABLE IF NOT EXISTS registros_ponto (
 
 CREATE TABLE IF NOT EXISTS configuracoes_empresa (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     razao_social VARCHAR(180) NOT NULL DEFAULT 'Nexus Code Brasil Tecnologia Ltda',
     nome_fantasia VARCHAR(150) NOT NULL DEFAULT 'Nexus Code Brasil',
     cnpj VARCHAR(25) NULL,
@@ -236,6 +286,7 @@ CREATE TABLE IF NOT EXISTS configuracoes_empresa (
 
 CREATE TABLE IF NOT EXISTS propostas_comerciais (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     codigo VARCHAR(30) NOT NULL UNIQUE,
     cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
     solicitacao_id INTEGER NULL REFERENCES solicitacoes_orcamento(id) ON DELETE SET NULL,
@@ -258,6 +309,7 @@ CREATE TABLE IF NOT EXISTS propostas_comerciais (
 
 CREATE TABLE IF NOT EXISTS despesas (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     descricao VARCHAR(200) NOT NULL,
     categoria VARCHAR(50) NOT NULL DEFAULT 'infraestrutura',
     fornecedor VARCHAR(150) NULL,
@@ -273,6 +325,7 @@ CREATE TABLE IF NOT EXISTS despesas (
 
 CREATE TABLE IF NOT EXISTS contratos_recorrentes (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
     projeto_id INTEGER NULL REFERENCES projetos(id) ON DELETE SET NULL,
     titulo VARCHAR(180) NOT NULL,
@@ -288,7 +341,8 @@ CREATE TABLE IF NOT EXISTS contratos_recorrentes (
 
 CREATE TABLE IF NOT EXISTS apontamentos_horas (
     id SERIAL PRIMARY KEY,
-    projeto_id INTEGER NOT NULL REFERENCES projetos(id) ON DELETE CASCADE,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
+    projeto_id INTEGER NULL REFERENCES projetos(id) ON DELETE CASCADE,
     tarefa_id INTEGER NULL REFERENCES tarefas(id) ON DELETE SET NULL,
     usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     data_trabalho DATE NOT NULL,
@@ -301,6 +355,7 @@ CREATE TABLE IF NOT EXISTS apontamentos_horas (
 
 CREATE TABLE IF NOT EXISTS chamados_suporte (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     protocolo VARCHAR(30) NOT NULL UNIQUE,
     cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
     projeto_id INTEGER NULL REFERENCES projetos(id) ON DELETE SET NULL,
@@ -319,6 +374,7 @@ CREATE TABLE IF NOT EXISTS chamados_suporte (
 
 CREATE TABLE IF NOT EXISTS ativos_infra (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     cliente_id INTEGER NULL REFERENCES clientes(id) ON DELETE SET NULL,
     projeto_id INTEGER NULL REFERENCES projetos(id) ON DELETE SET NULL,
     tipo VARCHAR(40) NOT NULL DEFAULT 'dominio',
@@ -336,6 +392,7 @@ CREATE TABLE IF NOT EXISTS ativos_infra (
 
 CREATE TABLE IF NOT EXISTS notificacoes (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     usuario_id INTEGER NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     perfil_destino VARCHAR(30) NULL,
     titulo VARCHAR(160) NOT NULL,
@@ -363,6 +420,7 @@ CREATE INDEX IF NOT EXISTS idx_notificacoes_usuario ON notificacoes(usuario_id);
 
 CREATE TABLE IF NOT EXISTS produtos_loja (
     id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
     slug VARCHAR(80) NOT NULL UNIQUE,
     nome VARCHAR(150) NOT NULL,
     descricao TEXT NULL,
@@ -375,5 +433,48 @@ CREATE TABLE IF NOT EXISTS produtos_loja (
     cores_json TEXT NULL,
     ordem INTEGER NOT NULL DEFAULT 0,
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS banco_horas (
+    id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    competencia VARCHAR(15) NOT NULL,
+    saldo_minutos INTEGER NOT NULL DEFAULT 0,
+    observacao TEXT NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS reembolsos_despesas (
+    id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    projeto_id INTEGER NULL REFERENCES projetos(id) ON DELETE SET NULL,
+    descricao VARCHAR(200) NOT NULL,
+    valor NUMERIC(12, 2) NOT NULL,
+    data_despesa DATE NOT NULL,
+    status VARCHAR(25) NOT NULL DEFAULT 'pendente',
+    comprovante_data TEXT NULL,
+    observacoes_gestor TEXT NULL,
+    despesa_gerada_id INTEGER NULL REFERENCES despesas(id) ON DELETE SET NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS pedidos_loja (
+    id SERIAL PRIMARY KEY,
+    organizacao_id INTEGER NOT NULL DEFAULT 1 REFERENCES organizacoes(id) ON DELETE CASCADE,
+    codigo VARCHAR(30) NOT NULL UNIQUE,
+    cliente_id INTEGER NULL REFERENCES clientes(id) ON DELETE SET NULL,
+    nome_comprador VARCHAR(150) NOT NULL,
+    email_comprador VARCHAR(150) NOT NULL,
+    telefone_comprador VARCHAR(30) NULL,
+    itens_json TEXT NOT NULL,
+    subtotal NUMERIC(12, 2) NOT NULL,
+    desconto NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    frete NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    valor_total NUMERIC(12, 2) NOT NULL,
+    status VARCHAR(25) NOT NULL DEFAULT 'aguardando_pagamento',
+    fatura_gerada_id INTEGER NULL REFERENCES faturas(id) ON DELETE SET NULL,
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

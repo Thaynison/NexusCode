@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="none"/>
+  <g transform="translate(400, 220)">
+    <path d="M -80 80 L -80 -80 L 80 80 L 80 -80" fill="none" stroke="#0A1D37" stroke-width="28" stroke-linecap="square" stroke-linejoin="miter"/>
+    <path d="M -80 -80 L -140 -80" fill="none" stroke="#00B4D8" stroke-width="12" stroke-linecap="square"/>
+    <circle cx="-140" cy="-80" r="12" fill="#00B4D8"/>
+    <path d="M -80 0 L -120 0" fill="none" stroke="#00B4D8" stroke-width="12" stroke-linecap="square"/>
+    <circle cx="-120" cy="0" r="12" fill="#00B4D8"/>
+    <path d="M 80 80 L 140 80" fill="none" stroke="#00B4D8" stroke-width="12" stroke-linecap="square"/>
+    <circle cx="140" cy="80" r="12" fill="#00B4D8"/>
+    <path d="M 80 0 L 120 0" fill="none" stroke="#00B4D8" stroke-width="12" stroke-linecap="square"/>
+    <circle cx="120" cy="0" r="12" fill="#00B4D8"/>
+    <circle cx="0" cy="0" r="18" fill="#00B4D8"/>
+    <circle cx="0" cy="0" r="8" fill="#ffffff"/>
+  </g>
+  <text x="400" y="440" font-family="Montserrat, Arial, sans-serif" font-size="56" font-weight="900" fill="#0A1D37" text-anchor="middle" letter-spacing="3">NEXUS CODE</text>
+  <text x="400" y="490" font-family="Montserrat, Arial, sans-serif" font-size="22" font-weight="700" fill="#00B4D8" text-anchor="middle" letter-spacing="18">BRASIL</text>
+</svg>

@@ -7,10 +7,52 @@ from sqlalchemy.orm import relationship
 from database import Base
 
 
+class Organizacao(Base):
+    __tablename__ = "organizacoes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(150), nullable=False)
+    slug = Column(String(80), unique=True, index=True, nullable=False)
+    dominio_customizado = Column(String(180), unique=True, index=True, nullable=True)
+    is_master = Column(Boolean, default=False, server_default="false", nullable=False)
+    plano = Column(String(40), default="pro", server_default="pro", nullable=False)
+    status_assinatura = Column(String(30), default="ativo", server_default="ativo", nullable=False)
+    valor_mensal = Column(Numeric(12, 2), default=0.00, server_default="0.00", nullable=False)
+    limite_usuarios = Column(Integer, default=10, server_default="10", nullable=False)
+    limite_clientes = Column(Integer, default=200, server_default="200", nullable=False)
+    trial_ate = Column(Date, nullable=True)
+    vencimento_assinatura = Column(Date, nullable=True)
+    modulos_json = Column(Text, nullable=True)
+    branding_json = Column(Text, nullable=True)
+    cliente_master_id = Column(Integer, nullable=True)
+    contrato_master_id = Column(Integer, nullable=True)
+    observacoes = Column(Text, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+
+class PlanoSaas(Base):
+    __tablename__ = "planos_saas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    codigo = Column(String(40), unique=True, index=True, nullable=False)
+    nome = Column(String(100), nullable=False)
+    subtitulo = Column(String(200), nullable=True)
+    preco_mensal = Column(Numeric(12, 2), default=0.00, nullable=False)
+    limite_usuarios = Column(Integer, default=5, nullable=False)
+    limite_clientes = Column(Integer, default=100, nullable=False)
+    destaque = Column(Boolean, default=False, nullable=False)
+    modulos_json = Column(Text, nullable=True)
+    recursos_json = Column(Text, nullable=True)
+    ativo = Column(Boolean, default=True, nullable=False)
+    ordem = Column(Integer, default=1, nullable=False)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+
 class Usuario(Base):
     __tablename__ = "usuarios"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     nome = Column(String(120), nullable=False)
     email = Column(String(150), unique=True, index=True, nullable=False)
     senha_hash = Column(String(255), nullable=False)
@@ -62,6 +104,7 @@ class Cliente(Base):
     __tablename__ = "clientes"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     usuario_portal_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     nome_empresa = Column(String(150), nullable=False)
     contato_nome = Column(String(120), nullable=False)
@@ -88,6 +131,7 @@ class SolicitacaoOrcamento(Base):
     __tablename__ = "solicitacoes_orcamento"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="SET NULL"), nullable=True)
     nome = Column(String(120), nullable=False)
     empresa = Column(String(150), nullable=True)
@@ -113,6 +157,7 @@ class Projeto(Base):
     __tablename__ = "projetos"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
     responsavel_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     titulo = Column(String(180), nullable=False)
@@ -152,6 +197,7 @@ class Tarefa(Base):
     __tablename__ = "tarefas"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="CASCADE"), nullable=False, index=True)
     responsavel_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     titulo = Column(String(180), nullable=False)
@@ -178,6 +224,7 @@ class Interacao(Base):
     __tablename__ = "interacoes"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     tipo = Column(
@@ -197,6 +244,7 @@ class Fatura(Base):
     __tablename__ = "faturas"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="CASCADE"), nullable=True)
     cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
     descricao = Column(String(200), nullable=False)
@@ -222,6 +270,7 @@ class Holerite(Base):
     __tablename__ = "holerites"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
     competencia = Column(String(20), nullable=False)
     tipo = Column(String(50), default="Salário Mensal", nullable=False)
@@ -247,6 +296,7 @@ class InformeRendimento(Base):
     __tablename__ = "informes_rendimentos"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
     ano_calendario = Column(String(10), nullable=False)
     ano_exercicio = Column(String(10), nullable=False)
@@ -268,6 +318,7 @@ class ModuloRegistro(Base):
     __tablename__ = "modulos_registros"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     modulo = Column(String(60), index=True, nullable=False)
     titulo = Column(String(180), nullable=False)
     subtitulo = Column(String(180), nullable=True)
@@ -282,6 +333,7 @@ class LogAuditoria(Base):
     __tablename__ = "logs_auditoria"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     usuario_nome = Column(String(120), nullable=False)
     acao = Column(String(80), nullable=False)
     detalhes = Column(String(255), nullable=False)
@@ -292,6 +344,7 @@ class RegistroPonto(Base):
     __tablename__ = "registros_ponto"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
     data_ponto = Column(Date, nullable=False, index=True)
     entrada = Column(String(10), nullable=True)
@@ -318,6 +371,7 @@ class ConfiguracaoEmpresa(Base):
     __tablename__ = "configuracoes_empresa"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     razao_social = Column(String(180), default="Nexus Code Brasil Tecnologia Ltda", nullable=False)
     nome_fantasia = Column(String(150), default="Nexus Code Brasil", nullable=False)
     cnpj = Column(String(25), default="00.000.000/0001-00", nullable=True)
@@ -343,6 +397,7 @@ class PropostaComercial(Base):
     __tablename__ = "propostas_comerciais"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     codigo = Column(String(30), unique=True, index=True, nullable=False)
     cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
     solicitacao_id = Column(Integer, ForeignKey("solicitacoes_orcamento.id", ondelete="SET NULL"), nullable=True)
@@ -367,6 +422,7 @@ class Despesa(Base):
     __tablename__ = "despesas"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     descricao = Column(String(200), nullable=False)
     categoria = Column(String(50), default="infraestrutura", nullable=False)
     fornecedor = Column(String(150), nullable=True)
@@ -384,6 +440,7 @@ class ContratoRecorrente(Base):
     __tablename__ = "contratos_recorrentes"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
     projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="SET NULL"), nullable=True)
     titulo = Column(String(180), nullable=False)
@@ -401,6 +458,7 @@ class ApontamentoHora(Base):
     __tablename__ = "apontamentos_horas"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="CASCADE"), nullable=False, index=True)
     tarefa_id = Column(Integer, ForeignKey("tarefas.id", ondelete="SET NULL"), nullable=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -416,6 +474,7 @@ class ChamadoSuporte(Base):
     __tablename__ = "chamados_suporte"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     protocolo = Column(String(30), unique=True, index=True, nullable=False)
     cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
     projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="SET NULL"), nullable=True)
@@ -436,6 +495,7 @@ class AtivoInfra(Base):
     __tablename__ = "ativos_infra"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="SET NULL"), nullable=True)
     projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="SET NULL"), nullable=True)
     tipo = Column(String(40), default="dominio", nullable=False)
@@ -455,6 +515,7 @@ class Notificacao(Base):
     __tablename__ = "notificacoes"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=True, index=True)
     perfil_destino = Column(String(30), nullable=True)
     titulo = Column(String(160), nullable=False)
@@ -468,6 +529,7 @@ class BancoHoras(Base):
     __tablename__ = "banco_horas"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
     competencia = Column(String(15), nullable=False)
     saldo_minutos = Column(Integer, default=0, nullable=False)
@@ -479,6 +541,7 @@ class ReembolsoDespesa(Base):
     __tablename__ = "reembolsos_despesas"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
     projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="SET NULL"), nullable=True)
     descricao = Column(String(200), nullable=False)
@@ -495,6 +558,7 @@ class PedidoLoja(Base):
     __tablename__ = "pedidos_loja"
 
     id = Column(Integer, primary_key=True, index=True)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
     codigo = Column(String(30), unique=True, index=True, nullable=False)
     cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="SET NULL"), nullable=True)
     nome_comprador = Column(String(150), nullable=False)
@@ -514,16 +578,17 @@ class ProdutoLoja(Base):
     __tablename__ = "produtos_loja"
 
     id = Column(Integer, primary_key=True, index=True)
-    slug = Column(String(80), unique=True, index=True, nullable=False)
+    organizacao_id = Column(Integer, ForeignKey("organizacoes.id", ondelete="CASCADE"), default=1, server_default="1", nullable=False, index=True)
+    slug = Column(String(60), index=True, nullable=False)
     nome = Column(String(150), nullable=False)
     descricao = Column(Text, nullable=True)
-    preco = Column(Numeric(12, 2), default=0.00, nullable=False)
+    preco = Column(Numeric(12, 2), nullable=False)
     badge = Column(String(40), nullable=True)
-    spec_label = Column(String(60), nullable=True)
+    spec_label = Column(String(80), nullable=True)
     imagem_url = Column(Text, nullable=True)
-    fundo_escuro = Column(Boolean, default=True, nullable=False)
+    fundo_escuro = Column(Boolean, default=False, nullable=False)
     tamanhos_json = Column(Text, nullable=True)
     cores_json = Column(Text, nullable=True)
-    ordem = Column(Integer, default=0, nullable=False)
+    ordem = Column(Integer, default=1, nullable=False)
     ativo = Column(Boolean, default=True, nullable=False)
     criado_em = Column(DateTime, default=datetime.utcnow)

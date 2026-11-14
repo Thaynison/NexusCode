@@ -13,7 +13,7 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Usuario
+from models import Usuario, Organizacao
 
 load_dotenv()
 
@@ -33,9 +33,9 @@ def verificar_senha(senha_plana: str, senha_hash: str) -> bool:
     return pwd_context.verify(senha_plana, senha_hash)
 
 
-def criar_token_acesso(dados: dict) -> str:
+def criar_token_acesso(dados: dict, expires_minutes: int | None = None) -> str:
     payload = dados.copy()
-    expira = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expira = datetime.utcnow() + timedelta(minutes=expires_minutes or ACCESS_TOKEN_EXPIRE_MINUTES)
     payload.update({"exp": expira})
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -54,6 +54,8 @@ def get_usuario_atual(token: str = Depends(oauth2_scheme)):
             raise credenciais_exc
         return SimpleNamespace(
             id=int(user_id),
+            organizacao_id=int(payload.get("org_id") or 1),
+            is_master=bool(payload.get("is_master", False)),
             perfil=perfil,
             nome=payload.get("nome", "Usuário"),
             email=payload.get("email", ""),
@@ -75,6 +77,12 @@ def get_usuario_db(
             detail="Sessão inválida ou usuário desativado.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    org = db.query(Organizacao).filter(Organizacao.id == usuario.organizacao_id).first()
+    if org and not org.is_master and org.status_assinatura == "suspenso":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A assinatura deste portal está suspensa. Entre em contato com o suporte para reativação.",
+        )
     return usuario
 
 
@@ -82,7 +90,7 @@ def exigir_equipe(usuario=Depends(get_usuario_atual)):
     if usuario.perfil not in ("admin", "colaborador"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acesso restrito à equipe Nexus Code.",
+            detail="Acesso restrito à equipe interna.",
         )
     return usuario
 
@@ -92,5 +100,23 @@ def exigir_admin(usuario=Depends(get_usuario_atual)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acesso restrito a administradores.",
+        )
+    return usuario
+
+
+def exigir_master_admin(
+    usuario=Depends(get_usuario_atual),
+    db: Session = Depends(get_db),
+):
+    if usuario.perfil != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso restrito ao administrador master da plataforma.",
+        )
+    org = db.query(Organizacao).filter(Organizacao.id == usuario.organizacao_id).first()
+    if not org or not org.is_master:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Recurso exclusivo da organização proprietária (Nexus Code Master).",
         )
     return usuario

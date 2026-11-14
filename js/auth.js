@@ -1,4 +1,4 @@
-import { apiRequest, setSession, getToken } from '../assets/js/config.js';
+import { apiRequest, setSession, getToken, getTenantSlug } from '../assets/js/config.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -6,8 +6,51 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const authForm = $('#auth-form');
 const authStatus = $('#auth-status');
 
-// Pré-aquece a Serverless Function na Vercel (gru1) enquanto o usuário digita
-fetch('/api/health').catch(() => {});
+// Carrega Branding White-Label da empresa se acessado via subdomínio ou ?tenant=slug
+apiRequest('/public/tenant-branding')
+  .then((orgData) => {
+    if (!orgData || orgData.is_master) return;
+    const brand = orgData.branding || {};
+    const root = document.documentElement;
+    if (brand.cor_primaria) root.style.setProperty('--primary', brand.cor_primaria);
+    if (brand.cor_secundaria) root.style.setProperty('--primary-hover', brand.cor_secundaria);
+    if (brand.cor_sidebar) {
+      document.body.style.background = `linear-gradient(135deg, ${brand.cor_sidebar} 0%, ${brand.cor_secundaria || '#0F2E56'} 100%)`;
+    }
+
+    const name = (brand.nome_plataforma || orgData.nome || 'PORTAL EMPRESARIAL').trim();
+    const sub = (brand.subtitulo_plataforma || 'ACESSO CORPORATIVO').trim();
+    document.title = `Acesso | ${name}`;
+
+    const stack = $('#login-brand-stack');
+    if (stack) {
+      if (brand.logo_url) {
+        stack.innerHTML = `
+          <img src="${brand.logo_url}" alt="${name}" style="max-height:56px; max-width:210px; object-fit:contain; border-radius:10px;">
+          <span class="nc-auth-logo-title" style="font-size:17px;">${name}</span>
+          <span class="nc-auth-logo-sub">${sub}</span>
+        `;
+      } else {
+        const abbr = name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('') || 'ERP';
+        stack.innerHTML = `
+          <div style="width:52px; height:52px; border-radius:14px; background:${brand.cor_sidebar || '#0A1D37'}; color:${brand.cor_primaria || '#00B4D8'}; font-family:'Montserrat',sans-serif; font-weight:900; font-size:20px; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 20px rgba(10,29,55,0.25);">${abbr}</div>
+          <span class="nc-auth-logo-title">${name}</span>
+          <span class="nc-auth-logo-sub">${sub}</span>
+        `;
+      }
+    }
+
+    const callout = $('#saas-signup-callout');
+    if (callout) callout.style.display = 'none';
+
+    const footerEl = $('#login-footer-text span');
+    if (footerEl) {
+      footerEl.textContent = brand.ocultar_powered_by
+        ? `Ambiente Seguro • ${name}`
+        : `Ambiente Seguro • ${name} (Tecnologia Nexus Code)`;
+    }
+  })
+  .catch(() => {});
 
 if (getToken()) {
   apiRequest('/auth/me')
@@ -131,7 +174,7 @@ if (authForm) {
         body: JSON.stringify(payload)
       });
 
-      setSession(data.access_token, data.usuario);
+      setSession(data.access_token, data.usuario, getTenantSlug());
       window.location.href = data.usuario.perfil === 'cliente' ? 'app/portal.html' : 'app/index.html';
     } catch (err) {
       authStatus.className = 'nc-auth-status error';

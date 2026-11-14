@@ -1,4 +1,4 @@
-import { apiRequest, clearSession, getToken } from './config.js';
+import { apiRequest, clearSession, getToken, applyWhiteLabelBranding } from './config.js';
 import { showToast, showNoticeModal, showConfirmModal } from './ui.js';
 
 const $ = (s) => document.querySelector(s);
@@ -73,6 +73,7 @@ $('#logout')?.addEventListener('click', () => { clearSession(); window.location.
 
 async function loadPortalData() {
   portalData = await apiRequest('/portal/bootstrap');
+  if (portalData?.organizacao) applyWhiteLabelBranding(portalData.organizacao);
   updateBadgesAndNotifications();
   return portalData;
 }
