@@ -958,7 +958,7 @@ body.crm-app {
 .dialog {
   border: 0;
   background: transparent;
-  width: min(940px, 94vw);
+  width: min(1040px, 96vw);
   max-height: 90vh;
   padding: 0;
   margin: auto;
@@ -1012,8 +1012,8 @@ body.crm-app {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  padding: 18px 26px;
+  gap: 20px;
+  padding: 24px 32px;
   margin: 0;
   background: linear-gradient(135deg, #050f1e 0%, #0A1D37 60%, #0E2A4E 100%);
   color: #ffffff;
@@ -1044,7 +1044,7 @@ body.crm-app {
 
 .modal-header h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 800;
   color: #ffffff;
   letter-spacing: -0.02em;
@@ -1052,8 +1052,8 @@ body.crm-app {
 }
 
 .modal-subtitle {
-  margin: 3px 0 0;
-  font-size: 12.5px;
+  margin: 4px 0 0;
+  font-size: 13px;
   color: #cbd5e1;
   font-weight: 400;
   line-height: 1.35;
@@ -1086,8 +1086,8 @@ body.crm-app {
 .modal-tabs {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 26px;
+  gap: 8px;
+  padding: 14px 32px;
   background: var(--surface2);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
@@ -1103,13 +1103,13 @@ body.crm-app {
 .modal-tab-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 13px;
-  border-radius: 9px;
+  gap: 10px;
+  padding: 9px 16px;
+  border-radius: 10px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-light);
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -1166,7 +1166,7 @@ body.crm-app {
 
 /* Corpo do Modal SEM Barra de Rolagem Visível e com Altura Estável */
 .modal-body {
-  padding: 22px 26px;
+  padding: 28px 32px;
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -1177,7 +1177,7 @@ body.crm-app {
 }
 
 .modal-tabbed .modal-body {
-  min-height: 330px;
+  min-height: 400px;
 }
 
 .modal-body::-webkit-scrollbar,
@@ -1196,9 +1196,9 @@ body.crm-app {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   margin: 0;
-  padding: 14px 26px;
+  padding: 18px 32px;
   background: var(--surface2);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
@@ -1242,11 +1242,11 @@ body.crm-app {
 .modal-section-card {
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 18px 20px;
+  border-radius: 16px;
+  padding: 24px 28px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
 }
 
 .modal-tabbed .modal-section-card {
@@ -1264,13 +1264,13 @@ body.crm-app {
 .modal-section-title {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 11.5px;
+  gap: 12px;
+  font-size: 13px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: #0A1D37;
-  padding-bottom: 8px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -1282,12 +1282,12 @@ body.crm-app {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   background: #0A1D37;
   color: #00B4D8;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 800;
   flex-shrink: 0;
 }
@@ -1317,11 +1317,11 @@ body.crm-app {
 .field-full {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-size: 11.5px;
+  gap: 8px;
+  font-size: 12.5px;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: #475569;
+  color: #334155;
   text-align: left;
 }
 
@@ -1336,13 +1336,13 @@ body.crm-app {
 .modal select,
 .modal textarea {
   width: 100%;
-  min-height: 40px;
+  min-height: 46px;
   background: #f8fafc;
   color: var(--text);
   border: 1.5px solid #cbd5e1;
-  padding: 8px 13px;
-  border-radius: 10px;
-  font-size: 13.5px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-size: 14px;
   font-weight: 500;
   font-family: inherit;
   line-height: 1.4;
@@ -1360,11 +1360,11 @@ body.crm-app {
 .modal select {
   appearance: none;
   -webkit-appearance: none;
-  padding-right: 34px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 11px center;
-  background-size: 15px;
+  background-position: right 14px center;
+  background-size: 16px;
 }
 
 .modal textarea {
