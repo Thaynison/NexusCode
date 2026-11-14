@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db, SessionLocal
@@ -26,7 +27,7 @@ from schemas import (
 )
 from auth import (
     gerar_hash_senha, verificar_senha, criar_token_acesso,
-    get_usuario_atual, exigir_equipe, exigir_admin,
+    get_usuario_atual, get_usuario_db, exigir_equipe, exigir_admin,
 )
 
 load_dotenv()
@@ -43,10 +44,22 @@ def ensure_db_initialized():
     global _db_ready
     if _db_ready:
         return
+    db = SessionLocal()
+    try:
+        # Caminho rápido: se a tabela já existe e possui usuário, evita 10 consultas de catálogo
+        has_user = db.query(Usuario.id).first()
+        if has_user:
+            _db_ready = True
+            return
+    except SQLAlchemyError:
+        db.rollback()
+    finally:
+        db.close()
+
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        if not db.query(Usuario).first():
+        if not db.query(Usuario.id).first():
             admin = Usuario(
                 nome="Administrador Nexus",
                 email="admin@nexuscode.com",
@@ -116,7 +129,8 @@ app.add_middleware(
 
 @app.middleware("http")
 async def init_db_middleware(request, call_next):
-    if request.url.path.startswith("/api"):
+    path = request.url.path
+    if path.startswith("/api") and (path != "/api/health" or request.query_params.get("db") == "1"):
         ensure_db_initialized()
     return await call_next(request)
 
@@ -139,7 +153,7 @@ def login(dados: LoginRequest, db: Session = Depends(get_db)):
     if not usuario.ativo:
         raise HTTPException(status_code=403, detail="Conta desativada. Entre em contato com o administrador.")
 
-    token = criar_token_acesso({"sub": str(usuario.id), "perfil": usuario.perfil})
+    token = criar_token_acesso({"sub": str(usuario.id), "perfil": usuario.perfil, "nome": usuario.nome, "email": usuario.email})
     return {"access_token": token, "token_type": "bearer", "usuario": usuario}
 
 
@@ -167,7 +181,7 @@ def registrar_conta(dados: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(novo)
 
-    token = criar_token_acesso({"sub": str(novo.id), "perfil": novo.perfil})
+    token = criar_token_acesso({"sub": str(novo.id), "perfil": novo.perfil, "nome": novo.nome, "email": novo.email})
     return {"access_token": token, "token_type": "bearer", "usuario": novo}
 
 
@@ -179,7 +193,7 @@ def recuperar_senha(dados: ForgotPasswordRequest):
 
 
 @app.get("/api/auth/me", response_model=UsuarioOut, tags=["Auth"])
-def perfil_logado(usuario: Usuario = Depends(get_usuario_atual)):
+def perfil_logado(usuario: Usuario = Depends(get_usuario_db)):
     return usuario
 
 
@@ -345,6 +359,54 @@ def remover_solicitacao(
     registrar_log(db, equipe.nome, "EXCLUIR_ORCAMENTO", f"Removeu solicitação #{sol.id} ({sol.nome})")
     db.delete(sol)
     db.commit()
+
+
+# ==================== BOOTSTRAP CONSOLIDADO (1 REQUISIÇÃO) ====================
+@app.get("/api/bootstrap", tags=["Dashboard"])
+def bootstrap_painel(
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(exigir_equipe),
+):
+    clientes = db.query(Cliente).order_by(Cliente.criado_em.desc()).all()
+    usuarios = db.query(Usuario).order_by(Usuario.nome).all()
+    projetos = db.query(Projeto).order_by(Projeto.criado_em.desc()).all()
+    orcamentos = db.query(SolicitacaoOrcamento).order_by(SolicitacaoOrcamento.criado_em.desc()).all()
+    tarefas = db.query(Tarefa).order_by(Tarefa.criado_em.desc()).all()
+
+    leads_abertos = sum(1 for c in clientes if c.status_funil in ("lead", "proposta", "negociacao"))
+    solicitacoes_novas = sum(1 for o in orcamentos if o.status in ("novo", "em_atendimento"))
+    projetos_ativos = sum(1 for p in projetos if p.status in ("planejamento", "em_andamento", "homologacao"))
+    tarefas_pendentes = sum(1 for t in tarefas if t.status != "concluida")
+
+    receita_paga = (
+        db.query(func.coalesce(func.sum(Fatura.valor), 0))
+        .filter(Fatura.status == "pago")
+        .scalar()
+    )
+    receita_pendente = (
+        db.query(func.coalesce(func.sum(Fatura.valor), 0))
+        .filter(Fatura.status.in_(["pendente", "atrasado"]))
+        .scalar()
+    )
+
+    kpi = {
+        "total_clientes": len(clientes),
+        "leads_abertos": leads_abertos,
+        "solicitacoes_novas": solicitacoes_novas,
+        "projetos_ativos": projetos_ativos,
+        "tarefas_pendentes": tarefas_pendentes,
+        "receita_paga": float(receita_paga),
+        "receita_pendente": float(receita_pendente),
+    }
+
+    return {
+        "kpi": kpi,
+        "clientes": [ClienteOut.model_validate(c) for c in clientes],
+        "usuarios": [UsuarioOut.model_validate(u) for u in usuarios],
+        "projetos": [ProjetoOut.model_validate(p) for p in projetos],
+        "orcamentos": [SolicitacaoOut.model_validate(o) for o in orcamentos],
+        "tarefas": [TarefaOut.model_validate(t) for t in tarefas],
+    }
 
 
 # ==================== DASHBOARD / KPIS ====================

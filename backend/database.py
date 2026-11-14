@@ -3,7 +3,6 @@ from urllib.parse import quote_plus, urlparse, urlunparse, parse_qsl, urlencode
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy.pool import NullPool
 
 load_dotenv()
 
@@ -25,7 +24,6 @@ def _build_neon_database_url() -> str:
         ssl_part = "" if pg_host in ("127.0.0.1", "localhost") else "?sslmode=require"
         return f"postgresql+psycopg2://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db}{ssl_part}"
 
-    # Normaliza prefixo padrão do Neon/Heroku (postgres:// -> postgresql+psycopg2://)
     if raw_url.startswith("postgres://"):
         raw_url = "postgresql+psycopg2://" + raw_url[len("postgres://"):]
     elif raw_url.startswith("postgresql://"):
@@ -33,8 +31,6 @@ def _build_neon_database_url() -> str:
 
     parsed = urlparse(raw_url)
     query_params = dict(parse_qsl(parsed.query))
-
-    # Remove channel_binding caso presente para máxima compatibilidade com runtimes serverless
     query_params.pop("channel_binding", None)
 
     is_local = parsed.hostname in ("127.0.0.1", "localhost")
@@ -48,16 +44,17 @@ def _build_neon_database_url() -> str:
 DATABASE_URL = _build_neon_database_url()
 IS_VERCEL = bool(os.getenv("VERCEL"))
 
-engine_kwargs = {
-    "pool_pre_ping": True,
-}
-if IS_VERCEL:
-    # Em ambiente serverless (Vercel + Neon PgBouncer), NullPool evita conexões ociosas presas
-    engine_kwargs["poolclass"] = NullPool
-else:
-    engine_kwargs["pool_recycle"] = 300
-
-engine = create_engine(DATABASE_URL, **engine_kwargs)
+# Pool enxuto compatível com o PgBouncer do Neon: reaproveita a conexão TLS aberta
+# dentro da instância ativa, evitando handshakes SSL repetidos a cada chamada.
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=2 if IS_VERCEL else 5,
+    max_overflow=3 if IS_VERCEL else 10,
+    pool_timeout=15,
+    pool_recycle=60,
+    pool_pre_ping=True,
+    connect_args={"connect_timeout": 10},
+)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()

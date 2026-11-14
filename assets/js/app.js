@@ -15,7 +15,31 @@ let user = null;
 let editingId = null;
 let searchTerm = '';
 let statusFilter = 'todos';
-let cache = { clientes: [], usuarios: [], projetos: [], orcamentos: [] };
+let cache = { kpi: null, clientes: [], usuarios: [], projetos: [], orcamentos: [], tarefas: [], loadedAt: 0 };
+const CACHE_TTL_MS = 30000;
+
+function invalidateCache() {
+  cache.loadedAt = 0;
+}
+
+async function loadBootstrap(force = false) {
+  const now = Date.now();
+  if (!force && cache.loadedAt && (now - cache.loadedAt) < CACHE_TTL_MS) {
+    return cache;
+  }
+  const data = await apiRequest('/bootstrap');
+  cache = {
+    kpi: data.kpi,
+    clientes: data.clientes || [],
+    usuarios: data.usuarios || [],
+    projetos: data.projetos || [],
+    orcamentos: data.orcamentos || [],
+    tarefas: data.tarefas || [],
+    loadedAt: Date.now()
+  };
+  updateQuotesBadge();
+  return cache;
+}
 
 const esc = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) => ({
@@ -106,17 +130,10 @@ $('#app-theme')?.addEventListener('click', () => {
 // ==================== CARREGAMENTO & FILTROS ====================
 const internalRoles = new Set(['admin', 'colaborador']);
 
-async function preloadRefs() {
+async function preloadRefs(force = false) {
   if (!internalRoles.has(user?.perfil)) return;
   try {
-    const [clientes, usuarios, projetos, orcamentos] = await Promise.all([
-      apiRequest('/clientes'),
-      apiRequest('/usuarios'),
-      apiRequest('/projetos'),
-      apiRequest('/orcamentos')
-    ]);
-    cache = { clientes, usuarios, projetos, orcamentos };
-    updateQuotesBadge();
+    await loadBootstrap(force);
   } catch (_) {}
 }
 
@@ -136,14 +153,7 @@ function matchSearch(texts) {
 
 // ==================== TELAS DO SISTEMA ====================
 async function renderDashboard() {
-  const [kpi, projetos, clientes, orcamentos] = await Promise.all([
-    apiRequest('/dashboard/resumo'),
-    apiRequest('/projetos'),
-    apiRequest('/clientes'),
-    apiRequest('/orcamentos')
-  ]);
-  cache.orcamentos = orcamentos;
-  updateQuotesBadge();
+  const { kpi, projetos, orcamentos } = await loadBootstrap();
 
   return `
     <div class="toolbar">
@@ -849,6 +859,7 @@ recordForm.onsubmit = async (e) => {
     }
 
     recordDialog.close();
+    invalidateCache();
     render();
   } catch (err) {
     alert('Não foi possível concluir a operação: ' + err.message);
@@ -883,20 +894,24 @@ async function render() {
     $$('[data-del]').forEach((b) => (b.onclick = async () => {
       if (!confirm('Confirma a exclusão permanente deste registro?')) return;
       await apiRequest(b.dataset.del, { method: 'DELETE' });
+      invalidateCache();
       render();
     }));
     $$('[data-pay]').forEach((b) => (b.onclick = async () => {
       await apiRequest(`/faturas/${b.dataset.pay}`, { method: 'PATCH', body: JSON.stringify({ status: 'pago' }) });
+      invalidateCache();
       render();
     }));
     $$('[data-move-client]').forEach((b) => (b.onclick = async () => {
       const [id, status_funil] = b.dataset.moveClient.split(':');
       await apiRequest(`/clientes/${id}`, { method: 'PATCH', body: JSON.stringify({ status_funil }) });
+      invalidateCache();
       render();
     }));
     $$('[data-move-task]').forEach((b) => (b.onclick = async () => {
       const [id, status] = b.dataset.moveTask.split(':');
       await apiRequest(`/tarefas/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+      invalidateCache();
       render();
     }));
 
@@ -963,16 +978,33 @@ $('#app-logout')?.addEventListener('click', () => {
 if (!getToken()) {
   window.location.href = '../login.html';
 } else {
+  const savedUser = (() => {
+    try { return JSON.parse(localStorage.getItem('nexus_user') || 'null'); } catch { return null; }
+  })();
+
+  if (savedUser) {
+    if (savedUser.perfil === 'cliente') {
+      window.location.href = './portal.html';
+    } else {
+      user = savedUser;
+      $('#app-user-name').textContent = savedUser.nome;
+      $('#user-avatar-initials').textContent = initials(savedUser.nome);
+      render();
+    }
+  }
+
   apiRequest('/auth/me')
     .then((u) => {
+      const firstPaint = !user;
       user = u;
+      localStorage.setItem('nexus_user', JSON.stringify(u));
       if (u.perfil === 'cliente') {
         window.location.href = './portal.html';
         return;
       }
       $('#app-user-name').textContent = u.nome;
       $('#user-avatar-initials').textContent = initials(u.nome);
-      render();
+      if (firstPaint) render();
     })
     .catch(() => {
       clearSession();
