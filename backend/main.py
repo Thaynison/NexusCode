@@ -4,6 +4,7 @@ from datetime import datetime, date, timezone, timedelta
 from decimal import Decimal
 from typing import List, Optional
 import calendar
+import hashlib
 import hmac
 import json
 import re
@@ -285,6 +286,278 @@ def enviar_email(destinatario: str, assunto: str, mensagem_html: str):
     except Exception as e:
         print(f"[Erro SMTP] {str(e)}")
         return False
+
+def _format_brl(valor) -> str:
+    try:
+        num = float(valor or 0)
+    except Exception:
+        num = 0.0
+    s = f"{num:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {s}"
+
+
+def _format_dt_br(dt: Optional[datetime]) -> str:
+    if not dt:
+        dt = datetime.utcnow()
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    br = dt.astimezone(timezone(timedelta(hours=-3)))
+    return br.strftime("%d/%m/%Y às %H:%M")
+
+
+def _gerar_dados_recibo_fatura(db: Session, fat: Fatura) -> dict:
+    org = db.query(Organizacao).filter(Organizacao.id == fat.organizacao_id).first()
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == fat.organizacao_id).first()
+    cli = db.query(Cliente).filter(Cliente.id == fat.cliente_id).first()
+    proj = db.query(Projeto).filter(Projeto.id == fat.projeto_id).first() if fat.projeto_id else None
+
+    branding = _parse_json_dict(org.branding_json if org else None, DEFAULT_BRANDING_MASTER)
+    brand_name = (branding.get("nome_plataforma") or (cfg.nome_fantasia if cfg else None) or (org.nome if org else "NEXUS CODE")).strip()
+    brand_sub = (branding.get("subtitulo_plataforma") or ("BRASIL" if (not org or org.is_master) else "GESTÃO EMPRESARIAL")).strip()
+    cor_primaria = branding.get("cor_primaria") or "#00B4D8"
+    cor_sidebar = branding.get("cor_sidebar") or "#0A1D37"
+
+    pago_dt = fat.pago_em or datetime.utcnow()
+    ano_ref = pago_dt.year if hasattr(pago_dt, "year") else date.today().year
+    numero_comprovante = f"REC-{ano_ref}-{int(fat.id):05d}"
+
+    seed = f"NEXUS-REC|{fat.id}|{fat.organizacao_id}|{float(fat.valor or 0):.2f}|{pago_dt.isoformat()}|{fat.mp_order_id or ''}|{fat.mp_payment_id or ''}"
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest().upper()
+    codigo_autenticacao = f"NC-{digest[:4]}-{digest[4:8]}-{digest[8:12]}"
+
+    portal_url = "https://www.nexuscodebrasil.com.br/app/portal.html"
+    if org and not org.is_master:
+        if org.dominio_customizado and (org.plano or "").lower() == "enterprise":
+            portal_url = f"https://{org.dominio_customizado}/app/portal.html"
+        elif org.slug:
+            portal_url = f"https://{org.slug}.nexuscodebrasil.com.br/app/portal.html"
+
+    cidade_uf = ""
+    if cfg:
+        if cfg.cidade and cfg.estado:
+            cidade_uf = f"{cfg.cidade}, {cfg.estado} - Brasil"
+        elif cfg.endereco:
+            cidade_uf = cfg.endereco
+    if not cidade_uf:
+        cidade_uf = "Aracruz, ES - Brasil"
+
+    return {
+        "numero_comprovante": numero_comprovante,
+        "codigo_autenticacao": codigo_autenticacao,
+        "portal_url": portal_url,
+        "branding": {
+            "nome_plataforma": brand_name,
+            "subtitulo_plataforma": brand_sub,
+            "cor_primaria": cor_primaria,
+            "cor_sidebar": cor_sidebar,
+            "logo_url": branding.get("logo_url") or "",
+        },
+        "emissor": {
+            "razao_social": (cfg.razao_social if cfg else None) or (org.nome if org else "Nexus Code Brasil Tecnologia Ltda"),
+            "nome_fantasia": (cfg.nome_fantasia if cfg else None) or (org.nome if org else "Nexus Code Brasil"),
+            "cnpj": (cfg.cnpj if cfg else None) or "00.000.000/0001-00",
+            "email": (cfg.email_financeiro if cfg else None) or "contato@nexuscodebrasil.com.br",
+            "telefone": (cfg.telefone if cfg else None) or "(27) 99999-9999",
+            "localizacao": cidade_uf,
+        },
+        "pagador": {
+            "nome_empresa": cli.nome_empresa if cli else "Cliente",
+            "contato_nome": cli.contato_nome if cli else "Cliente",
+            "email": cli.email if cli else "",
+            "documento": (cli.documento if cli and cli.documento else None) or "Não informado",
+            "telefone": (cli.telefone if cli and cli.telefone else None) or "",
+        },
+        "fatura": {
+            "id": fat.id,
+            "descricao": fat.descricao,
+            "projeto": proj.titulo if proj else None,
+            "valor": float(fat.valor or 0),
+            "valor_formatado": _format_brl(fat.valor),
+            "status": fat.status,
+            "forma_pagamento": fat.forma_pagamento or "Mercado Pago",
+            "vencimento": fat.vencimento.strftime("%d/%m/%Y") if fat.vencimento else "-",
+            "pago_em": _format_dt_br(fat.pago_em) if fat.status == "pago" else "-",
+            "mp_order_id": fat.mp_order_id or "",
+            "mp_payment_id": fat.mp_payment_id or "",
+            "mp_status_detalhe": fat.mp_status_detalhe or ("accredited" if fat.status == "pago" else ""),
+            "mp_checkout_url": fat.mp_checkout_url or "",
+            "observacoes": fat.observacoes or "",
+        },
+    }
+
+
+def _build_payment_receipt_email_html(recibo: dict) -> tuple[str, str]:
+    b = recibo["branding"]
+    em = recibo["emissor"]
+    pg = recibo["pagador"]
+    ft = recibo["fatura"]
+
+    primary = b["cor_primaria"] or "#00B4D8"
+    navy = b["cor_sidebar"] or "#0A1D37"
+    deep = "#061224"
+
+    tx_id = ft["mp_order_id"] or ft["mp_payment_id"] or recibo["numero_comprovante"]
+    tx_label = "Order ID (Mercado Pago)" if ft["mp_order_id"] else ("ID Transação (Mercado Pago)" if ft["mp_payment_id"] else "Protocolo Interno")
+
+    assunto = f"Comprovante de Pagamento {recibo['numero_comprovante']} • {ft['descricao']} ({ft['valor_formatado']})"
+
+    html = f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{assunto}</title>
+</head>
+<body style="margin:0; padding:0; background-color:#061224; font-family:'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#0F172A;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#061224; padding:32px 14px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="max-width:600px; width:100%; background-color:#FFFFFF; border-radius:20px; overflow:hidden; box-shadow:0 24px 48px rgba(0,0,0,0.45); border:1px solid #1E3A5F;">
+          
+          <!-- HEADER CYBER & ENTERPRISE -->
+          <tr>
+            <td style="background:linear-gradient(135deg, {deep} 0%, {navy} 62%, #0F2E56 100%); background-color:{navy}; padding:30px 32px 26px; text-align:center; border-bottom:3px solid {primary};">
+              <table role="presentation" align="center" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto 12px;">
+                <tr>
+                  <td style="width:44px; height:44px; background-color:{deep}; border:1.5px solid {primary}; border-radius:12px; text-align:center; vertical-align:middle; font-family:Montserrat, Arial, sans-serif; font-weight:900; font-size:20px; color:#FFFFFF;">
+                    N
+                  </td>
+                  <td style="padding-left:12px; text-align:left;">
+                    <div style="font-family:Montserrat, Arial, sans-serif; font-size:20px; font-weight:900; letter-spacing:1.2px; color:#FFFFFF; line-height:1.1;">
+                      {b['nome_plataforma']}
+                    </div>
+                    <div style="font-family:Montserrat, Arial, sans-serif; font-size:10px; font-weight:800; letter-spacing:4px; color:{primary}; margin-top:3px;">
+                      {b['subtitulo_plataforma']}
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <div style="display:inline-block; background-color:rgba(16,185,129,0.16); border:1px solid rgba(16,185,129,0.45); color:#34D399; font-size:11px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; padding:6px 14px; border-radius:999px; margin-top:6px;">
+                &#10003; PAGAMENTO CONFIRMADO
+              </div>
+              <h1 style="margin:14px 0 4px; font-size:22px; font-weight:800; color:#FFFFFF; letter-spacing:-0.3px;">
+                Comprovante Oficial de Pagamento
+              </h1>
+              <p style="margin:0; font-size:13px; color:#CBD5E1;">
+                Recibo Digital Nº <strong style="color:{primary};">{recibo['numero_comprovante']}</strong>
+              </p>
+            </td>
+          </tr>
+
+          <!-- SAUDAÇÃO & VALOR DESTAQUE -->
+          <tr>
+            <td style="padding:28px 32px 10px;">
+              <p style="margin:0 0 18px; font-size:15px; line-height:1.6; color:#334155;">
+                Olá, <strong style="color:{navy};">{pg['contato_nome']}</strong>!<br>
+                Confirmamos a compensação do seu pagamento referente a <strong style="color:{navy};">{ft['descricao']}</strong>. Sua fatura já foi quitada automaticamente em nosso sistema.
+              </p>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%); background-color:#F8FAFC; border:1.5px solid #BAE6FD; border-radius:16px; margin-bottom:22px;">
+                <tr>
+                  <td style="padding:20px 24px; text-align:center;">
+                    <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1.2px; color:#0284C7; margin-bottom:6px;">
+                      Valor Total Liquidado
+                    </div>
+                    <div style="font-size:32px; font-weight:900; color:{navy}; letter-spacing:-0.5px;">
+                      {ft['valor_formatado']}
+                    </div>
+                    <div style="font-size:12px; color:#475569; margin-top:6px;">
+                      Pago em <strong>{ft['pago_em']}</strong> &bull; Via <strong>{ft['forma_pagamento']}</strong>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- TABELA DE DETALHES DA TRANSAÇÃO -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #E2E8F0; border-radius:14px; overflow:hidden; font-size:13px;">
+                <tr style="background-color:#F8FAFC;">
+                  <td style="padding:11px 16px; color:#64748B; font-weight:600; border-bottom:1px solid #E2E8F0; width:42%;">Nº do Recibo</td>
+                  <td style="padding:11px 16px; color:{navy}; font-weight:800; text-align:right; border-bottom:1px solid #E2E8F0;">{recibo['numero_comprovante']}</td>
+                </tr>
+                <tr>
+                  <td style="padding:11px 16px; color:#64748B; font-weight:600; border-bottom:1px solid #E2E8F0;">Descrição / Serviço</td>
+                  <td style="padding:11px 16px; color:#0F172A; font-weight:700; text-align:right; border-bottom:1px solid #E2E8F0;">{ft['descricao']}</td>
+                </tr>
+                <tr style="background-color:#F8FAFC;">
+                  <td style="padding:11px 16px; color:#64748B; font-weight:600; border-bottom:1px solid #E2E8F0;">Pagador / Cliente</td>
+                  <td style="padding:11px 16px; color:#0F172A; font-weight:600; text-align:right; border-bottom:1px solid #E2E8F0;">{pg['nome_empresa']}</td>
+                </tr>
+                <tr>
+                  <td style="padding:11px 16px; color:#64748B; font-weight:600; border-bottom:1px solid #E2E8F0;">Meio de Pagamento</td>
+                  <td style="padding:11px 16px; color:#0F172A; font-weight:600; text-align:right; border-bottom:1px solid #E2E8F0;">{ft['forma_pagamento']}</td>
+                </tr>
+                <tr style="background-color:#F8FAFC;">
+                  <td style="padding:11px 16px; color:#64748B; font-weight:600; border-bottom:1px solid #E2E8F0;">{tx_label}</td>
+                  <td style="padding:11px 16px; color:#0284C7; font-family:monospace; font-size:12px; font-weight:700; text-align:right; border-bottom:1px solid #E2E8F0;">{tx_id}</td>
+                </tr>
+                <tr>
+                  <td style="padding:11px 16px; color:#64748B; font-weight:600; border-bottom:1px solid #E2E8F0;">Vencimento Original</td>
+                  <td style="padding:11px 16px; color:#0F172A; text-align:right; border-bottom:1px solid #E2E8F0;">{ft['vencimento']}</td>
+                </tr>
+                <tr style="background-color:#F0FDF4;">
+                  <td style="padding:11px 16px; color:#15803D; font-weight:700;">Autenticação Digital</td>
+                  <td style="padding:11px 16px; color:#15803D; font-family:monospace; font-size:12px; font-weight:800; text-align:right;">{recibo['codigo_autenticacao']}</td>
+                </tr>
+              </table>
+
+              <!-- CTA PORTAL DO CLIENTE -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:26px 0 18px;">
+                <tr>
+                  <td align="center">
+                    <a href="{recibo['portal_url']}" target="_blank" style="display:inline-block; background-color:{primary}; color:{navy}; font-size:14px; font-weight:800; text-decoration:none; padding:14px 28px; border-radius:12px; box-shadow:0 8px 20px rgba(0,180,216,0.35);">
+                      Visualizar e Baixar Comprovante PDF &rarr;
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0 0 18px; font-size:12px; color:#64748B; text-align:center; line-height:1.5;">
+                Este comprovante eletrônico tem validade de quitação junto a <strong>{em['razao_social']}</strong> (CNPJ: {em['cnpj']}).
+              </p>
+            </td>
+          </tr>
+
+          <!-- RODAPÉ INSTITUCIONAL -->
+          <tr>
+            <td style="background-color:{deep}; padding:22px 32px; text-align:center; border-top:1px solid rgba(0,180,216,0.25);">
+              <div style="font-size:13px; font-weight:800; color:#FFFFFF; margin-bottom:4px;">
+                {em['razao_social']}
+              </div>
+              <div style="font-size:11.5px; color:#94A3B8; line-height:1.6;">
+                CNPJ: {em['cnpj']} &bull; {em['localizacao']}<br>
+                E-mail: <a href="mailto:{em['email']}" style="color:{primary}; text-decoration:none;">{em['email']}</a> &bull; Tel: {em['telefone']}
+              </div>
+              <div style="font-size:10.5px; color:#64748B; margin-top:10px;">
+                Enviado automaticamente pelo ecossistema financeiro {b['nome_plataforma']}. Em conformidade com a LGPD (Lei nº 13.709/2018).
+              </div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+    return assunto, html
+
+
+def _notificar_pagamento_fatura_confirmado(db: Session, fat: Fatura, background_tasks: Optional[BackgroundTasks] = None):
+    """Gera o recibo oficial e dispara o e-mail HTML estilizado ao pagador."""
+    try:
+        recibo = _gerar_dados_recibo_fatura(db, fat)
+        dest_email = (recibo["pagador"].get("email") or "").strip()
+        if not dest_email:
+            return
+        assunto, html_body = _build_payment_receipt_email_html(recibo)
+        if background_tasks is not None:
+            background_tasks.add_task(enviar_email, dest_email, assunto, html_body)
+        else:
+            enviar_email(dest_email, assunto, html_body)
+    except Exception as mail_err:
+        print(f"[Recibo Email Warning] Fatura #{fat.id}: {mail_err}")
+
 
 
 def registrar_log(db: Session, usuario_nome: str, acao: str, detalhes: str, org_id: int = 1):
@@ -835,7 +1108,7 @@ def raiz(db: int = 0):
     return {
         "status": "online" if db_status != "error" else "degraded",
         "sistema": "Nexus Code Enterprise SaaS ERP & CRM API",
-        "versao": "2.4.0-prod",
+        "versao": "2.4.2-prod",
         "regiao": os.getenv("VERCEL_REGION", "local"),
         "database_url_configurada": bool(os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")),
         "db_status": db_status,
@@ -2582,16 +2855,10 @@ def webhook_compensacao_pagamento(req: Request, background_tasks: BackgroundTask
         if pedido:
             pedido.status = "pago"
 
-        cliente = db.query(Cliente).filter(Cliente.id == fatura.cliente_id).first()
-        if cliente and cliente.email:
-            background_tasks.add_task(
-                enviar_email,
-                cliente.email,
-                f"Recibo de Pagamento - {fatura.descricao}",
-                f"<p>Olá, <b>{cliente.contato_nome}</b>. Confirmamos o recebimento de <b>R$ {fatura.valor}</b> referente a <b>{fatura.descricao}</b>.</p>",
-            )
         registrar_log(db, "Webhook Gateway", "BAIXA_FATURA_AUTO", f"Fatura #{fatura.id} compensada automaticamente.", org_id=fatura.organizacao_id)
         db.commit()
+        db.refresh(fatura)
+        _notificar_pagamento_fatura_confirmado(db, fatura, background_tasks)
 
     return {"ok": True, "fatura_id": fatura.id, "status": fatura.status}
 
@@ -3704,6 +3971,50 @@ def listar_faturas(
     return query.order_by(Fatura.vencimento.asc()).all()
 
 
+@router.get("/faturas/{fatura_id}/recibo-digital", tags=["Financeiro"])
+def obter_recibo_digital_fatura(
+    fatura_id: int,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_atual),
+):
+    fat = db.query(Fatura).filter(
+        Fatura.id == fatura_id,
+        Fatura.organizacao_id == usuario.organizacao_id,
+    ).first()
+    if not fat:
+        raise HTTPException(status_code=404, detail="Fatura não encontrada.")
+
+    if usuario.perfil == "cliente":
+        cli_usr = _obter_cliente_do_usuario(db, usuario)
+        if not cli_usr or fat.cliente_id != cli_usr.id:
+            raise HTTPException(status_code=403, detail="Acesso negado a esta fatura.")
+
+    if fat.status != "pago":
+        raise HTTPException(status_code=400, detail="O comprovante oficial é gerado automaticamente após a confirmação do pagamento.")
+
+    if not fat.mp_status_detalhe and (fat.mp_order_id or fat.mp_payment_id):
+        cfg = _aplicar_env_fallback_integracoes(db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == fat.organizacao_id).first())
+        if cfg and cfg.mp_access_token:
+            try:
+                info = (
+                    mp_consultar_order(cfg.mp_access_token, fat.mp_order_id)
+                    if fat.mp_order_id
+                    else mp_consultar_pagamento(cfg.mp_access_token, fat.mp_payment_id)
+                )
+                if info.get("status_detail"):
+                    fat.mp_status_detalhe = info.get("status_detail")
+                if info.get("payment_id") and not fat.mp_payment_id:
+                    fat.mp_payment_id = str(info.get("payment_id"))
+                if info.get("ticket_url") and not fat.mp_checkout_url:
+                    fat.mp_checkout_url = info.get("ticket_url")
+                db.commit()
+                db.refresh(fat)
+            except Exception:
+                pass
+
+    return _gerar_dados_recibo_fatura(db, fat)
+
+
 @router.get("/faturas/{fatura_id}/comprovante", tags=["Financeiro"])
 def baixar_comprovante_fatura(
     fatura_id: int,
@@ -3749,12 +4060,14 @@ def criar_fatura(
 def atualizar_fatura(
     fatura_id: int,
     dados: FaturaUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     equipe: Usuario = Depends(exigir_equipe),
 ):
     fatura = db.query(Fatura).filter(Fatura.id == fatura_id, Fatura.organizacao_id == equipe.organizacao_id).first()
     if not fatura:
         raise HTTPException(status_code=404, detail="Fatura não encontrada.")
+    was_paid = fatura.status == "pago"
     payload = dados.model_dump(exclude_unset=True)
     if payload.get("status") == "pago" and not fatura.pago_em:
         fatura.pago_em = datetime.utcnow()
@@ -3763,6 +4076,8 @@ def atualizar_fatura(
     registrar_log(db, equipe.nome, "EDITAR_FATURA", f"Atualizou fatura #{fatura_id}", org_id=equipe.organizacao_id)
     db.commit()
     db.refresh(fatura)
+    if not was_paid and fatura.status == "pago":
+        _notificar_pagamento_fatura_confirmado(db, fatura, background_tasks)
     return fatura
 
 
