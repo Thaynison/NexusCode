@@ -183,7 +183,7 @@ window.portalOpenNewProjectRequestModal = () => {
                 <div class="portal-svc-card" data-svc-cod="${esc(s.codigo)}" style="padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface); cursor:pointer; transition:border-color 0.2s;">
                   <div style="font-size:10.5px; font-weight:800; color:var(--primary); text-transform:uppercase;">${esc(s.categoria)}</div>
                   <div style="font-weight:700; font-size:13px; margin:2px 0;">${esc(s.nome)}</div>
-                  <div style="font-weight:900; font-size:14px; color:var(--ok);">A partir de ${formatMoney(s.valor_base)}</div>
+                  <div style="font-weight:900; font-size:14px; color:var(--ok);">Orçamento sob medida</div>
                   <div class="muted" style="font-size:11px;">Prazo médio: ${s.prazo_dias} dias • até ${s.parcelas_padrao}x</div>
                 </div>
               `).join('')}

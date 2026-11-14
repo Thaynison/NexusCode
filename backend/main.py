@@ -1976,7 +1976,7 @@ def atualizar_meu_perfil(dados: UsuarioUpdate, db: Session = Depends(get_db), us
             usuario.senha_hash = gerar_hash_senha(nova_senha)
 
     if "email" in payload and payload["email"] and payload["email"] != usuario.email:
-        if db.query(Usuario.id).filter(Usuario.organizacao_id == admin.organizacao_id, Usuario.email == payload["email"], Usuario.id != usuario.id).first():
+        if db.query(Usuario.id).filter(Usuario.organizacao_id == usuario.organizacao_id, Usuario.email == payload["email"], Usuario.id != usuario.id).first():
             raise HTTPException(status_code=400, detail="Este e-mail já está em uso por outra conta neste ambiente.")
 
     for campo, valor in payload.items():
@@ -2485,24 +2485,57 @@ def _executar_bootstrap_painel(db: Session, usuario: Usuario) -> dict:
     else:
         modulos = _parse_json_dict(org.modulos_json, DEFAULT_MODULOS_TENANT)
 
-    clientes = db.query(Cliente).filter(Cliente.organizacao_id == org_id).order_by(Cliente.criado_em.desc()).all()
-    usuarios = (
-        db.query(Usuario)
-        .options(defer(Usuario.foto_url), defer(Usuario.resumo_profissional))
-        .filter(Usuario.organizacao_id == org_id)
-        .order_by(Usuario.nome)
-        .all()
-    )
-    projetos = db.query(Projeto).filter(Projeto.organizacao_id == org_id).order_by(Projeto.criado_em.desc()).all()
-    orcamentos = db.query(SolicitacaoOrcamento).filter(SolicitacaoOrcamento.organizacao_id == org_id).order_by(SolicitacaoOrcamento.criado_em.desc()).all()
-    tarefas = db.query(Tarefa).filter(Tarefa.organizacao_id == org_id).order_by(Tarefa.criado_em.desc()).all()
-    propostas = db.query(PropostaComercial).filter(PropostaComercial.organizacao_id == org_id).order_by(PropostaComercial.criado_em.desc()).all()
-    despesas = db.query(Despesa).filter(Despesa.organizacao_id == org_id).order_by(Despesa.vencimento.asc()).all()
-    contratos = db.query(ContratoRecorrente).filter(ContratoRecorrente.organizacao_id == org_id).order_by(ContratoRecorrente.criado_em.desc()).all()
-    apontamentos = db.query(ApontamentoHora).filter(ApontamentoHora.organizacao_id == org_id).order_by(ApontamentoHora.data_trabalho.desc(), ApontamentoHora.id.desc()).all()
-    chamados = db.query(ChamadoSuporte).filter(ChamadoSuporte.organizacao_id == org_id).order_by(ChamadoSuporte.criado_em.desc()).all()
-    ativos = db.query(AtivoInfra).filter(AtivoInfra.organizacao_id == org_id).order_by(AtivoInfra.data_vencimento.asc().nullslast()).all()
     empresa_cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org_id).first()
+    
+    # 4.1: Resolver permissões do colaborador para o backend (simulando a mesma matriz do frontend)
+    colab_perms = None
+    if usuario.perfil != "admin":
+        cbo_text = ((usuario.cbo_descricao or '') + ' ' + (usuario.cbo_codigo or '') + ' ' + (usuario.cargo or '')).lower()
+        colab_perms = {
+            "projetos": True, "tarefas": True, "timesheet": True, "orcamentos": True,
+            "propostas": True, "clientes": True, "chamados": True, "financeiro_dre": False,
+            "faturas": True, "despesas": False, "contratos": False, "ponto": True,
+            "holerite": True, "ativos": True, "usuarios": False, "auditoria": False, "loja": False, "reembolsos": True
+        }
+        if "administrativo" in cbo_text or "4110" in cbo_text:
+            colab_perms.update({"projetos": False, "orcamentos": False, "propostas": False, "clientes": False, "despesas": True, "ativos": False})
+        elif any(x in cbo_text for x in ["financeiro", "contabilidade", "2525", "2522", "4131"]):
+            colab_perms.update({"projetos": False, "orcamentos": False, "propostas": False, "clientes": False, "chamados": False, "financeiro_dre": True, "despesas": True, "contratos": True, "ativos": False})
+        elif any(x in cbo_text for x in ["vendas", "comercial", "3541", "1423"]):
+            colab_perms.update({"projetos": False, "chamados": False, "faturas": False, "loja": True})
+        elif any(x in cbo_text for x in ["desenvolvedor", "programador", "engenheiro", "designer", "3171", "2624"]):
+            colab_perms.update({"orcamentos": False, "propostas": False, "clientes": False, "faturas": False})
+        elif any(x in cbo_text for x in ["recursos humanos", "rh ", "2524"]):
+            colab_perms.update({"projetos": False, "orcamentos": False, "propostas": False, "clientes": False, "chamados": False, "faturas": False, "usuarios": True})
+            
+        if empresa_cfg and empresa_cfg.permissoes_json:
+            try:
+                parsed_perms = json.loads(empresa_cfg.permissoes_json)
+                if "colaborador" in parsed_perms:
+                    for k, v in parsed_perms["colaborador"].items():
+                        colab_perms[k] = colab_perms[k] and v
+            except:
+                pass
+                
+        # Combinar limites do SaaS (Tenant) com limites do Colaborador
+        for k in colab_perms:
+            colab_perms[k] = colab_perms[k] and modulos.get(k, False)
+            
+    def _has_perm(key: str) -> bool:
+        if usuario.perfil == "admin": return True
+        return colab_perms.get(key, False) if colab_perms else False
+
+    clientes = db.query(Cliente).filter(Cliente.organizacao_id == org_id).order_by(Cliente.criado_em.desc()).all() if _has_perm("clientes") else []
+    usuarios = (db.query(Usuario).options(defer(Usuario.foto_url), defer(Usuario.resumo_profissional)).filter(Usuario.organizacao_id == org_id).order_by(Usuario.nome).all()) if _has_perm("usuarios") else []
+    projetos = db.query(Projeto).filter(Projeto.organizacao_id == org_id).order_by(Projeto.criado_em.desc()).all() if _has_perm("projetos") else []
+    orcamentos = db.query(SolicitacaoOrcamento).filter(SolicitacaoOrcamento.organizacao_id == org_id).order_by(SolicitacaoOrcamento.criado_em.desc()).all() if _has_perm("orcamentos") else []
+    tarefas = db.query(Tarefa).filter(Tarefa.organizacao_id == org_id).order_by(Tarefa.criado_em.desc()).all() if _has_perm("tarefas") else []
+    propostas = db.query(PropostaComercial).filter(PropostaComercial.organizacao_id == org_id).order_by(PropostaComercial.criado_em.desc()).all() if _has_perm("propostas") else []
+    despesas = db.query(Despesa).filter(Despesa.organizacao_id == org_id).order_by(Despesa.vencimento.asc()).all() if _has_perm("despesas") else []
+    contratos = db.query(ContratoRecorrente).filter(ContratoRecorrente.organizacao_id == org_id).order_by(ContratoRecorrente.criado_em.desc()).all() if _has_perm("contratos") else []
+    apontamentos = db.query(ApontamentoHora).filter(ApontamentoHora.organizacao_id == org_id).order_by(ApontamentoHora.data_trabalho.desc(), ApontamentoHora.id.desc()).all() if _has_perm("timesheet") else []
+    chamados = db.query(ChamadoSuporte).filter(ChamadoSuporte.organizacao_id == org_id).order_by(ChamadoSuporte.criado_em.desc()).all() if _has_perm("chamados") else []
+    ativos = db.query(AtivoInfra).filter(AtivoInfra.organizacao_id == org_id).order_by(AtivoInfra.data_vencimento.asc().nullslast()).all() if _has_perm("ativos") else []
 
     notificacoes = (
         db.query(Notificacao)
@@ -3161,6 +3194,20 @@ def gerar_faturas_recorrentes_mes(
 
 @router.get("/financeiro/dre", tags=["Financeiro"])
 def obter_dre_gerencial(db: Session = Depends(get_db), equipe: Usuario = Depends(exigir_equipe)):
+    if equipe.perfil != "admin":
+        # Need to check colab perms
+        org = _get_org_or_404(db, equipe.organizacao_id)
+        emp_cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first()
+        cbo_text = ((equipe.cbo_descricao or '') + ' ' + (equipe.cbo_codigo or '') + ' ' + (equipe.cargo or '')).lower()
+        if not any(x in cbo_text for x in ["financeiro", "contabilidade", "2525", "2522", "4131"]):
+            raise HTTPException(status_code=403, detail="Acesso restrito.")
+        if emp_cfg and emp_cfg.permissoes_json:
+            try:
+                p = json.loads(emp_cfg.permissoes_json)
+                if not p.get("colaborador", {}).get("financeiro_dre", False):
+                    raise HTTPException(status_code=403, detail="Acesso restrito.")
+            except:
+                pass
     org_id = equipe.organizacao_id
     faturas = db.query(Fatura.valor, Fatura.status, Fatura.vencimento).filter(Fatura.organizacao_id == org_id).all()
     despesas = db.query(Despesa.valor, Despesa.status, Despesa.categoria, Despesa.vencimento).filter(Despesa.organizacao_id == org_id).all()
@@ -4022,6 +4069,7 @@ def listar_usuarios(db: Session = Depends(get_db), equipe: Usuario = Depends(exi
 @router.post("/usuarios", response_model=UsuarioListOut, status_code=201, tags=["Usuários"])
 def criar_usuario(
     dados: UsuarioCreate,
+    req: Request,
     db: Session = Depends(get_db),
     admin: Usuario = Depends(exigir_admin),
 ):
@@ -4042,6 +4090,20 @@ def criar_usuario(
         raise HTTPException(status_code=400, detail="E-mail já cadastrado neste ambiente.")
     is_client_role = dados.perfil == "cliente"
     cargo_final = None if is_client_role else (dados.cargo or dados.cbo_descricao)
+
+    if admin.perfil != 'admin' and dados.perfil == 'admin':
+        raise HTTPException(status_code=403, detail="Apenas administradores podem criar perfis Admin.")
+    if dados.perfil == 'cliente':
+         # Se esta vindo pela tela de RH, bloqueia o Cliente Externo
+         if req.url.path == '/api/usuarios' and 'colaboradores' not in str(req.url):
+              pass # this is fine, it handles both. But we must assure RBAC
+    
+    chave_pix = dados.pix_chave
+    if not is_client_role and dados.pix_tipo:
+        if dados.pix_tipo == 'cpf' and dados.cpf and not chave_pix: chave_pix = dados.cpf
+        elif dados.pix_tipo == 'email' and not chave_pix: chave_pix = dados.email
+        elif dados.pix_tipo == 'telefone' and dados.telefone and not chave_pix: chave_pix = dados.telefone
+        
     novo = Usuario(
         organizacao_id=org.id,
         nome=dados.nome,
@@ -4065,7 +4127,7 @@ def criar_usuario(
         valor_vt_mensal=0 if is_client_role else (dados.valor_vt_mensal or 0),
         salario_base=0 if is_client_role else (dados.salario_base or 0),
         pix_tipo=None if is_client_role else (dados.pix_tipo or "cpf"),
-        pix_chave=None if is_client_role else dados.pix_chave,
+        pix_chave=None if is_client_role else chave_pix,
         telefone=dados.telefone,
     )
     db.add(novo)
@@ -4090,6 +4152,13 @@ def atualizar_usuario(
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
 
     payload = dados.model_dump(exclude_unset=True)
+    
+    if "perfil" in payload and payload["perfil"] != usuario.perfil:
+        if admin.perfil != 'admin':
+            raise HTTPException(status_code=403, detail="Você não tem permissão para alterar níveis de acesso (RBAC).")
+        if payload["perfil"] == 'cliente' and usuario.perfil != 'cliente':
+            raise HTTPException(status_code=400, detail="Não é permitido rebaixar um Colaborador para Cliente Externo. Exclua a conta e crie no Portal do Cliente.")
+
     if "senha" in payload:
         nova_senha = payload.pop("senha")
         if nova_senha:

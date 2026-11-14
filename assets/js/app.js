@@ -67,6 +67,55 @@ let cache = {
 };
 const CACHE_TTL_MS = 30000;
 
+function hasPermission(modKey) {
+  if (user?.perfil === 'admin') return true;
+  if (user?.perfil !== 'colaborador') return false;
+  
+  const cboText = ((user.cbo_descricao || '') + ' ' + (user.cbo_codigo || '') + ' ' + (user.cargo || '')).toLowerCase();
+  const base = {
+    projetos: true, tarefas: true, timesheet: true, orcamentos: true,
+    propostas: true, clientes: true, chamados: true, financeiro_dre: false,
+    faturas: true, despesas: false, contratos: false, ponto: true,
+    holerite: true, ativos: true, usuarios: false, auditoria: false, loja: false, reembolsos: true
+  };
+  if (cboText.includes('administrativo') || cboText.includes('4110')) {
+    Object.assign(base, { projetos: false, orcamentos: false, propostas: false, clientes: false, despesas: true, ativos: false });
+  } else if (cboText.includes('financeiro') || cboText.includes('contabilidade') || cboText.includes('2525') || cboText.includes('2522') || cboText.includes('4131')) {
+    Object.assign(base, { projetos: false, orcamentos: false, propostas: false, clientes: false, chamados: false, financeiro_dre: true, despesas: true, contratos: true, ativos: false });
+  } else if (cboText.includes('vendas') || cboText.includes('comercial') || cboText.includes('3541') || cboText.includes('1423')) {
+    Object.assign(base, { projetos: false, chamados: false, faturas: false, loja: true });
+  } else if (cboText.includes('desenvolvedor') || cboText.includes('programador') || cboText.includes('engenheiro') || cboText.includes('designer') || cboText.includes('3171') || cboText.includes('2624')) {
+    Object.assign(base, { orcamentos: false, propostas: false, clientes: false, faturas: false });
+  } else if (cboText.includes('recursos humanos') || cboText.includes('rh ') || cboText.includes('2524')) {
+    Object.assign(base, { projetos: false, orcamentos: false, propostas: false, clientes: false, chamados: false, faturas: false, usuarios: true });
+  }
+  
+  if (cache.empresa_config?.permissoes_json) {
+    try {
+      const p = JSON.parse(cache.empresa_config.permissoes_json);
+      if (p?.colaborador && typeof p.colaborador[modKey] === 'boolean') {
+        base[modKey] = base[modKey] && p.colaborador[modKey];
+      }
+    } catch (_) {}
+  }
+  
+  if (user?.permissoes_individuais_json) {
+     try {
+       const pi = JSON.parse(user.permissoes_individuais_json);
+       if (typeof pi[modKey] === 'boolean') {
+          return pi[modKey]; // Individual overrides company base
+       }
+     } catch(_) {}
+  }
+  
+  if (cache.organizacao?.modulos && cache.organizacao.modulos[modKey] === false) {
+     return false;
+  }
+  
+  return Boolean(base[modKey]);
+}
+
+
 function invalidateCache() {
   cache.loadedAt = 0;
 }
@@ -482,7 +531,7 @@ function renderGlobalSearchBanner() {
   if (!q) return '';
 
   const hits = [];
-  (cache.clientes || []).forEach((c) => {
+  if (hasPermission('clientes')) { (cache.clientes || []).forEach((c) => {
     if (matchSearch([c.nome_empresa, c.contato_nome, c.email, c.telefone, c.status_funil])) {
       hits.push({
         type: 'Cliente / Lead',
@@ -491,8 +540,8 @@ function renderGlobalSearchBanner() {
         action: `window.nexusGo('customers')`
       });
     }
-  });
-  (cache.projetos || []).forEach((p) => {
+  }); }
+  if (hasPermission('projetos')) { (cache.projetos || []).forEach((p) => {
     if (matchSearch([p.titulo, p.descricao, p.status])) {
       hits.push({
         type: 'Projeto',
@@ -501,8 +550,8 @@ function renderGlobalSearchBanner() {
         action: `window.nexusGo('projects')`
       });
     }
-  });
-  (cache.tarefas || []).forEach((t) => {
+  }); }
+  if (hasPermission('tarefas')) { (cache.tarefas || []).forEach((t) => {
     if (matchSearch([t.titulo, t.descricao, t.status])) {
       hits.push({
         type: 'Tarefa Planner',
@@ -511,8 +560,8 @@ function renderGlobalSearchBanner() {
         action: `window.nexusOpenPlannerTask(${t.id})`
       });
     }
-  });
-  (cache.orcamentos || []).forEach((o) => {
+  }); }
+  if (hasPermission('orcamentos')) { (cache.orcamentos || []).forEach((o) => {
     if (matchSearch([o.nome, o.empresa, o.email, o.tipo_projeto, o.mensagem])) {
       hits.push({
         type: 'Solicitação',
@@ -521,8 +570,8 @@ function renderGlobalSearchBanner() {
         action: `window.nexusReplyQuote(${o.id})`
       });
     }
-  });
-  (cache.usuarios || []).forEach((u) => {
+  }); }
+  if (hasPermission('usuarios')) { (cache.usuarios || []).forEach((u) => {
     if (matchSearch([u.nome, u.email, u.cargo, u.perfil, u.cidade])) {
       hits.push({
         type: 'Colaborador / Usuário',
@@ -531,8 +580,8 @@ function renderGlobalSearchBanner() {
         action: `window.nexusGo('users')`
       });
     }
-  });
-  (cache.propostas || []).forEach((pr) => {
+  }); }
+  if (hasPermission('propostas')) { (cache.propostas || []).forEach((pr) => {
     if (matchSearch([pr.codigo, pr.titulo, pr.escopo, pr.status])) {
       hits.push({
         type: 'Proposta Comercial',
@@ -541,8 +590,8 @@ function renderGlobalSearchBanner() {
         action: `window.nexusGo('propostas')`
       });
     }
-  });
-  (cache.chamados || []).forEach((ch) => {
+  }); }
+  if (hasPermission('chamados')) { (cache.chamados || []).forEach((ch) => {
     if (matchSearch([ch.protocolo, ch.titulo, ch.descricao, ch.status])) {
       hits.push({
         type: 'Chamado Suporte',
@@ -551,8 +600,8 @@ function renderGlobalSearchBanner() {
         action: `window.nexusGo('chamados')`
       });
     }
-  });
-  (cache.holerites || []).forEach((h) => {
+  }); }
+  if (hasPermission('holerite')) { (cache.holerites || []).forEach((h) => {
     const uName = (cache.usuarios || []).find((u) => u.id === h.usuario_id)?.nome || '';
     if (matchSearch([h.competencia, h.tipo, uName, h.status])) {
       hits.push({
@@ -562,7 +611,7 @@ function renderGlobalSearchBanner() {
         action: `window.nexusGo('holerite')`
       });
     }
-  });
+  }); }
 
   return `
     <div class="card global-search-banner">
@@ -662,31 +711,31 @@ async function renderDashboard() {
       </div>
 
       <div class="grid">
-        <div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('quotes')">
+        ${hasPermission('orcamentos') ? `<div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('quotes')">
           <div class="metric-head">
             <span class="title">Solicitações Pendentes</span>
             <span class="metric-icon">${ICONS.inbox}</span>
           </div>
           <strong>${kpi.solicitacoes_novas}</strong>
           <span class="pill-info">${orcamentos.length} solicitações registradas</span>
-        </div>
-        <div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('customers')">
+        </div>` : ''}
+        ${hasPermission('clientes') ? `<div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('customers')">
           <div class="metric-head">
             <span class="title">Clientes &amp; Leads</span>
             <span class="metric-icon">${ICONS.users}</span>
           </div>
           <strong>${kpi.total_clientes}</strong>
           <span class="pill-info">${kpi.leads_abertos} oportunidades em andamento</span>
-        </div>
-        <div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('projects')">
+        </div>` : ''}
+        ${hasPermission('projetos') ? `<div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('projects')">
           <div class="metric-head">
             <span class="title">Projetos Ativos</span>
             <span class="metric-icon">${ICONS.folder}</span>
           </div>
           <strong>${kpi.projetos_ativos}</strong>
           <span class="pill-info">Em execução e homologação</span>
-        </div>
-        ${cache.empresa_config?.permissoes_json && JSON.parse(cache.empresa_config.permissoes_json).colaborador?.financeiro_dre ? `
+        </div>` : ''}
+        ${hasPermission('financeiro_dre') ? `
         <div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('dre')">
           <div class="metric-head">
             <span class="title">Receita Paga / Lucro</span>
@@ -695,26 +744,26 @@ async function renderDashboard() {
           <strong>${formatMoney(kpi.receita_paga)}</strong>
           <span class="pill-info">Lucro: ${formatMoney(kpi.lucro_realizado ?? kpi.receita_paga)} • MRR: ${formatMoney(kpi.mrr_ativo ?? 0)}</span>
         </div>` : ''}
-        <div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('propostas')">
+        ${hasPermission('propostas') ? `<div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('propostas')">
           <div class="metric-head">
             <span class="title">Propostas Abertas</span>
             <span class="metric-icon">${ICONS.fileText}</span>
           </div>
           <strong>${kpi.propostas_abertas ?? 0}</strong>
           <span class="pill-info">Aguardando aprovação do cliente</span>
-        </div>
-        <div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('chamados')">
+        </div>` : ''}
+        ${hasPermission('chamados') ? `<div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('chamados')">
           <div class="metric-head">
             <span class="title">Chamados Suporte</span>
             <span class="metric-icon">${ICONS.clock}</span>
           </div>
           <strong>${kpi.chamados_abertos ?? 0}</strong>
           <span class="pill-info">${kpi.horas_totais ?? 0}h apontadas no Timesheet</span>
-        </div>
+        </div>` : ''}
       </div>
 
       <div class="dashboard-panels">
-        <div class="card">
+        ${hasPermission('orcamentos') ? `<div class="card">
           <div class="toolbar" style="margin-bottom:10px;">
             <h3 style="margin:0; font-size:16px;">Solicitações Recentes</h3>
             <button class="btn secondary" style="padding:5px 10px; font-size:12px;" onclick="window.nexusGo('quotes')">Ver todas</button>
@@ -728,9 +777,9 @@ async function renderDashboard() {
               <span class="badge ${esc(o.status)}">${esc(o.status).replace('_', ' ')}</span>
             </div>
           `).join('') || '<p class="muted">Nenhuma solicitação pendente no momento.</p>'}
-        </div>
+        </div>` : ''}
 
-        <div class="card">
+        ${hasPermission('projetos') ? `<div class="card">
           <div class="toolbar" style="margin-bottom:10px;">
             <h3 style="margin:0; font-size:16px;">Projetos em Andamento</h3>
             <button class="btn secondary" style="padding:5px 10px; font-size:12px;" onclick="window.nexusGo('projects')">Ver todos</button>
@@ -744,7 +793,7 @@ async function renderDashboard() {
               <span class="badge ${esc(p.status)}">${esc(p.status).replace('_', ' ')}</span>
             </div>
           `).join('') || '<p class="muted">Nenhum projeto em andamento.</p>'}
-        </div>
+        </div>` : ''}
       </div>
 
       <div class="anniv-sections-grid">
@@ -4149,9 +4198,11 @@ async function openRecordModal(editObj = null, defaultPerfil = 'colaborador') {
           <label>Nome Completo *<input name="nome" required value="${esc(editObj?.nome || '')}" placeholder="Ex.: Mariana Silva"></label>
           <label>E-mail de Acesso *<input name="email" type="email" required value="${esc(editObj?.email || '')}" placeholder="nome@empresa.com.br"></label>
           <label>Senha ${editObj ? '(deixe vazio para manter)' : '*'}<input name="senha" type="password" ${editObj ? '' : 'required'} minlength="6" autocomplete="new-password"></label>
-          <label>Tipo de Conta / Perfil *<select name="perfil" id="usr-perfil-select">
-            ${['colaborador', 'admin', 'cliente'].map((r) => `<option value="${r}" ${activePerfil === r ? 'selected' : ''}>${r === 'admin' ? 'Administrador Interno (Gestão & RH)' : r === 'colaborador' ? 'Colaborador Interno (Ponto & Tarefas)' : 'Cliente Externo (Somente Portal do Cliente)'}</option>`).join('')}
-          </select></label>
+          <label>Tipo de Conta / Perfil *
+            <select name="perfil" id="usr-perfil-select" ${user?.perfil !== 'admin' ? 'disabled' : ''}>
+              ${['colaborador', 'admin'].map((r) => `<option value="${r}" ${activePerfil === r ? 'selected' : ''}>${r === 'admin' ? 'Administrador Interno (Gestão & RH)' : 'Colaborador Interno (Ponto & Tarefas)'}</option>`).join('')}
+            </select>
+          </label>
           <label>CPF / Documento<input name="cpf" value="${esc(editObj?.cpf || '')}" placeholder="000.000.000-00"></label>
           <label>Telefone / WhatsApp<input name="telefone" value="${esc(editObj?.telefone || '')}" placeholder="(27) 99999-9999"></label>
           <label>Status da Conta<select name="ativo">
@@ -4233,22 +4284,107 @@ async function openRecordModal(editObj = null, defaultPerfil = 'colaborador') {
         <div class="modal-section-title"><span class="modal-section-step">4</span> Dados PIX para Pagamento de Folha (Mercado Pago)</div>
         <div class="formgrid">
           <label>Tipo de Chave PIX
-            <select name="pix_tipo">
-              <option value="cpf" ${(editObj?.pix_tipo || 'cpf') === 'cpf' ? 'selected' : ''}>CPF</option>
+            <select name="pix_tipo" id="usr-pix-tipo">
+              <option value="cpf" ${(editObj?.pix_tipo || 'cpf') === 'cpf' ? 'selected' : ''}>CPF (Mesmo do Cadastro)</option>
               <option value="email" ${editObj?.pix_tipo === 'email' ? 'selected' : ''}>E-mail</option>
               <option value="telefone" ${editObj?.pix_tipo === 'telefone' ? 'selected' : ''}>Telefone / Celular</option>
               <option value="aleatoria" ${editObj?.pix_tipo === 'aleatoria' ? 'selected' : ''}>Chave Aleatória (EVP)</option>
             </select>
           </label>
-          <label>Chave PIX do Colaborador
-            <input name="pix_chave" value="${esc(editObj?.pix_chave || '')}" placeholder="Informe a chave PIX para transferência">
+          <label>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+               Chave PIX do Colaborador
+               <span id="usr-pix-usar-cad-wrap" style="display:inline-flex; align-items:center; gap:4px; font-weight:normal; cursor:pointer; font-size:11px; color:var(--primary);">
+                 <input type="checkbox" id="usr-pix-usar-cad" checked style="width:12px; height:12px; margin:0;"> Usar do cadastro
+               </span>
+            </div>
+            <input name="pix_chave" id="usr-pix-chave" value="${esc(editObj?.pix_chave || '')}" placeholder="Preenchido automaticamente..." readonly>
           </label>
+        </div>
+      </div>
+      
+      <div class="modal-section-card">
+        <div class="modal-section-title"><span class="modal-section-step">5</span> Exceções de Acesso (Opcional)</div>
+        <p class="muted" style="margin:0 0 10px; font-size:12.5px;">As permissões base são geradas automaticamente pelo CBO. Marque abaixo apenas se quiser forçar o acesso ou bloqueio específico deste colaborador.</p>
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:10px;">
+          ${[
+            ['projetos', 'Projetos'], ['tarefas', 'Tarefas'], ['timesheet', 'Timesheet'],
+            ['orcamentos', 'Orçamentos'], ['propostas', 'Propostas'], ['clientes', 'Clientes'],
+            ['chamados', 'Chamados'], ['financeiro_dre', 'Financeiro DRE'], ['faturas', 'Faturas'],
+            ['despesas', 'Despesas'], ['contratos', 'Contratos MRR'], ['ponto', 'Ponto'],
+            ['holerite', 'Holerites'], ['ativos', 'Ativos'], ['usuarios', 'Usuários'],
+            ['loja', 'Loja Virtual'], ['reembolsos', 'Reembolsos']
+          ].map(([k, label]) => {
+            let val = 'default';
+            if (editObj?.permissoes_individuais_json) {
+               try { const p = JSON.parse(editObj.permissoes_individuais_json); if (p[k] === true) val = 'true'; else if (p[k] === false) val = 'false'; } catch(_) {}
+            }
+            return `
+              <label style="font-size:12px; font-weight:600; display:flex; flex-direction:column; gap:4px;">${label}
+                <select name="perm_ind_${k}" class="nc-input" style="min-height:30px; padding:4px 8px; font-size:12px;">
+                  <option value="default" ${val === 'default' ? 'selected' : ''}>Padrão (CBO)</option>
+                  <option value="true" ${val === 'true' ? 'selected' : ''}>Forçar Acesso</option>
+                  <option value="false" ${val === 'false' ? 'selected' : ''}>Bloquear</option>
+                </select>
+              </label>
+            `;
+          }).join('')}
         </div>
       </div>
       </div>`;
 
     // Bind CBO live autocomplete, contract period toggle & role switch (Cliente vs Colaborador)
     setTimeout(() => {
+      
+      const cpfInp = document.querySelector('input[name="cpf"]');
+      const emailInp = document.querySelector('input[name="email"]');
+      const telInp = document.querySelector('input[name="telefone"]');
+      
+      const pixTipo = document.getElementById('usr-pix-tipo');
+      const pixChave = document.getElementById('usr-pix-chave');
+      const pixUsarCad = document.getElementById('usr-pix-usar-cad');
+      const pixUsarCadWrap = document.getElementById('usr-pix-usar-cad-wrap');
+      
+      const syncPix = () => {
+         const t = pixTipo.value;
+         if (t === 'aleatoria') {
+            pixUsarCadWrap.style.display = 'none';
+            pixUsarCad.checked = false;
+            pixChave.readOnly = false;
+            pixChave.placeholder = 'Ex: 123e4567-e89b...';
+         } else {
+            pixUsarCadWrap.style.display = 'inline-flex';
+            if (pixUsarCad.checked) {
+               pixChave.readOnly = true;
+               pixChave.placeholder = 'Preenchido automaticamente...';
+               if (t === 'cpf') pixChave.value = cpfInp?.value || '';
+               else if (t === 'email') pixChave.value = emailInp?.value || '';
+               else if (t === 'telefone') pixChave.value = telInp?.value || '';
+            } else {
+               pixChave.readOnly = false;
+               pixChave.placeholder = 'Digite a chave PIX...';
+            }
+         }
+      };
+      
+      pixTipo?.addEventListener('change', () => { if (pixTipo.value !== 'aleatoria') pixUsarCad.checked = true; syncPix(); });
+      pixUsarCad?.addEventListener('change', syncPix);
+      cpfInp?.addEventListener('input', () => { if (pixTipo?.value === 'cpf' && pixUsarCad?.checked) syncPix(); });
+      emailInp?.addEventListener('input', () => { if (pixTipo?.value === 'email' && pixUsarCad?.checked) syncPix(); });
+      telInp?.addEventListener('input', () => { if (pixTipo?.value === 'telefone' && pixUsarCad?.checked) syncPix(); });
+      
+      setTimeout(() => { 
+        if(pixChave && pixChave.value && !['aleatoria'].includes(pixTipo?.value)) {
+           // se a chave salva não for igual a do cadastro, desmarca o checkbox no load
+           let expected = '';
+           if(pixTipo.value === 'cpf') expected = cpfInp?.value || '';
+           if(pixTipo.value === 'email') expected = emailInp?.value || '';
+           if(pixTipo.value === 'telefone') expected = telInp?.value || '';
+           if (expected && pixChave.value !== expected) pixUsarCad.checked = false;
+        }
+        syncPix(); 
+      }, 50);
+
       const perfilSel = document.getElementById('usr-perfil-select');
       const hrSections = document.getElementById('usr-hr-sections');
       const clientNotice = document.getElementById('usr-client-notice');
@@ -4466,6 +4602,7 @@ recordForm.onsubmit = async (e) => {
           pix_tipo: isCli ? null : (raw.pix_tipo || 'cpf'),
           pix_chave: (!isCli && raw.pix_chave) ? raw.pix_chave.trim() : null,
           ativo: raw.ativo === 'true',
+          permissoes_individuais_json: isCli ? null : JSON.stringify(['projetos','tarefas','timesheet','orcamentos','propostas','clientes','chamados','financeiro_dre','faturas','despesas','contratos','ponto','holerite','ativos','usuarios','loja','reembolsos'].reduce((acc, k) => { const v = raw['perm_ind_'+k]; if (v === 'true') acc[k] = true; else if (v === 'false') acc[k] = false; return acc; }, {})),
           ...(raw.senha ? { senha: raw.senha } : {})
         })
       });
