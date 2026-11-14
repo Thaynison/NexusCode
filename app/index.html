@@ -61,6 +61,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
           <span class="nav-label">Faturas &amp; Cobranças</span>
         </button>
+        <button data-app-page="holerite" title="Holerite e Informe de Rendimentos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>
+          <span class="nav-label">Holerite</span>
+        </button>
 
         <div class="nav-group">Sistema</div>
         <button data-app-page="users" title="Usuários e Perfis">
@@ -93,13 +97,13 @@
           </button>
           <div class="search-box">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            <input type="search" id="global-search" placeholder="Pesquisar clientes, projetos ou solicitações...">
+            <input type="search" id="global-search" placeholder="Pesquisar em todo o sistema (clientes, projetos, tarefas, holerites...)">
+            <button type="button" id="clear-global-search" class="search-clear-btn" title="Limpar pesquisa" style="display:none;">&times;</button>
           </div>
         </div>
 
         <div class="top-actions">
-          <span id="app-title" class="top-breadcrumb">Dashboard</span>
-          <div class="user-chip">
+          <div class="user-chip" style="cursor:pointer;" onclick="window.nexusGo('profile')" title="Abrir Meu Perfil">
             <div class="user-avatar" id="user-avatar-initials">NC</div>
             <span id="app-user-name">Nexus Code</span>
           </div>
@@ -128,6 +132,16 @@
         <button type="submit" class="btn" id="record-save-btn">Salvar Registro</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Modal MS365 Planner (Detalhes da Tarefa, Checklist e Documentos) -->
+  <dialog id="planner-dialog" class="dialog planner-dialog">
+    <div id="planner-modal-container" class="modal planner-modal"></div>
+  </dialog>
+
+  <!-- Modal Oficial de Holerite / Informe -->
+  <dialog id="holerite-dialog" class="dialog planner-dialog">
+    <div id="holerite-modal-container" class="modal"></div>
   </dialog>
 
   <script type="module" src="../assets/js/app.js"></script>

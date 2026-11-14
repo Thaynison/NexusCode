@@ -23,6 +23,8 @@ class Usuario(Base):
     ativo = Column(Boolean, default=True, nullable=False)
     cpf = Column(String(20), nullable=True)
     data_nascimento = Column(Date, nullable=True)
+    data_contratacao = Column(Date, nullable=True)
+    salario_base = Column(Numeric(12, 2), default=0.00, nullable=True)
     telefone = Column(String(30), nullable=True)
     cargo = Column(String(120), nullable=True)
     area_atuacao = Column(String(120), nullable=True)
@@ -40,6 +42,8 @@ class Usuario(Base):
 
     projetos_responsavel = relationship("Projeto", back_populates="responsavel")
     tarefas_responsavel = relationship("Tarefa", back_populates="responsavel")
+    holerites = relationship("Holerite", back_populates="usuario", cascade="all, delete-orphan")
+    informes_rendimentos = relationship("InformeRendimento", back_populates="usuario", cascade="all, delete-orphan")
 
 
 class Cliente(Base):
@@ -139,7 +143,12 @@ class Tarefa(Base):
         native_enum=False,
         nullable=False,
     )
+    prioridade = Column(String(20), default="media", nullable=False)
+    data_inicio = Column(Date, nullable=True)
     prazo = Column(Date, nullable=True)
+    checklist_json = Column(Text, nullable=True)
+    anexos_json = Column(Text, nullable=True)
+    comentarios_json = Column(Text, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
     projeto = relationship("Projeto", back_populates="tarefas")
@@ -184,6 +193,52 @@ class Fatura(Base):
 
     projeto = relationship("Projeto", back_populates="faturas")
     cliente = relationship("Cliente", back_populates="faturas")
+
+
+class Holerite(Base):
+    __tablename__ = "holerites"
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    competencia = Column(String(20), nullable=False)
+    tipo = Column(String(50), default="Salário Mensal", nullable=False)
+    salario_base = Column(Numeric(12, 2), default=0.00, nullable=False)
+    proventos = Column(Numeric(12, 2), default=0.00, nullable=False)
+    descricao_proventos = Column(String(255), nullable=True)
+    descontos = Column(Numeric(12, 2), default=0.00, nullable=False)
+    descricao_descontos = Column(String(255), nullable=True)
+    valor_liquido = Column(Numeric(12, 2), default=0.00, nullable=False)
+    fgts_valor = Column(Numeric(12, 2), default=0.00, nullable=False)
+    data_pagamento = Column(Date, nullable=True)
+    status = Column(String(20), default="pago", nullable=False)
+    observacoes = Column(Text, nullable=True)
+    anexo_nome = Column(String(255), nullable=True)
+    anexo_data = Column(Text, nullable=True)
+    publicado_por = Column(String(120), nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+    usuario = relationship("Usuario", back_populates="holerites")
+
+
+class InformeRendimento(Base):
+    __tablename__ = "informes_rendimentos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    ano_calendario = Column(String(10), nullable=False)
+    ano_exercicio = Column(String(10), nullable=False)
+    rendimentos_tributaveis = Column(Numeric(12, 2), default=0.00, nullable=False)
+    contribuicao_previdenciaria = Column(Numeric(12, 2), default=0.00, nullable=False)
+    irrf_retido = Column(Numeric(12, 2), default=0.00, nullable=False)
+    decimo_terceiro = Column(Numeric(12, 2), default=0.00, nullable=False)
+    rendimentos_isentos = Column(Numeric(12, 2), default=0.00, nullable=False)
+    observacoes = Column(Text, nullable=True)
+    anexo_nome = Column(String(255), nullable=True)
+    anexo_data = Column(Text, nullable=True)
+    publicado_por = Column(String(120), nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+    usuario = relationship("Usuario", back_populates="informes_rendimentos")
 
 
 class ModuloRegistro(Base):

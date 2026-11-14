@@ -32,6 +32,8 @@ class UsuarioBase(BaseModel):
     ativo: bool = True
     cpf: Optional[str] = None
     data_nascimento: Optional[date] = None
+    data_contratacao: Optional[date] = None
+    salario_base: Optional[Decimal] = Decimal("0.00")
     telefone: Optional[str] = None
     cargo: Optional[str] = None
     area_atuacao: Optional[str] = None
@@ -59,6 +61,8 @@ class UsuarioUpdate(BaseModel):
     senha: Optional[str] = Field(default=None, min_length=6)
     cpf: Optional[str] = None
     data_nascimento: Optional[date] = None
+    data_contratacao: Optional[date] = None
+    salario_base: Optional[Decimal] = None
     telefone: Optional[str] = None
     cargo: Optional[str] = None
     area_atuacao: Optional[str] = None
@@ -121,7 +125,7 @@ class SolicitacaoPublicCreate(BaseModel):
     telefone: Optional[str] = Field(default=None, max_length=30)
     tipo_projeto: Optional[str] = Field(default="Não especificado", max_length=80)
     mensagem: str = Field(..., min_length=3, max_length=4000)
-    website: Optional[str] = None  # honeypot
+    website: Optional[str] = None
 
 
 class SolicitacaoResponder(BaseModel):
@@ -192,7 +196,12 @@ class TarefaBase(BaseModel):
     titulo: str = Field(..., max_length=180)
     descricao: Optional[str] = None
     status: Literal["pendente", "fazendo", "revisao", "concluida"] = "pendente"
+    prioridade: Literal["baixa", "media", "alta", "urgente"] = "media"
+    data_inicio: Optional[date] = None
     prazo: Optional[date] = None
+    checklist_json: Optional[str] = None
+    anexos_json: Optional[str] = None
+    comentarios_json: Optional[str] = None
 
 
 class TarefaCreate(TarefaBase):
@@ -200,11 +209,17 @@ class TarefaCreate(TarefaBase):
 
 
 class TarefaUpdate(BaseModel):
+    projeto_id: Optional[int] = None
     responsavel_id: Optional[int] = None
     titulo: Optional[str] = None
     descricao: Optional[str] = None
     status: Optional[Literal["pendente", "fazendo", "revisao", "concluida"]] = None
+    prioridade: Optional[Literal["baixa", "media", "alta", "urgente"]] = None
+    data_inicio: Optional[date] = None
     prazo: Optional[date] = None
+    checklist_json: Optional[str] = None
+    anexos_json: Optional[str] = None
+    comentarios_json: Optional[str] = None
 
 
 class TarefaOut(TarefaBase):
@@ -245,6 +260,77 @@ class FaturaUpdate(BaseModel):
 class FaturaOut(FaturaCreate):
     id: int
     pago_em: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HoleriteBase(BaseModel):
+    usuario_id: int
+    competencia: str = Field(..., max_length=20)
+    tipo: str = Field(default="Salário Mensal", max_length=50)
+    salario_base: Decimal = Decimal("0.00")
+    proventos: Decimal = Decimal("0.00")
+    descricao_proventos: Optional[str] = None
+    descontos: Decimal = Decimal("0.00")
+    descricao_descontos: Optional[str] = None
+    valor_liquido: Decimal = Decimal("0.00")
+    fgts_valor: Decimal = Decimal("0.00")
+    data_pagamento: Optional[date] = None
+    status: Literal["pago", "programado", "pendente"] = "pago"
+    observacoes: Optional[str] = None
+    anexo_nome: Optional[str] = None
+    anexo_data: Optional[str] = None
+
+
+class HoleriteCreate(HoleriteBase):
+    pass
+
+
+class HoleriteUpdate(BaseModel):
+    competencia: Optional[str] = None
+    tipo: Optional[str] = None
+    salario_base: Optional[Decimal] = None
+    proventos: Optional[Decimal] = None
+    descricao_proventos: Optional[str] = None
+    descontos: Optional[Decimal] = None
+    descricao_descontos: Optional[str] = None
+    valor_liquido: Optional[Decimal] = None
+    fgts_valor: Optional[Decimal] = None
+    data_pagamento: Optional[date] = None
+    status: Optional[Literal["pago", "programado", "pendente"]] = None
+    observacoes: Optional[str] = None
+    anexo_nome: Optional[str] = None
+    anexo_data: Optional[str] = None
+
+
+class HoleriteOut(HoleriteBase):
+    id: int
+    publicado_por: Optional[str] = None
+    criado_em: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InformeRendimentoBase(BaseModel):
+    usuario_id: int
+    ano_calendario: str = Field(..., max_length=10)
+    ano_exercicio: str = Field(..., max_length=10)
+    rendimentos_tributaveis: Decimal = Decimal("0.00")
+    contribuicao_previdenciaria: Decimal = Decimal("0.00")
+    irrf_retido: Decimal = Decimal("0.00")
+    decimo_terceiro: Decimal = Decimal("0.00")
+    rendimentos_isentos: Decimal = Decimal("0.00")
+    observacoes: Optional[str] = None
+    anexo_nome: Optional[str] = None
+    anexo_data: Optional[str] = None
+
+
+class InformeRendimentoCreate(InformeRendimentoBase):
+    pass
+
+
+class InformeRendimentoOut(InformeRendimentoBase):
+    id: int
+    publicado_por: Optional[str] = None
+    criado_em: datetime
     model_config = ConfigDict(from_attributes=True)
 
 

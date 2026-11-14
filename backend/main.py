@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from database import Base, engine, get_db, SessionLocal
 from models import (
     Usuario, Cliente, SolicitacaoOrcamento, Projeto,
-    Tarefa, Interacao, Fatura, ModuloRegistro, LogAuditoria
+    Tarefa, Interacao, Fatura, Holerite, InformeRendimento, ModuloRegistro, LogAuditoria
 )
 from schemas import (
     LoginRequest, RegisterRequest, ForgotPasswordRequest, TokenResponse,
@@ -27,6 +27,8 @@ from schemas import (
     TarefaCreate, TarefaUpdate, TarefaOut,
     InteracaoCreate, InteracaoOut,
     FaturaCreate, FaturaUpdate, FaturaOut,
+    HoleriteCreate, HoleriteUpdate, HoleriteOut,
+    InformeRendimentoCreate, InformeRendimentoOut,
     ModuloRegistroCreate, ModuloRegistroOut, LogAuditoriaOut,
 )
 from auth import (
@@ -407,7 +409,7 @@ def remover_solicitacao(
 @app.get("/api/bootstrap", tags=["Dashboard"])
 def bootstrap_painel(
     db: Session = Depends(get_db),
-    _: Usuario = Depends(exigir_equipe),
+    usuario: Usuario = Depends(exigir_equipe),
 ):
     clientes = db.query(Cliente).order_by(Cliente.criado_em.desc()).all()
     usuarios = db.query(Usuario).order_by(Usuario.nome).all()
@@ -441,6 +443,15 @@ def bootstrap_painel(
         "receita_pendente": float(receita_pendente),
     }
 
+    holerite_q = db.query(Holerite)
+    informe_q = db.query(InformeRendimento)
+    if usuario.perfil != "admin":
+        holerite_q = holerite_q.filter(Holerite.usuario_id == usuario.id)
+        informe_q = informe_q.filter(InformeRendimento.usuario_id == usuario.id)
+
+    holerites = holerite_q.order_by(Holerite.criado_em.desc()).all()
+    informes = informe_q.order_by(InformeRendimento.ano_calendario.desc(), InformeRendimento.criado_em.desc()).all()
+
     return {
         "kpi": kpi,
         "clientes": [ClienteOut.model_validate(c) for c in clientes],
@@ -448,6 +459,8 @@ def bootstrap_painel(
         "projetos": [ProjetoOut.model_validate(p) for p in projetos],
         "orcamentos": [SolicitacaoOut.model_validate(o) for o in orcamentos],
         "tarefas": [TarefaOut.model_validate(t) for t in tarefas],
+        "holerites": [HoleriteOut.model_validate(h) for h in holerites],
+        "informes": [InformeRendimentoOut.model_validate(i) for i in informes],
     }
 
 
@@ -520,6 +533,12 @@ def criar_usuario(
         senha_hash=gerar_hash_senha(dados.senha),
         perfil=dados.perfil,
         ativo=dados.ativo,
+        cpf=dados.cpf,
+        cargo=dados.cargo,
+        data_nascimento=dados.data_nascimento,
+        data_contratacao=dados.data_contratacao,
+        salario_base=dados.salario_base or 0,
+        telefone=dados.telefone,
     )
     db.add(novo)
     registrar_log(db, admin.nome, "CRIAR_USUARIO", f"Criou usuário {novo.email} ({novo.perfil})")
@@ -841,6 +860,140 @@ def remover_fatura(
     if not fatura:
         raise HTTPException(status_code=404, detail="Fatura não encontrada.")
     db.delete(fatura)
+    db.commit()
+
+
+
+
+# ==================== FOLHA DE PAGAMENTO, HOLERITES & INFORME DE RENDIMENTOS ====================
+@app.get("/api/holerites", response_model=List[HoleriteOut], tags=["Holerite"])
+def listar_holerites(
+    usuario_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_atual),
+):
+    query = db.query(Holerite)
+    if usuario.perfil != "admin":
+        query = query.filter(Holerite.usuario_id == usuario.id)
+    elif usuario_id:
+        query = query.filter(Holerite.usuario_id == usuario_id)
+    return query.order_by(Holerite.criado_em.desc()).all()
+
+
+@app.post("/api/holerites", response_model=HoleriteOut, status_code=201, tags=["Holerite"])
+def criar_holerite(
+    dados: HoleriteCreate,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(exigir_admin),
+):
+    colaborador = db.query(Usuario).filter(Usuario.id == dados.usuario_id).first()
+    if not colaborador:
+        raise HTTPException(status_code=404, detail="Colaborador informado não encontrado.")
+
+    payload = dados.model_dump()
+    liquido_calc = (payload["salario_base"] or 0) + (payload["proventos"] or 0) - (payload["descontos"] or 0)
+    if not payload.get("valor_liquido") or payload["valor_liquido"] == 0:
+        payload["valor_liquido"] = liquido_calc
+
+    item = Holerite(**payload, publicado_por=admin.nome)
+    db.add(item)
+    registrar_log(
+        db,
+        admin.nome,
+        "PUBLICAR_HOLERITE",
+        f"Publicou holerite ({item.competencia} - {item.tipo}) para {colaborador.nome}",
+    )
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.patch("/api/holerites/{holerite_id}", response_model=HoleriteOut, tags=["Holerite"])
+def atualizar_holerite(
+    holerite_id: int,
+    dados: HoleriteUpdate,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(exigir_admin),
+):
+    item = db.query(Holerite).filter(Holerite.id == holerite_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Holerite não encontrado.")
+
+    payload = dados.model_dump(exclude_unset=True)
+    for campo, valor in payload.items():
+        setattr(item, campo, valor)
+
+    if any(k in payload for k in ("salario_base", "proventos", "descontos")) and "valor_liquido" not in payload:
+        item.valor_liquido = (item.salario_base or 0) + (item.proventos or 0) - (item.descontos or 0)
+
+    registrar_log(db, admin.nome, "EDITAR_HOLERITE", f"Atualizou holerite #{holerite_id} ({item.competencia})")
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.delete("/api/holerites/{holerite_id}", status_code=204, tags=["Holerite"])
+def remover_holerite(
+    holerite_id: int,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(exigir_admin),
+):
+    item = db.query(Holerite).filter(Holerite.id == holerite_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Holerite não encontrado.")
+    registrar_log(db, admin.nome, "EXCLUIR_HOLERITE", f"Removeu holerite #{holerite_id} ({item.competencia})")
+    db.delete(item)
+    db.commit()
+
+
+@app.get("/api/informes-rendimentos", response_model=List[InformeRendimentoOut], tags=["Holerite"])
+def listar_informes_rendimentos(
+    usuario_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_atual),
+):
+    query = db.query(InformeRendimento)
+    if usuario.perfil != "admin":
+        query = query.filter(InformeRendimento.usuario_id == usuario.id)
+    elif usuario_id:
+        query = query.filter(InformeRendimento.usuario_id == usuario_id)
+    return query.order_by(InformeRendimento.ano_calendario.desc(), InformeRendimento.criado_em.desc()).all()
+
+
+@app.post("/api/informes-rendimentos", response_model=InformeRendimentoOut, status_code=201, tags=["Holerite"])
+def criar_informe_rendimento(
+    dados: InformeRendimentoCreate,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(exigir_admin),
+):
+    colaborador = db.query(Usuario).filter(Usuario.id == dados.usuario_id).first()
+    if not colaborador:
+        raise HTTPException(status_code=404, detail="Colaborador informado não encontrado.")
+
+    item = InformeRendimento(**dados.model_dump(), publicado_por=admin.nome)
+    db.add(item)
+    registrar_log(
+        db,
+        admin.nome,
+        "PUBLICAR_INFORME_IR",
+        f"Publicou Informe de Rendimentos ({item.ano_calendario}) para {colaborador.nome}",
+    )
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.delete("/api/informes-rendimentos/{informe_id}", status_code=204, tags=["Holerite"])
+def remover_informe_rendimento(
+    informe_id: int,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(exigir_admin),
+):
+    item = db.query(InformeRendimento).filter(InformeRendimento.id == informe_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Informe de rendimentos não encontrado.")
+    registrar_log(db, admin.nome, "EXCLUIR_INFORME_IR", f"Removeu Informe de Rendimentos #{informe_id}")
+    db.delete(item)
     db.commit()
 
 

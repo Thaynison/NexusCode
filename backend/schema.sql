@@ -1,6 +1,4 @@
 -- Schema PostgreSQL (Neon) - Nexus Code Gestão Empresarial
--- Execute este script no Editor SQL do Neon caso deseje criar as tabelas manualmente
--- (O sistema também cria todas as tabelas automaticamente na inicialização).
 
 CREATE TABLE IF NOT EXISTS usuarios (
     id SERIAL PRIMARY KEY,
@@ -11,6 +9,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
     cpf VARCHAR(20) NULL,
     data_nascimento DATE NULL,
+    data_contratacao DATE NULL,
+    salario_base NUMERIC(12, 2) NULL DEFAULT 0.00,
     telefone VARCHAR(30) NULL,
     cargo VARCHAR(120) NULL,
     area_atuacao VARCHAR(120) NULL,
@@ -79,7 +79,50 @@ CREATE TABLE IF NOT EXISTS tarefas (
     titulo VARCHAR(180) NOT NULL,
     descricao TEXT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'fazendo', 'revisao', 'concluida')),
+    prioridade VARCHAR(20) NOT NULL DEFAULT 'media',
+    data_inicio DATE NULL,
     prazo DATE NULL,
+    checklist_json TEXT NULL,
+    anexos_json TEXT NULL,
+    comentarios_json TEXT NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS holerites (
+    id SERIAL PRIMARY KEY,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    competencia VARCHAR(20) NOT NULL,
+    tipo VARCHAR(50) NOT NULL DEFAULT 'Salário Mensal',
+    salario_base NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    proventos NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    descricao_proventos VARCHAR(255) NULL,
+    descontos NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    descricao_descontos VARCHAR(255) NULL,
+    valor_liquido NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    fgts_valor NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    data_pagamento DATE NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pago',
+    observacoes TEXT NULL,
+    anexo_nome VARCHAR(255) NULL,
+    anexo_data TEXT NULL,
+    publicado_por VARCHAR(120) NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS informes_rendimentos (
+    id SERIAL PRIMARY KEY,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    ano_calendario VARCHAR(10) NOT NULL,
+    ano_exercicio VARCHAR(10) NOT NULL,
+    rendimentos_tributaveis NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    contribuicao_previdenciaria NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    irrf_retido NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    decimo_terceiro NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    rendimentos_isentos NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    observacoes TEXT NULL,
+    anexo_nome VARCHAR(255) NULL,
+    anexo_data TEXT NULL,
+    publicado_por VARCHAR(120) NULL,
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -130,3 +173,5 @@ CREATE INDEX IF NOT EXISTS idx_solicitacoes_email ON solicitacoes_orcamento(emai
 CREATE INDEX IF NOT EXISTS idx_projetos_cliente ON projetos(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_tarefas_projeto ON tarefas(projeto_id);
 CREATE INDEX IF NOT EXISTS idx_faturas_cliente ON faturas(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_holerites_usuario ON holerites(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_informes_usuario ON informes_rendimentos(usuario_id);
