@@ -12,20 +12,24 @@ Arquitetura unificada em **mesmo host** para deploy em produção na **Vercel** 
 - `backend/` — Modelos SQLAlchemy, schemas Pydantic, autenticação JWT/Bcrypt e regras de negócio.
 - `vercel.json` — Roteamento unificado `/api/(.*)` -> `/api/index.py`.
 - `requirements.txt` — Dependências Python para build automático na Vercel.
+- `.env.example` — Modelo das variáveis de ambiente necessárias.
 
 ## Passo a Passo para Publicar na Vercel + Neon
 
 1. **Conectar o banco Neon ao projeto na Vercel:**
-   - No painel da Vercel (aba *Storage* / *Neon*), clique em **Conecte-se ao Projeto** para vincular o banco `nexus_code_crm` ao seu projeto Vercel.
-   - A Vercel criará automaticamente a variável `DATABASE_URL` no ambiente de produção.
+   - No painel da Vercel (aba *Storage* / *Neon*), conecte o banco `nexus_code_crm` ao projeto para criar automaticamente `DATABASE_URL`.
 
-2. **Configurar a chave JWT na Vercel:**
-   - Em *Settings → Environment Variables*, adicione:
-     - `SECRET_KEY`: uma sequência longa e aleatória (ex.: 64 caracteres).
+2. **Configurar as Variáveis de Ambiente na Vercel (Obrigatório):**
+   - Acesse **Vercel → Seu Projeto → Settings → Environment Variables**.
+   - Adicione (ou cole no formato `.env`) as 4 chaves abaixo marcando **Production**, **Preview** e **Development**:
+     - `SECRET_KEY` (Chave de assinatura dos tokens JWT de login)
+     - `MP_WEBHOOK_SECRET` (Assinatura secreta HMAC do Webhook do Mercado Pago)
+     - `WEBHOOK_SECRET` (Token secreto para baixa automática via `/api/webhook/pagamento`)
+     - `CRON_SECRET` (Token secreto de autenticação da rotina diária `/api/cron/verificar-vencimentos`)
+   - **Importante:** Após salvar as variáveis, vá em **Deployments → ⋮ → Redeploy** para aplicar as variáveis ao build em produção.
 
-3. **Fazer o Deploy:**
-   - Envie os arquivos deste ZIP para o repositório GitHub conectado à Vercel (ou execute `npx vercel --prod`).
-   - As tabelas e o usuário administrador inicial (`admin@nexuscode.com` / `Nexus@2026`) serão criados automaticamente no primeiro acesso.
+3. **Verificar Saúde e Variáveis Ativas:**
+   - Acesse `https://seu-dominio.vercel.app/api/health` para confirmar que `secret_key_configurada`, `mp_webhook_secret_configurado`, `webhook_secret_configurado` e `cron_secret_configurado` retornam `true`.
 
 ## Execução Local (Mesmo Host)
 

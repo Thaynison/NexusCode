@@ -18,17 +18,30 @@ from models import Usuario, Organizacao
 load_dotenv()
 
 _RAW_SECRET = (os.getenv("SECRET_KEY") or "").strip()
-if not _RAW_SECRET or _RAW_SECRET == "chave_insegura_altere_no_env":
-    if os.getenv("VERCEL") or os.getenv("ENV") == "production":
-        raise RuntimeError("CRÍTICO: Defina uma variável de ambiente SECRET_KEY forte em produção.")
-    _RAW_SECRET = "dev_only_nexus_ephemeral_secret_change_me_2026"
+IS_PROD_ENV = bool(os.getenv("VERCEL") or os.getenv("ENV") == "production")
+SECRET_KEY_CONFIGURED = bool(_RAW_SECRET and _RAW_SECRET != "chave_insegura_altere_no_env")
 
-SECRET_KEY = _RAW_SECRET
+if SECRET_KEY_CONFIGURED:
+    SECRET_KEY = _RAW_SECRET
+elif not IS_PROD_ENV:
+    SECRET_KEY = "dev_only_nexus_ephemeral_secret_change_me_2026"
+else:
+    SECRET_KEY = ""
+
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+
+def _exigir_secret_key() -> str:
+    if not SECRET_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Variável SECRET_KEY não configurada na Vercel. Acesse Settings -> Environment Variables, adicione SECRET_KEY e faça Redeploy.",
+        )
+    return SECRET_KEY
 
 
 def gerar_hash_senha(senha: str) -> str:
@@ -40,21 +53,23 @@ def verificar_senha(senha_plana: str, senha_hash: str) -> bool:
 
 
 def criar_token_acesso(dados: dict, expires_minutes: int | None = None) -> str:
+    key = _exigir_secret_key()
     payload = dados.copy()
     payload.setdefault("type", "access")
     expira = datetime.utcnow() + timedelta(minutes=expires_minutes or ACCESS_TOKEN_EXPIRE_MINUTES)
     payload.update({"exp": expira})
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(payload, key, algorithm=ALGORITHM)
 
 
 def _decodificar_identidade_jwt(token: str) -> SimpleNamespace:
+    key = _exigir_secret_key()
     credenciais_exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Token inválido ou expirado.",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, key, algorithms=[ALGORITHM])
         if payload.get("type") == "reset":
             raise credenciais_exc
         user_id = payload.get("sub")

@@ -1349,9 +1349,13 @@ def raiz(db: int = 0):
     return {
         "status": "online" if db_status != "error" else "degraded",
         "sistema": "Nexus Code Enterprise SaaS ERP & CRM API",
-        "versao": "2.5.1-prod",
+        "versao": "2.6.2-prod",
         "regiao": os.getenv("VERCEL_REGION", "local"),
         "database_url_configurada": bool(os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")),
+        "secret_key_configurada": bool((os.getenv("SECRET_KEY") or "").strip()),
+        "mp_webhook_secret_configurado": bool((os.getenv("MP_WEBHOOK_SECRET") or "").strip()),
+        "webhook_secret_configurado": bool((os.getenv("WEBHOOK_SECRET") or "").strip()),
+        "cron_secret_configurado": bool((os.getenv("CRON_SECRET") or "").strip()),
         "db_status": db_status,
         **({"db_error": db_error} if db_error else {}),
     }
