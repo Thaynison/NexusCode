@@ -958,26 +958,26 @@ body.crm-app {
 .dialog {
   border: 0;
   background: transparent;
-  width: min(980px, 94vw);
-  max-height: 92vh;
+  width: min(940px, 94vw);
+  max-height: 90vh;
   padding: 0;
   margin: auto;
   overflow: visible;
 }
 
 .dialog.dialog-lg {
-  width: min(1060px, 95vw);
+  width: min(1040px, 95vw);
 }
 
 .dialog.planner-dialog {
-  width: min(1080px, 95vw);
+  width: min(1060px, 95vw);
 }
 
 .dialog::backdrop {
-  background: rgba(6, 18, 36, 0.74);
+  background: rgba(5, 15, 30, 0.76);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  animation: fadeInBackdrop 0.2s ease;
+  animation: fadeInBackdrop 0.18s ease-out;
 }
 
 @keyframes fadeInBackdrop {
@@ -989,22 +989,22 @@ body.crm-app {
   background: var(--surface);
   color: var(--text);
   padding: 0;
-  border: 1px solid rgba(0, 180, 216, 0.34);
-  border-radius: 20px;
+  border: 1px solid rgba(0, 180, 216, 0.36);
+  border-radius: 18px;
   box-shadow:
-    0 32px 72px -12px rgba(6, 18, 36, 0.65),
-    0 0 0 1px rgba(255, 255, 255, 0.08);
+    0 28px 64px -12px rgba(5, 15, 30, 0.68),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  max-height: 92vh;
-  animation: modalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  max-height: 90vh;
+  animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .modal > form {
   display: flex;
   flex-direction: column;
-  max-height: 92vh;
+  max-height: 90vh;
   overflow: hidden;
 }
 
@@ -1015,10 +1015,10 @@ body.crm-app {
   gap: 16px;
   padding: 18px 26px;
   margin: 0;
-  background: linear-gradient(135deg, #050f1e 0%, #0A1D37 58%, #0F2E56 100%);
+  background: linear-gradient(135deg, #050f1e 0%, #0A1D37 60%, #0E2A4E 100%);
   color: #ffffff;
-  border-bottom: 1px solid rgba(0, 180, 216, 0.35);
-  box-shadow: inset 0 2px 0 rgba(0, 180, 216, 0.65);
+  border-bottom: 1px solid rgba(0, 180, 216, 0.32);
+  box-shadow: inset 0 2px 0 #00B4D8;
   flex-shrink: 0;
 }
 
@@ -1030,25 +1030,24 @@ body.crm-app {
 }
 
 .modal-header-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
   background: rgba(0, 180, 216, 0.14);
-  border: 1px solid rgba(0, 180, 216, 0.45);
+  border: 1px solid rgba(0, 180, 216, 0.42);
   color: #00B4D8;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 8px 20px -6px rgba(0, 180, 216, 0.4);
 }
 
 .modal-header h2 {
   margin: 0;
-  font-size: 17.5px;
+  font-size: 17px;
   font-weight: 800;
   color: #ffffff;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
   line-height: 1.25;
 }
 
@@ -1074,14 +1073,13 @@ body.crm-app {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: all 0.18s ease;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
 }
 
 .modal-close-btn:hover {
   background: #00B4D8;
   border-color: #00B4D8;
-  color: #0A1D37;
-  transform: rotate(90deg);
+  color: #061224;
 }
 
 /* Barra de Navegação por Abas / Etapas do Modal */
@@ -1107,16 +1105,16 @@ body.crm-app {
   align-items: center;
   gap: 8px;
   padding: 7px 13px;
-  border-radius: 10px;
+  border-radius: 9px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-light);
   font-size: 12.5px;
-  font-weight: 700;
+  font-weight: 600;
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.16s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .modal-tab-btn:hover {
@@ -1127,8 +1125,9 @@ body.crm-app {
 .modal-tab-btn.active {
   background: var(--surface);
   color: #0A1D37;
-  border-color: rgba(0, 180, 216, 0.45);
-  box-shadow: 0 2px 8px rgba(10, 29, 55, 0.08);
+  font-weight: 700;
+  border-color: rgba(0, 180, 216, 0.5);
+  box-shadow: 0 2px 6px rgba(10, 29, 55, 0.07);
 }
 
 .app-dark .modal-tab-btn.active {
@@ -1153,7 +1152,6 @@ body.crm-app {
   color: var(--text-light);
   font-size: 11px;
   font-weight: 800;
-  transition: all 0.16s ease;
 }
 
 .modal-tab-btn.active .modal-tab-step {
@@ -1166,16 +1164,20 @@ body.crm-app {
   color: #061224;
 }
 
-/* Corpo do Modal SEM Barra de Rolagem Visível */
+/* Corpo do Modal SEM Barra de Rolagem Visível e com Altura Estável */
 .modal-body {
-  padding: 20px 26px;
+  padding: 22px 26px;
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
+}
+
+.modal-tabbed .modal-body {
+  min-height: 330px;
 }
 
 .modal-body::-webkit-scrollbar,
@@ -1205,7 +1207,7 @@ body.crm-app {
 .modal-footer-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   font-size: 11.5px;
   color: var(--muted);
 }
@@ -1233,6 +1235,7 @@ body.crm-app {
 .modal-footer .btn {
   padding: 9px 18px;
   font-size: 13px;
+  font-weight: 700;
   border-radius: 10px;
 }
 
@@ -1240,12 +1243,10 @@ body.crm-app {
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 16px 18px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
-  animation: tabPanelFade 0.18s ease;
+  gap: 14px;
 }
 
 .modal-tabbed .modal-section-card {
@@ -1260,16 +1261,11 @@ body.crm-app {
   display: none;
 }
 
-@keyframes tabPanelFade {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 .modal-section-title {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1296,59 +1292,215 @@ body.crm-app {
   flex-shrink: 0;
 }
 
+/* Grids Responsivos e Tipografia de Formulário Enterprise */
 .formgrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 16px;
+  gap: 14px 18px;
 }
 
 .formgrid-3 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px 14px;
+  gap: 14px 16px;
 }
 
-.formgrid label, .formgrid-3 label, .field-full {
+.formgrid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px 14px;
+}
+
+.formgrid > label,
+.formgrid-3 > label,
+.formgrid-4 > label,
+.field-full {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-light);
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #475569;
+  text-align: left;
+}
+
+.app-dark .formgrid > label,
+.app-dark .formgrid-3 > label,
+.app-dark .formgrid-4 > label,
+.app-dark .field-full {
+  color: #94a3b8;
 }
 
 .modal input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
 .modal select,
 .modal textarea {
   width: 100%;
-  min-height: 38px;
-  background: var(--surface);
+  min-height: 40px;
+  background: #f8fafc;
   color: var(--text);
-  border: 1.5px solid var(--border);
-  padding: 8px 12px;
+  border: 1.5px solid #cbd5e1;
+  padding: 8px 13px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 13.5px;
+  font-weight: 500;
   font-family: inherit;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  line-height: 1.4;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+}
+
+.app-dark .modal input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+.app-dark .modal select,
+.app-dark .modal textarea {
+  background: #0f172a;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+.modal select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  background-size: 15px;
 }
 
 .modal textarea {
-  min-height: 72px;
-  line-height: 1.45;
+  min-height: 76px;
+  line-height: 1.5;
+  resize: vertical;
 }
 
-.modal input:focus, .modal select:focus, .modal textarea:focus {
+.modal input::placeholder,
+.modal textarea::placeholder {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.modal input:hover:not(:disabled):not([readonly]),
+.modal select:hover:not(:disabled),
+.modal textarea:hover:not(:disabled):not([readonly]) {
+  border-color: #94a3b8;
+}
+
+.modal input:focus,
+.modal select:focus,
+.modal textarea:focus {
   outline: none;
-  border-color: #00B4D8;
-  box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.15);
+  background: var(--surface);
+  border-color: #0096B4;
+  box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.16);
 }
 
 .modal input[readonly],
 .modal input:disabled,
 .modal select:disabled {
   background: var(--surface2);
-  opacity: 0.78;
+  opacity: 0.72;
   cursor: not-allowed;
+}
+
+/* Switch Toggle Card Executivo (Estilo Stripe / Linear) */
+.nc-switch-card {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 16px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(0, 180, 216, 0.07) 0%, rgba(10, 29, 55, 0.03) 100%);
+  border: 1.5px solid rgba(0, 180, 216, 0.32);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.nc-switch-card:hover {
+  border-color: #0096B4;
+  background: rgba(0, 180, 216, 0.11);
+}
+
+.nc-switch-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nc-switch-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nc-switch-desc {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-light);
+  line-height: 1.4;
+}
+
+.nc-switch-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.nc-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.nc-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.nc-toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: #cbd5e1;
+  border-radius: 999px;
+  transition: background 0.2s ease;
+}
+
+.nc-toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nc-toggle input:checked + .nc-toggle-slider {
+  background: #0096B4;
+}
+
+.nc-toggle input:checked + .nc-toggle-slider::before {
+  transform: translateX(20px);
+}
+
+@media (max-width: 760px) {
+  .formgrid-3, .formgrid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nc-switch-card { flex-direction: column; align-items: flex-start; }
 }
 
 /* Dropdown de busca CBO */

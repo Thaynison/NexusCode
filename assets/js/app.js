@@ -4187,167 +4187,206 @@ async function openRecordModal(editObj = null, defaultPerfil = 'colaborador') {
         : (isClientAccount ? 'Cadastrar Acesso ao Portal do Cliente' : 'Cadastrar Novo Colaborador (RH / CBO)'),
       isClientAccount
         ? 'Credenciais exclusivas para o Portal do Cliente (sem vínculos trabalhistas ou acesso interno)'
-        : 'Configure acesso interno, função oficial CBO, regime contratual, jornada e benefícios para folha automática',
+        : 'Configure acesso interno, função oficial CBO, regime contratual, jornada e dados PIX para folha',
       ICONS.users
     );
     const tipoContr = editObj?.tipo_contrato || 'clt_fixo';
     box.innerHTML = `
       <div class="modal-section-card">
-        <div class="modal-section-title"><span class="modal-section-step">1</span> Identificação &amp; Credenciais de Acesso</div>
+        <div class="modal-section-title"><span class="modal-section-step">1</span> Identificação &amp; Credenciais</div>
         <div class="formgrid">
-          <label>Nome Completo *<input name="nome" required value="${esc(editObj?.nome || '')}" placeholder="Ex.: Mariana Silva"></label>
-          <label>E-mail de Acesso *<input name="email" type="email" required value="${esc(editObj?.email || '')}" placeholder="nome@empresa.com.br"></label>
-          <label>Senha ${editObj ? '(deixe vazio para manter)' : '*'}<input name="senha" type="password" ${editObj ? '' : 'required'} minlength="6" autocomplete="new-password"></label>
-          ${isClientAccount
-            ? '<input type="hidden" name="perfil" value="cliente">'
-            : `<div class="field-full" style="grid-column: 1 / -1; background: rgba(0, 180, 216, 0.07); border: 1px solid rgba(0, 180, 216, 0.3); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-                <div>
-                  <label for="usr-is-admin-check" style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin: 0; font-weight: 700; font-size: 13.5px; color: var(--text);">
-                    <input type="checkbox" id="usr-is-admin-check" name="is_admin_full" value="true" ${activePerfil === 'admin' ? 'checked' : ''} ${user?.perfil !== 'admin' ? 'disabled' : ''} style="width: 17px; height: 17px; accent-color: #0096B4; margin: 0;">
-                    <span>Acesso Total (Administrador do Sistema)</span>
-                  </label>
-                  <div class="muted" style="font-size: 12px; margin-top: 3px; padding-left: 27px;">
-                    Concede acesso irrestrito a todos os módulos, financeiro, folha, configurações e gestão de usuários. Quando desmarcado, o colaborador segue as permissões do CBO.
-                  </div>
-                </div>
-                <span id="usr-role-pill" class="badge ${activePerfil === 'admin' ? 'em_andamento' : ''}" style="flex-shrink: 0;">
+          <label>Nome Completo *
+            <input name="nome" required value="${esc(editObj?.nome || '')}" placeholder="Ex.: Mariana Silva">
+          </label>
+          <label>E-mail Corporativo de Acesso *
+            <input name="email" type="email" required value="${esc(editObj?.email || '')}" placeholder="nome@empresa.com.br">
+          </label>
+        </div>
+
+        <div class="formgrid-3">
+          <label>Senha ${editObj ? '(vazio = manter atual)' : '*'}
+            <input name="senha" type="password" ${editObj ? '' : 'required'} minlength="6" placeholder="••••••••" autocomplete="new-password">
+          </label>
+          <label>CPF / Documento
+            <input name="cpf" value="${esc(editObj?.cpf || '')}" placeholder="000.000.000-00">
+          </label>
+          <label>Telefone / WhatsApp
+            <input name="telefone" value="${esc(editObj?.telefone || '')}" placeholder="(27) 99999-9999">
+          </label>
+        </div>
+
+        <div class="formgrid">
+          <label>Status da Conta *
+            <select name="ativo">
+              <option value="true" ${editObj?.ativo !== false ? 'selected' : ''}>Ativo (Acesso Liberado)</option>
+              <option value="false" ${editObj?.ativo === false ? 'selected' : ''}>Inativo / Bloqueado</option>
+            </select>
+          </label>
+          <label>Data de Nascimento
+            <input name="data_nascimento" type="date" value="${editObj?.data_nascimento ? String(editObj.data_nascimento).slice(0, 10) : ''}">
+          </label>
+        </div>
+
+        ${isClientAccount
+          ? '<input type="hidden" name="perfil" value="cliente">'
+          : `<label for="usr-is-admin-check" class="nc-switch-card">
+              <div class="nc-switch-info">
+                <div class="nc-switch-title">Acesso Total (Administrador do Sistema)</div>
+                <div class="nc-switch-desc">Concede acesso irrestrito a todos os módulos, financeiro, folha, configurações e equipe. Desmarcado = segue permissões do CBO.</div>
+              </div>
+              <div class="nc-switch-controls">
+                <span id="usr-role-pill" class="badge ${activePerfil === 'admin' ? 'em_andamento' : ''}">
                   ${activePerfil === 'admin' ? 'Administrador Total' : 'Colaborador (CBO)'}
                 </span>
-              </div>`
-          }
-          <label>CPF / Documento<input name="cpf" value="${esc(editObj?.cpf || '')}" placeholder="000.000.000-00"></label>
-          <label>Telefone / WhatsApp<input name="telefone" value="${esc(editObj?.telefone || '')}" placeholder="(27) 99999-9999"></label>
-          <label>Status da Conta<select name="ativo">
-            <option value="true" ${editObj?.ativo !== false ? 'selected' : ''}>Ativo</option>
-            <option value="false" ${editObj?.ativo === false ? 'selected' : ''}>Inativo / Bloqueado</option>
-          </select></label>
-        </div>
+                <span class="nc-toggle">
+                  <input type="checkbox" id="usr-is-admin-check" name="is_admin_full" value="true" ${activePerfil === 'admin' ? 'checked' : ''} ${user?.perfil !== 'admin' ? 'disabled' : ''}>
+                  <span class="nc-toggle-slider"></span>
+                </span>
+              </div>
+            </label>`
+        }
       </div>
 
-      <div id="usr-client-notice" class="modal-section-card" style="display:${isClientAccount ? 'flex' : 'none'}; border-left: 4px solid #00B4D8;">
+      ${isClientAccount ? `
+      <div id="usr-client-notice" class="modal-section-card" style="border-left: 4px solid #00B4D8;">
         <div class="modal-section-title">Conta Externa — Portal do Cliente</div>
-        <p style="margin:0; font-size:13px; color:var(--text-light); line-height:1.5;">
+        <p style="margin:0; font-size:13px; color:var(--text-light); line-height:1.55;">
           Usuários com perfil <b>Cliente Externo</b> acessam exclusivamente o <b>Portal do Cliente</b> (projetos contratados, propostas, faturas e chamados), não possuem vínculo empregatício (CBO / CLT / Ponto / Holerite) e são bloqueados automaticamente do painel administrativo interno.
         </p>
-      </div>
+      </div>` : ''}
 
-      <div id="usr-hr-sections" style="display:${isClientAccount ? 'none' : 'flex'}; flex-direction:column; gap:20px;">
-      <div class="modal-section-card">
-        <div class="modal-section-title"><span class="modal-section-step">2</span> Função &amp; Classificação Brasileira de Ocupações (CBO)</div>
-        <div class="cbo-search-wrap">
-          <label class="field-full">Pesquisar Função na Tabela Oficial CBO (digite o cargo ou código)
-            <input type="text" id="usr-cbo-search" placeholder="Ex.: Analista de Sistemas, Programador, Designer, 2124-05..." autocomplete="off">
-          </label>
-          <div id="usr-cbo-results" class="cbo-results-list"></div>
-        </div>
-        <div class="formgrid">
-          <label>Código CBO<input name="cbo_codigo" id="usr-cbo-codigo" value="${esc(editObj?.cbo_codigo || '')}" placeholder="Ex.: 2124-05"></label>
-          <label>Descrição Oficial CBO<input name="cbo_descricao" id="usr-cbo-desc" value="${esc(editObj?.cbo_descricao || '')}" placeholder="Ex.: Analista de Desenvolvimento de Sistemas"></label>
-        </div>
-        <label class="field-full">Cargo Interno / Título de Exibição<input name="cargo" id="usr-cargo" value="${esc(editObj?.cargo || '')}" placeholder="Ex.: Desenvolvedor Full Stack Sênior"></label>
-      </div>
-
-      <div class="modal-section-card">
-        <div class="modal-section-title"><span class="modal-section-step">3</span> Regime Contratual, Jornada &amp; Remuneração</div>
-        <div class="formgrid">
-          <label>Tipo de Contrato *
-            <select name="tipo_contrato" id="usr-tipo-contrato">
-              <option value="clt_fixo" ${tipoContr === 'clt_fixo' ? 'selected' : ''}>CLT — Salário Fixo Mensal</option>
-              <option value="clt_determinado" ${tipoContr === 'clt_determinado' ? 'selected' : ''}>Contrato por Período Determinado</option>
-              <option value="horista" ${tipoContr === 'horista' ? 'selected' : ''}>Horista (Cálculo por Horas Trabalhadas)</option>
-              <option value="estagio" ${tipoContr === 'estagio' ? 'selected' : ''}>Estágio (Bolsa Auxílio)</option>
-              <option value="pj_mensal" ${tipoContr === 'pj_mensal' ? 'selected' : ''}>PJ — Prestador Mensal</option>
-            </select>
-          </label>
-          <label>Salário Base / Valor Hora (R$) *
-            <input name="salario_base" type="number" step="0.01" required value="${editObj?.salario_base ?? 0}">
-          </label>
-          <label>Data de Contratação / Início
-            <input name="data_contratacao" type="date" value="${editObj?.data_contratacao ? String(editObj.data_contratacao).slice(0, 10) : ''}">
-          </label>
-          <label id="usr-fim-contrato-wrap" style="display:${tipoContr === 'clt_determinado' ? 'flex' : 'none'};">Data Término do Contrato
-            <input name="data_fim_contrato" type="date" value="${editObj?.data_fim_contrato ? String(editObj.data_fim_contrato).slice(0, 10) : ''}">
-          </label>
-          <label>Carga Horária Diária (horas)
-            <input name="carga_horaria_diaria" type="number" step="0.5" min="1" max="12" value="${editObj?.carga_horaria_diaria ?? 8}">
-          </label>
-          <label>Dependentes IRRF
-            <input name="dependentes_irrf" type="number" min="0" max="20" value="${editObj?.dependentes_irrf ?? 0}">
-          </label>
-          <label>Horário Entrada Previsto
-            <input name="horario_entrada" type="time" value="${esc(editObj?.horario_entrada || '08:00')}">
-          </label>
-          <label>Horário Saída Previsto
-            <input name="horario_saida" type="time" value="${esc(editObj?.horario_saida || '17:00')}">
-          </label>
-          <label>Vale-Transporte
-            <select name="vale_transporte">
-              <option value="false" ${!editObj?.vale_transporte ? 'selected' : ''}>Não utiliza</option>
-              <option value="true" ${editObj?.vale_transporte ? 'selected' : ''}>Sim (Desconto até 6%)</option>
-            </select>
-          </label>
-          <label>Custo Mensal VT (R$)
-            <input name="valor_vt_mensal" type="number" step="0.01" value="${editObj?.valor_vt_mensal ?? 0}">
+      <div id="usr-hr-sections" data-modal-hidden="${isClientAccount ? 'true' : 'false'}" style="display:${isClientAccount ? 'none' : 'flex'}; flex-direction:column; gap:16px;">
+        <div class="modal-section-card">
+          <div class="modal-section-title"><span class="modal-section-step">2</span> Função &amp; CBO</div>
+          <div class="cbo-search-wrap">
+            <label class="field-full">Pesquisar Função na Tabela Oficial CBO (digite cargo ou código)
+              <input type="text" id="usr-cbo-search" placeholder="Ex.: Analista de Sistemas, Programador, Designer, 2124-05..." autocomplete="off">
+            </label>
+            <div id="usr-cbo-results" class="cbo-results-list"></div>
+          </div>
+          <div class="formgrid">
+            <label>Código CBO
+              <input name="cbo_codigo" id="usr-cbo-codigo" value="${esc(editObj?.cbo_codigo || '')}" placeholder="Ex.: 2124-05">
+            </label>
+            <label>Descrição Oficial CBO
+              <input name="cbo_descricao" id="usr-cbo-desc" value="${esc(editObj?.cbo_descricao || '')}" placeholder="Ex.: Analista de Desenvolvimento de Sistemas">
+            </label>
+          </div>
+          <label class="field-full">Cargo Interno / Título de Exibição
+            <input name="cargo" id="usr-cargo" value="${esc(editObj?.cargo || '')}" placeholder="Ex.: Desenvolvedor Full Stack Sênior">
           </label>
         </div>
-      </div>
 
-      <div class="modal-section-card">
-        <div class="modal-section-title"><span class="modal-section-step">4</span> Dados PIX para Pagamento de Folha (Mercado Pago)</div>
-        <div class="formgrid">
-          <label>Tipo de Chave PIX
-            <select name="pix_tipo" id="usr-pix-tipo">
-              <option value="cpf" ${(editObj?.pix_tipo || 'cpf') === 'cpf' ? 'selected' : ''}>CPF (Mesmo do Cadastro)</option>
-              <option value="email" ${editObj?.pix_tipo === 'email' ? 'selected' : ''}>E-mail</option>
-              <option value="telefone" ${editObj?.pix_tipo === 'telefone' ? 'selected' : ''}>Telefone / Celular</option>
-              <option value="aleatoria" ${editObj?.pix_tipo === 'aleatoria' ? 'selected' : ''}>Chave Aleatória (EVP)</option>
-            </select>
-          </label>
-          <label>
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-               Chave PIX do Colaborador
-               <span id="usr-pix-usar-cad-wrap" style="display:inline-flex; align-items:center; gap:4px; font-weight:normal; cursor:pointer; font-size:11px; color:var(--primary);">
-                 <input type="checkbox" id="usr-pix-usar-cad" checked style="width:12px; height:12px; margin:0;"> Usar do cadastro
-               </span>
+        <div class="modal-section-card">
+          <div class="modal-section-title"><span class="modal-section-step">3</span> Contrato &amp; Jornada</div>
+          <div class="formgrid-3">
+            <label>Tipo de Contrato *
+              <select name="tipo_contrato" id="usr-tipo-contrato">
+                <option value="clt_fixo" ${tipoContr === 'clt_fixo' ? 'selected' : ''}>CLT — Salário Fixo Mensal</option>
+                <option value="clt_determinado" ${tipoContr === 'clt_determinado' ? 'selected' : ''}>Contrato por Período Determinado</option>
+                <option value="horista" ${tipoContr === 'horista' ? 'selected' : ''}>Horista (Por Horas Trabalhadas)</option>
+                <option value="estagio" ${tipoContr === 'estagio' ? 'selected' : ''}>Estágio (Bolsa Auxílio)</option>
+                <option value="pj_mensal" ${tipoContr === 'pj_mensal' ? 'selected' : ''}>PJ — Prestador Mensal</option>
+              </select>
+            </label>
+            <label>Salário Base / Valor Hora (R$) *
+              <input name="salario_base" type="number" step="0.01" required value="${editObj?.salario_base ?? 0}">
+            </label>
+            <label>Data de Contratação / Início
+              <input name="data_contratacao" type="date" value="${editObj?.data_contratacao ? String(editObj.data_contratacao).slice(0, 10) : ''}">
+            </label>
+          </div>
+
+          <div class="formgrid-4">
+            <label>Carga Horária (h/dia)
+              <input name="carga_horaria_diaria" type="number" step="0.5" min="1" max="12" value="${editObj?.carga_horaria_diaria ?? 8}">
+            </label>
+            <label>Entrada Prevista
+              <input name="horario_entrada" type="time" value="${esc(editObj?.horario_entrada || '08:00')}">
+            </label>
+            <label>Saída Prevista
+              <input name="horario_saida" type="time" value="${esc(editObj?.horario_saida || '17:00')}">
+            </label>
+            <label>Dependentes IRRF
+              <input name="dependentes_irrf" type="number" min="0" max="20" value="${editObj?.dependentes_irrf ?? 0}">
+            </label>
+          </div>
+
+          <div class="formgrid-3">
+            <label>Vale-Transporte
+              <select name="vale_transporte">
+                <option value="false" ${!editObj?.vale_transporte ? 'selected' : ''}>Não utiliza</option>
+                <option value="true" ${editObj?.vale_transporte ? 'selected' : ''}>Sim (Desconto até 6%)</option>
+              </select>
+            </label>
+            <label>Custo Mensal VT (R$)
+              <input name="valor_vt_mensal" type="number" step="0.01" value="${editObj?.valor_vt_mensal ?? 0}">
+            </label>
+            <label id="usr-fim-contrato-wrap" style="display:${tipoContr === 'clt_determinado' ? 'flex' : 'none'};">Término do Contrato
+              <input name="data_fim_contrato" type="date" value="${editObj?.data_fim_contrato ? String(editObj.data_fim_contrato).slice(0, 10) : ''}">
+            </label>
+          </div>
+        </div>
+
+        <div class="modal-section-card">
+          <div class="modal-section-title"><span class="modal-section-step">4</span> Dados PIX para Pagamento de Folha</div>
+          <div class="formgrid">
+            <label>Tipo de Chave PIX
+              <select name="pix_tipo" id="usr-pix-tipo">
+                <option value="cpf" ${(editObj?.pix_tipo || 'cpf') === 'cpf' ? 'selected' : ''}>CPF (Mesmo do Cadastro)</option>
+                <option value="email" ${editObj?.pix_tipo === 'email' ? 'selected' : ''}>E-mail (Mesmo do Cadastro)</option>
+                <option value="telefone" ${editObj?.pix_tipo === 'telefone' ? 'selected' : ''}>Telefone / Celular</option>
+                <option value="aleatoria" ${editObj?.pix_tipo === 'aleatoria' ? 'selected' : ''}>Chave Aleatória (EVP)</option>
+              </select>
+            </label>
+            <label>
+              <span style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                <span>Chave PIX do Colaborador</span>
+                <span id="usr-pix-usar-cad-wrap" style="display:inline-flex; flex-direction:row; align-items:center; gap:5px; font-weight:700; cursor:pointer; font-size:11px; color:var(--primary); margin:0;">
+                  <input type="checkbox" id="usr-pix-usar-cad" checked style="width:13px; height:13px; margin:0; accent-color:#0096B4; pointer-events:auto;"> Usar do cadastro
+                </span>
+              </span>
+              <input name="pix_chave" id="usr-pix-chave" value="${esc(editObj?.pix_chave || '')}" placeholder="Preenchido automaticamente..." readonly>
+            </label>
+          </div>
+          <div style="background:rgba(0,180,216,0.06); border:1px solid rgba(0,180,216,0.25); border-radius:10px; padding:12px 14px; font-size:12.5px; color:var(--text-light); line-height:1.5;">
+            <b>Pagamento Automático de Folha (Mercado Pago Payouts):</b> Ao confirmar o pagamento de um holerite via <i>Pagar PIX (MP)</i>, o valor líquido será transferido instantaneamente da sua conta PJ para a chave PIX informada acima.
+          </div>
+        </div>
+
+        <div class="modal-section-card" id="usr-sec5-card">
+          <div class="modal-section-title"><span class="modal-section-step">5</span> Exceções de Acesso</div>
+          <div id="usr-admin-full-banner" style="display:${activePerfil === 'admin' ? 'block' : 'none'}; background:rgba(22,163,74,0.09); border:1px solid rgba(22,163,74,0.3); color:var(--ok); padding:12px 14px; border-radius:10px; font-size:12.5px; font-weight:600;">
+            &#10003; Acesso Total (Administrador) habilitado: este colaborador possui acesso irrestrito a todos os módulos do sistema.
+          </div>
+          <div id="usr-perms-overrides-wrap" style="display:${activePerfil === 'admin' ? 'none' : 'block'};">
+            <p class="muted" style="margin:0 0 10px; font-size:12px;">As permissões base são definidas pelo CBO. Ajuste abaixo apenas para forçar ou bloquear módulos específicos.</p>
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(185px, 1fr)); gap:8px;">
+              ${[
+                ['projetos', 'Projetos'], ['tarefas', 'Tarefas'], ['timesheet', 'Timesheet'],
+                ['orcamentos', 'Orçamentos'], ['propostas', 'Propostas'], ['clientes', 'Clientes'],
+                ['chamados', 'Chamados'], ['financeiro_dre', 'Financeiro DRE'], ['faturas', 'Faturas'],
+                ['despesas', 'Despesas'], ['contratos', 'Contratos MRR'], ['ponto', 'Ponto'],
+                ['holerite', 'Holerites'], ['ativos', 'Ativos'], ['usuarios', 'Usuários'],
+                ['loja', 'Loja Virtual'], ['reembolsos', 'Reembolsos']
+              ].map(([k, label]) => {
+                let val = 'default';
+                if (editObj?.permissoes_individuais_json) {
+                   try { const p = JSON.parse(editObj.permissoes_individuais_json); if (p[k] === true) val = 'true'; else if (p[k] === false) val = 'false'; } catch(_) {}
+                }
+                return `
+                  <label style="font-size:11.5px; font-weight:600; display:flex; flex-direction:column; gap:3px;">${label}
+                    <select name="perm_ind_${k}" style="min-height:32px; padding:4px 28px 4px 8px; font-size:11.5px;">
+                      <option value="default" ${val === 'default' ? 'selected' : ''}>Padrão (CBO)</option>
+                      <option value="true" ${val === 'true' ? 'selected' : ''}>Forçar Acesso</option>
+                      <option value="false" ${val === 'false' ? 'selected' : ''}>Bloquear</option>
+                    </select>
+                  </label>
+                `;
+              }).join('')}
             </div>
-            <input name="pix_chave" id="usr-pix-chave" value="${esc(editObj?.pix_chave || '')}" placeholder="Preenchido automaticamente..." readonly>
-          </label>
+          </div>
         </div>
-      </div>
-      
-      <div class="modal-section-card" id="usr-sec5-card">
-        <div class="modal-section-title"><span class="modal-section-step">5</span> Exceções de Acesso (Opcional)</div>
-        <div id="usr-admin-full-banner" style="display:${activePerfil === 'admin' ? 'block' : 'none'}; background:rgba(22,163,74,0.09); border:1px solid rgba(22,163,74,0.3); color:var(--ok); padding:10px 14px; border-radius:8px; font-size:12.5px; font-weight:600;">
-          &#10003; Acesso Total (Administrador) habilitado: este colaborador possui acesso irrestrito a todos os módulos do sistema.
-        </div>
-        <div id="usr-perms-overrides-wrap" style="display:${activePerfil === 'admin' ? 'none' : 'block'};">
-        <p class="muted" style="margin:0 0 10px; font-size:12.5px;">As permissões base são geradas automaticamente pelo CBO. Marque abaixo apenas se quiser forçar o acesso ou bloqueio específico deste colaborador.</p>
-        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:10px;">
-          ${[
-            ['projetos', 'Projetos'], ['tarefas', 'Tarefas'], ['timesheet', 'Timesheet'],
-            ['orcamentos', 'Orçamentos'], ['propostas', 'Propostas'], ['clientes', 'Clientes'],
-            ['chamados', 'Chamados'], ['financeiro_dre', 'Financeiro DRE'], ['faturas', 'Faturas'],
-            ['despesas', 'Despesas'], ['contratos', 'Contratos MRR'], ['ponto', 'Ponto'],
-            ['holerite', 'Holerites'], ['ativos', 'Ativos'], ['usuarios', 'Usuários'],
-            ['loja', 'Loja Virtual'], ['reembolsos', 'Reembolsos']
-          ].map(([k, label]) => {
-            let val = 'default';
-            if (editObj?.permissoes_individuais_json) {
-               try { const p = JSON.parse(editObj.permissoes_individuais_json); if (p[k] === true) val = 'true'; else if (p[k] === false) val = 'false'; } catch(_) {}
-            }
-            return `
-              <label style="font-size:12px; font-weight:600; display:flex; flex-direction:column; gap:4px;">${label}
-                <select name="perm_ind_${k}" class="nc-input" style="min-height:30px; padding:4px 8px; font-size:12px;">
-                  <option value="default" ${val === 'default' ? 'selected' : ''}>Padrão (CBO)</option>
-                  <option value="true" ${val === 'true' ? 'selected' : ''}>Forçar Acesso</option>
-                  <option value="false" ${val === 'false' ? 'selected' : ''}>Bloquear</option>
-                </select>
-              </label>
-            `;
-          }).join('')}
-        </div>
-        </div>
-      </div>
       </div>`;
 
     // Bind CBO live autocomplete, contract period toggle & role switch (Cliente vs Colaborador)
@@ -4611,6 +4650,7 @@ recordForm.onsubmit = async (e) => {
           email: raw.email,
           ...(canEditRole ? { perfil: resolvedPerfil } : {}),
           cpf: raw.cpf || null,
+          data_nascimento: raw.data_nascimento || null,
           telefone: raw.telefone || null,
           cbo_codigo: isCli ? null : (raw.cbo_codigo || null),
           cbo_descricao: isCli ? null : (raw.cbo_descricao || null),

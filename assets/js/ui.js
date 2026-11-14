@@ -190,10 +190,14 @@ export function showNoticeModal({
 }
 
 
-// ==================== SMART TABBED MODAL ENGINE (ZERO SCROLLBAR) ====================
-function isElementHidden(el) {
-  let cur = el;
+// ==================== SMART TABBED MODAL ENGINE (ZERO SCROLLBAR & NO LOOP) ====================
+function isSectionHidden(card) {
+  if (!card) return true;
+  if (card.dataset.modalHidden === 'true' || card.hasAttribute('hidden')) return true;
+  if (card.style && card.style.display === 'none' && !card.hasAttribute('data-tab-panel')) return true;
+  let cur = card.parentElement;
   while (cur && cur !== document.body) {
+    if (cur.dataset?.modalHidden === 'true' || cur.hasAttribute?.('hidden')) return true;
     if (cur.style && cur.style.display === 'none') return true;
     cur = cur.parentElement;
   }
@@ -203,7 +207,7 @@ function isElementHidden(el) {
 function cleanStepTitle(rawText, index) {
   let txt = String(rawText || '').replace(/^\d+\s*/, '').trim();
   txt = txt.replace(/\s*\([^)]*\)/g, '').trim();
-  if (txt.length > 30) {
+  if (txt.length > 28) {
     const shortPart = txt.split(/[&—-]/)[0].trim();
     if (shortPart.length >= 4) txt = shortPart;
   }
@@ -213,7 +217,7 @@ function cleanStepTitle(rawText, index) {
 export function enhanceModalLayout(dialogEl) {
   if (!dialogEl) return;
 
-  // Fechar ao clicar fora (no backdrop)
+  // Fechar ao clicar fora
   if (!dialogEl.dataset.backdropBound) {
     dialogEl.dataset.backdropBound = '1';
     dialogEl.addEventListener('click', (e) => {
@@ -227,19 +231,21 @@ export function enhanceModalLayout(dialogEl) {
   const bodyEl = dialogEl.querySelector('.modal-body');
   if (!modalRoot || !bodyEl) return;
 
-  // Remove barra de abas anterior antes de recalcular
-  modalRoot.querySelectorAll('.modal-tabs').forEach((n) => n.remove());
-  modalRoot.querySelectorAll('.modal-step-nav-btn').forEach((n) => n.remove());
+  // Cleanup prev nav
+  const oldNavs = modalRoot.querySelectorAll('.modal-tabs');
+  oldNavs.forEach(n => n.remove());
+  modalRoot.querySelectorAll('.modal-step-nav-btn').forEach(n => n.remove());
   modalRoot.classList.remove('modal-tabbed');
 
   const allCards = [...bodyEl.querySelectorAll('.modal-section-card')];
-  const visibleCards = allCards.filter((c) => !isElementHidden(c));
+  const visibleCards = allCards.filter(c => !isSectionHidden(c));
 
-  // Se houver menos de 2 seções visíveis, garante que todas fiquem visíveis normalmente
   if (visibleCards.length < 2) {
     allCards.forEach((c) => {
-      c.style.removeProperty('display');
-      c.removeAttribute('data-tab-panel');
+      if (c.hasAttribute('data-tab-panel')) {
+        c.style.removeProperty('display');
+        c.removeAttribute('data-tab-panel');
+      }
     });
     return;
   }
@@ -251,7 +257,6 @@ export function enhanceModalLayout(dialogEl) {
   nav.setAttribute('role', 'tablist');
 
   let activeIdx = 0;
-
   const footerEl = modalRoot.querySelector('.modal-footer');
   let prevBtn = null;
   let nextBtn = null;
@@ -281,17 +286,30 @@ export function enhanceModalLayout(dialogEl) {
   const activateTab = (idx) => {
     activeIdx = Math.max(0, Math.min(visibleCards.length - 1, idx));
     visibleCards.forEach((card, i) => {
-      card.style.display = i === activeIdx ? 'flex' : 'none';
+      if (i === activeIdx) {
+        card.style.display = 'flex';
+      } else {
+        card.style.display = 'none';
+      }
       card.setAttribute('data-tab-panel', String(i));
     });
+    
     nav.querySelectorAll('.modal-tab-btn').forEach((btn, i) => {
       const isAct = i === activeIdx;
-      btn.classList.toggle('active', isAct);
-      btn.setAttribute('aria-selected', isAct ? 'true' : 'false');
+      if (isAct) {
+         btn.classList.add('active');
+         btn.setAttribute('aria-selected', 'true');
+      } else {
+         btn.classList.remove('active');
+         btn.setAttribute('aria-selected', 'false');
+      }
     });
+    
     if (prevBtn) prevBtn.style.display = activeIdx > 0 ? 'inline-flex' : 'none';
     if (nextBtn) nextBtn.style.display = activeIdx < visibleCards.length - 1 ? 'inline-flex' : 'none';
-    bodyEl.scrollTop = 0;
+    
+    // Evitar o pulo ao topo, apenas reseta se houver scroll interno no modal-body
+    if(bodyEl.scrollTop > 0) bodyEl.scrollTop = 0;
   };
 
   visibleCards.forEach((card, i) => {
@@ -305,17 +323,24 @@ export function enhanceModalLayout(dialogEl) {
     btn.className = 'modal-tab-btn';
     btn.setAttribute('role', 'tab');
     btn.innerHTML = `<span class="modal-tab-step">${esc(stepNum)}</span><span>${esc(labelText)}</span>`;
-    btn.onclick = () => activateTab(i);
+    
+    // Bind click without causing event bubbling issues
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      activateTab(i);
+    });
     nav.appendChild(btn);
   });
 
-  if (prevBtn) prevBtn.onclick = () => activateTab(activeIdx - 1);
-  if (nextBtn) nextBtn.onclick = () => activateTab(activeIdx + 1);
+  if (prevBtn) prevBtn.addEventListener('click', () => activateTab(activeIdx - 1));
+  if (nextBtn) nextBtn.addEventListener('click', () => activateTab(activeIdx + 1));
 
   bodyEl.parentElement.insertBefore(nav, bodyEl);
+  
+  // Set initial tab explicitly
   activateTab(0);
 
-  // Ponte de validação HTML5: se um campo obrigatório estiver em outra aba, troca automaticamente para ela
+  // Validação HTML5
   const formEl = modalRoot.matches('form') ? modalRoot : modalRoot.querySelector('form');
   if (formEl && !formEl.dataset.tabInvalidBound) {
     formEl.dataset.tabInvalidBound = '1';
@@ -325,13 +350,13 @@ export function enhanceModalLayout(dialogEl) {
       if (panel) {
         const panelIdx = Number(panel.getAttribute('data-tab-panel'));
         if (!Number.isNaN(panelIdx)) {
+          activateTab(panelIdx);
           const tabsNav = modalRoot.querySelector('.modal-tabs');
-          const tabBtns = tabsNav ? [...tabsNav.querySelectorAll('.modal-tab-btn')] : [];
-          if (tabBtns[panelIdx]) {
-            tabBtns[panelIdx].classList.add('has-error');
-            tabBtns[panelIdx].click();
+          if (tabsNav) {
+             const tabBtns = [...tabsNav.querySelectorAll('.modal-tab-btn')];
+             if (tabBtns[panelIdx]) tabBtns[panelIdx].classList.add('has-error');
           }
-          setTimeout(() => target.focus?.(), 30);
+          setTimeout(() => target.focus?.(), 50);
         }
       }
     }, true);
@@ -342,18 +367,26 @@ export function initGlobalModalEnhancer() {
   if (typeof document === 'undefined') return;
   const setupDialogs = () => {
     document.querySelectorAll('dialog.dialog:not(#nc-system-dialog)').forEach((dlg) => {
-      if (dlg.dataset.observerAttached) return;
-      dlg.dataset.observerAttached = '1';
+      // Monitor directly the #dynamic-record-fields or modal body instead of the dialog
+      // to avoid infinite loops when we inject the nav outside the body
+      const observeTarget = dlg.querySelector('#dynamic-record-fields') || dlg.querySelector('.modal-body') || dlg;
+      if (observeTarget.dataset.observerAttached) return;
+      observeTarget.dataset.observerAttached = '1';
+      
       let timer = null;
-      const schedule = () => {
-        clearTimeout(timer);
-        timer = setTimeout(() => enhanceModalLayout(dlg), 35);
-      };
-      const obs = new MutationObserver(schedule);
-      obs.observe(dlg, { childList: true, subtree: true });
+      const obs = new MutationObserver((mutations) => {
+        // Ignorar se a mutação foi a própria injeção do display:none nas tabs
+        const isSafe = mutations.some(m => m.type === 'childList' && Array.from(m.addedNodes).some(n => n.classList && n.classList.contains('modal-section-card')));
+        if(isSafe || (mutations.length > 0 && !mutations[0].target.classList.contains('modal-body'))) {
+           clearTimeout(timer);
+           timer = setTimeout(() => enhanceModalLayout(dlg), 50);
+        }
+      });
+      obs.observe(observeTarget, { childList: true });
       enhanceModalLayout(dlg);
     });
   };
+  
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', setupDialogs);
   } else {
