@@ -5,6 +5,8 @@ from decimal import Decimal
 from typing import List, Optional
 import calendar
 import json
+import re
+import unicodedata
 import smtplib
 from email.message import EmailMessage
 
@@ -28,7 +30,7 @@ from models import (
     RegistroPonto, ModuloRegistro, LogAuditoria,
     ConfiguracaoEmpresa, PropostaComercial, Despesa,
     ContratoRecorrente, ApontamentoHora, ChamadoSuporte,
-    AtivoInfra, Notificacao, BancoHoras, ReembolsoDespesa, PedidoLoja,
+    AtivoInfra, Notificacao, BancoHoras, ReembolsoDespesa, PedidoLoja, ProdutoLoja,
 )
 from schemas import (
     LoginRequest, RegisterRequest, ForgotPasswordRequest, ResetPasswordRequest, TokenResponse,
@@ -53,6 +55,7 @@ from schemas import (
     AtivoInfraCreate, AtivoInfraUpdate, AtivoInfraOut,
     NotificacaoOut, ReembolsoCreate, ReembolsoUpdate, ReembolsoOut,
     PedidoLojaCreate, PedidoLojaUpdate, PedidoLojaOut,
+    ProdutoLojaCreate, ProdutoLojaUpdate, ProdutoLojaOut,
 )
 from payroll_engine import (
     buscar_cbos,
@@ -300,6 +303,7 @@ def ensure_db_initialized(force_sync: bool = False):
     if not force_sync:
         try:
             with engine.connect() as conn:
+                conn.execute(text("SELECT 1 FROM produtos_loja LIMIT 1"))
                 conn.execute(text("SELECT 1 FROM pedidos_loja LIMIT 1"))
                 conn.execute(text("SELECT 1 FROM configuracoes_empresa LIMIT 1"))
             _db_ready = True
@@ -328,6 +332,67 @@ def ensure_db_initialized(force_sync: bool = False):
                     permissoes_json=json.dumps(DEFAULT_PERMISSOES, ensure_ascii=False),
                 )
             )
+            db.commit()
+
+        if not db.query(ProdutoLoja.id).first():
+            db.add_all([
+                ProdutoLoja(
+                    slug="blusa",
+                    nome="Blusa Nexus Code Brasil",
+                    descricao="Blusa preta 100% algodão com estampa oficial Negativa Branca & Ciano Digital.",
+                    preco=Decimal("39.90"),
+                    badge="Novo",
+                    spec_label="Tamanhos: P ao GG",
+                    imagem_url="assets/brand/Estampa_Negativa_Branca.svg",
+                    fundo_escuro=True,
+                    tamanhos_json=json.dumps(["P", "M", "G", "GG"], ensure_ascii=False),
+                    cores_json=json.dumps(["Preto", "Azul Enterprise"], ensure_ascii=False),
+                    ordem=1,
+                    ativo=True,
+                ),
+                ProdutoLoja(
+                    slug="moletom",
+                    nome="Moletom Nexus Code Brasil",
+                    descricao="Moletom canguru com capuz, tecido premium e monograma circuito em contraste.",
+                    preco=Decimal("139.90"),
+                    badge="Destaque",
+                    spec_label="Tamanhos: P ao GG",
+                    imagem_url="assets/brand/Estampa_Negativa_Branca.svg",
+                    fundo_escuro=True,
+                    tamanhos_json=json.dumps(["P", "M", "G", "GG"], ensure_ascii=False),
+                    cores_json=json.dumps(["Preto", "Azul Enterprise"], ensure_ascii=False),
+                    ordem=2,
+                    ativo=True,
+                ),
+                ProdutoLoja(
+                    slug="garrafinha",
+                    nome="Garrafinha Térmica 500ml",
+                    descricao="Garrafa térmica inox com estampa padrão Azul Enterprise & Ciano Digital.",
+                    preco=Decimal("29.90"),
+                    badge="Eco",
+                    spec_label="500ml Inox",
+                    imagem_url="assets/brand/Estampa_Padrao.svg",
+                    fundo_escuro=False,
+                    tamanhos_json=json.dumps(["500ml"], ensure_ascii=False),
+                    cores_json=json.dumps(["Branco", "Ciano Digital"], ensure_ascii=False),
+                    ordem=3,
+                    ativo=True,
+                ),
+                ProdutoLoja(
+                    slug="mochila",
+                    nome="Mochila Executiva Tech",
+                    descricao='Mochila executiva para notebook até 15.6" com emblema oficial Nexus Code Brasil.',
+                    preco=Decimal("159.90"),
+                    badge="Enterprise",
+                    spec_label='Até 15.6"',
+                    imagem_url="assets/brand/Estampa_Padrao.svg",
+                    fundo_escuro=False,
+                    tamanhos_json=json.dumps(["Único"], ensure_ascii=False),
+                    cores_json=json.dumps(["Azul Enterprise", "Preto"], ensure_ascii=False),
+                    ordem=4,
+                    ativo=True,
+                ),
+            ])
             db.commit()
 
         if not db.query(Usuario.id).first():
@@ -888,6 +953,8 @@ def bootstrap_painel(
 
     holerites = holerite_q.order_by(Holerite.criado_em.desc()).all()
     informes = informe_q.order_by(InformeRendimento.ano_calendario.desc(), InformeRendimento.criado_em.desc()).all()
+    produtos_loja = db.query(ProdutoLoja).order_by(ProdutoLoja.ordem.asc(), ProdutoLoja.id.asc()).all()
+    pedidos_loja = db.query(PedidoLoja).order_by(PedidoLoja.criado_em.desc()).limit(50).all()
 
     return {
         "kpi": kpi,
@@ -906,6 +973,8 @@ def bootstrap_painel(
         "empresa_config": ConfiguracaoEmpresaOut.model_validate(empresa_cfg) if empresa_cfg else None,
         "holerites": [HoleriteListOut.model_validate(h) for h in holerites],
         "informes": [InformeListOut.model_validate(i) for i in informes],
+        "produtos_loja": [ProdutoLojaOut.model_validate(pl) for pl in produtos_loja],
+        "pedidos_loja": [PedidoLojaOut.model_validate(ped) for ped in pedidos_loja],
     }
 
 
@@ -1561,6 +1630,122 @@ def atualizar_pedido_loja(pedido_id: int, dados: PedidoLojaUpdate, db: Session =
     return ped
 
 
+# ==================== VITRINE PÚBLICA & CATÁLOGO DA LOJA (SITE <-> PAINEL) ====================
+_SITE_CONFIG_CACHE = {"data": None, "ts": 0.0}
+
+
+def _slugify_produto(texto: str) -> str:
+    norm = unicodedata.normalize("NFKD", texto or "produto").encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", norm.lower()).strip("-")
+    return slug or "produto"
+
+
+@router.get("/public/site-config", tags=["Site & Loja"])
+def obter_configuracao_publica_site(db: Session = Depends(get_db)):
+    now_ts = datetime.utcnow().timestamp()
+    if _SITE_CONFIG_CACHE["data"] is not None and (now_ts - _SITE_CONFIG_CACHE["ts"]) < 30:
+        return _SITE_CONFIG_CACHE["data"]
+
+    cfg = db.query(ConfiguracaoEmpresa).first()
+    produtos = (
+        db.query(ProdutoLoja)
+        .filter(ProdutoLoja.ativo == True)
+        .order_by(ProdutoLoja.ordem.asc(), ProdutoLoja.id.asc())
+        .all()
+    )
+
+    cidade = (cfg.cidade or "").strip() if cfg else "Aracruz"
+    estado = (cfg.estado or "").strip() if cfg else "ES"
+    endereco = (cfg.endereco or "").strip() if cfg else ""
+    if cidade and estado:
+        localizacao = f"{cidade}, {estado} - Brasil"
+    elif endereco:
+        localizacao = endereco
+    else:
+        localizacao = "Aracruz, ES - Brasil"
+
+    payload = {
+        "empresa": {
+            "nome_fantasia": cfg.nome_fantasia if cfg else "Nexus Code Brasil",
+            "razao_social": cfg.razao_social if cfg else "Nexus Code Brasil Tecnologia Ltda",
+            "email": (cfg.email_financeiro or "contato@nexuscodebrasil.com.br") if cfg else "contato@nexuscodebrasil.com.br",
+            "telefone": (cfg.telefone or "(27) 99999-9999") if cfg else "(27) 99999-9999",
+            "endereco": endereco,
+            "cidade": cidade,
+            "estado": estado,
+            "localizacao": localizacao,
+            "chave_pix": (cfg.chave_pix or "contato@nexuscodebrasil.com.br") if cfg else "contato@nexuscodebrasil.com.br",
+        },
+        "produtos": [ProdutoLojaOut.model_validate(p).model_dump(mode="json") for p in produtos],
+    }
+    _SITE_CONFIG_CACHE["data"] = payload
+    _SITE_CONFIG_CACHE["ts"] = now_ts
+    return payload
+
+
+@router.get("/loja/produtos", response_model=List[ProdutoLojaOut], tags=["Site & Loja"])
+def listar_produtos_loja_admin(db: Session = Depends(get_db), _: Usuario = Depends(exigir_equipe)):
+    return db.query(ProdutoLoja).order_by(ProdutoLoja.ordem.asc(), ProdutoLoja.id.asc()).all()
+
+
+@router.post("/loja/produtos", response_model=ProdutoLojaOut, status_code=201, tags=["Site & Loja"])
+def criar_produto_loja(
+    dados: ProdutoLojaCreate,
+    db: Session = Depends(get_db),
+    equipe: Usuario = Depends(exigir_equipe),
+):
+    base_slug = _slugify_produto(dados.slug or dados.nome)
+    slug = base_slug
+    idx = 2
+    while db.query(ProdutoLoja.id).filter(ProdutoLoja.slug == slug).first():
+        slug = f"{base_slug}-{idx}"
+        idx += 1
+
+    payload = dados.model_dump()
+    payload["slug"] = slug
+    prod = ProdutoLoja(**payload)
+    db.add(prod)
+    registrar_log(db, equipe.nome, "CRIAR_PRODUTO_LOJA", f"Adicionou produto '{prod.nome}' na loja do site")
+    db.commit()
+    db.refresh(prod)
+    _SITE_CONFIG_CACHE["data"] = None
+    return prod
+
+
+@router.patch("/loja/produtos/{produto_id}", response_model=ProdutoLojaOut, tags=["Site & Loja"])
+def atualizar_produto_loja(
+    produto_id: int,
+    dados: ProdutoLojaUpdate,
+    db: Session = Depends(get_db),
+    equipe: Usuario = Depends(exigir_equipe),
+):
+    prod = db.query(ProdutoLoja).filter(ProdutoLoja.id == produto_id).first()
+    if not prod:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    for campo, valor in dados.model_dump(exclude_unset=True).items():
+        setattr(prod, campo, valor)
+    registrar_log(db, equipe.nome, "EDITAR_PRODUTO_LOJA", f"Atualizou produto '{prod.nome}' (#{produto_id})")
+    db.commit()
+    db.refresh(prod)
+    _SITE_CONFIG_CACHE["data"] = None
+    return prod
+
+
+@router.delete("/loja/produtos/{produto_id}", status_code=204, tags=["Site & Loja"])
+def remover_produto_loja(
+    produto_id: int,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(exigir_admin),
+):
+    prod = db.query(ProdutoLoja).filter(ProdutoLoja.id == produto_id).first()
+    if not prod:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    registrar_log(db, admin.nome, "EXCLUIR_PRODUTO_LOJA", f"Removeu produto '{prod.nome}'")
+    db.delete(prod)
+    db.commit()
+    _SITE_CONFIG_CACHE["data"] = None
+
+
 # ==================== TIMESHEET & RENTABILIDADE DE PROJETOS ====================
 @router.get("/timesheet", response_model=List[ApontamentoHoraOut], tags=["Timesheet"])
 def listar_apontamentos_horas(
@@ -1962,6 +2147,7 @@ def salvar_configuracoes_empresa(
     cfg.atualizado_em = datetime.utcnow()
     registrar_log(db, admin.nome, "CONFIG_EMPRESA", "Atualizou parâmetros institucionais, bancários e permissões.")
     db.commit()
+    _SITE_CONFIG_CACHE["data"] = None
     db.refresh(cfg)
     return cfg
 

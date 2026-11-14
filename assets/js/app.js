@@ -8,7 +8,8 @@ import {
   renderDespesasView,
   renderContratosView,
   renderAtivosView,
-  renderEmpresaView
+  renderEmpresaView,
+  renderLojaView
 } from './erp_modules.js';
 
 const $ = (s) => document.querySelector(s);
@@ -52,6 +53,8 @@ let cache = {
   empresa_config: null,
   holerites: [],
   informes: [],
+  produtos_loja: [],
+  pedidos_loja: [],
   loadedAt: 0
 };
 const CACHE_TTL_MS = 30000;
@@ -83,6 +86,8 @@ async function loadBootstrap(force = false) {
     empresa_config: data.empresa_config || null,
     holerites: data.holerites || [],
     informes: data.informes || [],
+    produtos_loja: data.produtos_loja || [],
+    pedidos_loja: data.pedidos_loja || [],
     loadedAt: Date.now()
   };
   updateQuotesBadge();
@@ -309,6 +314,7 @@ function applyRolePermissions() {
     timesheet: 'timesheet',
     quotes: 'orcamentos',
     propostas: 'propostas',
+    loja: 'loja',
     customers: 'clientes',
     leads: 'clientes',
     pipeline: 'clientes',
@@ -3587,6 +3593,7 @@ async function render(useCache = false) {
     else if (page === 'invoices') view.innerHTML = await renderInvoices(useCache);
     else if (page === 'timesheet') { await preloadRefs(useCache); view.innerHTML = await renderTimesheetView({ cache, user, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS }); }
     else if (page === 'propostas') { await preloadRefs(useCache); view.innerHTML = await renderPropostasView({ cache, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS }); }
+    else if (page === 'loja') { await preloadRefs(useCache); view.innerHTML = await renderLojaView({ cache, user, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS }); }
     else if (page === 'chamados') { await preloadRefs(useCache); view.innerHTML = await renderChamadosView({ cache, user, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS }); }
     else if (page === 'dre') { view.innerHTML = await renderDreView({ ICONS }); }
     else if (page === 'despesas') { await preloadRefs(useCache); view.innerHTML = await renderDespesasView({ cache, user, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS }); }

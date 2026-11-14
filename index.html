@@ -750,9 +750,9 @@
                 </p>
             </div>
 
-            <div class="grid lg:grid-cols-4 md:grid-cols-2 gap-8">
+            <div id="loja-products-grid" class="grid lg:grid-cols-4 md:grid-cols-2 gap-8 items-stretch">
                 <!-- Blusa (Estampa Negativa Branca sobre Azul Enterprise/Preto) -->
-                <div class="group bg-[#F8FAFC] rounded-2xl overflow-hidden card-hover">
+                <div class="group bg-[#F8FAFC] rounded-2xl overflow-hidden card-hover flex flex-col h-full">
                     <div class="aspect-square bg-[#0A1D37] relative overflow-hidden flex items-center justify-center p-6">
                         <img src="assets/brand/Estampa_Negativa_Branca.svg"
                              alt="Blusa Nexus Code Brasil"
@@ -761,21 +761,23 @@
                             Novo
                         </div>
                     </div>
-                    <div class="p-6">
+                    <div class="p-6 flex flex-col flex-1">
                         <h3 class="text-lg font-bold text-[#0A1D37] mb-2">Blusa Nexus Code Brasil</h3>
-                        <p class="text-slate-600 text-sm mb-4">Blusa preta 100% algodão com estampa oficial Negativa Branca &amp; Ciano Digital.</p>
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-2xl font-black text-[#0A1D37]">R$ 39,90</div>
-                            <div class="text-xs font-semibold text-slate-500">Tamanhos: P ao GG</div>
+                        <p class="text-slate-600 text-sm mb-4 flex-1 leading-relaxed">Blusa preta 100% algodão com estampa oficial Negativa Branca &amp; Ciano Digital.</p>
+                        <div class="mt-auto pt-2">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="text-2xl font-black text-[#0A1D37]">R$ 39,90</div>
+                                <div class="text-xs font-semibold text-slate-500">Tamanhos: P ao GG</div>
+                            </div>
+                            <button onclick="addToCart('blusa')" class="w-full bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] py-3 rounded-xl font-bold text-sm transition-all duration-300">
+                                Adicionar ao Carrinho
+                            </button>
                         </div>
-                        <button onclick="addToCart('blusa')" class="w-full bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] py-3 rounded-xl font-bold text-sm transition-all duration-300">
-                            Adicionar ao Carrinho
-                        </button>
                     </div>
                 </div>
 
                 <!-- Moletom (Estampa Negativa Branca sobre Azul Enterprise/Preto) -->
-                <div class="group bg-[#F8FAFC] rounded-2xl overflow-hidden card-hover">
+                <div class="group bg-[#F8FAFC] rounded-2xl overflow-hidden card-hover flex flex-col h-full">
                     <div class="aspect-square bg-[#061224] relative overflow-hidden flex items-center justify-center p-6">
                         <img src="assets/brand/Estampa_Negativa_Branca.svg"
                              alt="Moletom Nexus Code Brasil"
@@ -784,21 +786,23 @@
                             Destaque
                         </div>
                     </div>
-                    <div class="p-6">
+                    <div class="p-6 flex flex-col flex-1">
                         <h3 class="text-lg font-bold text-[#0A1D37] mb-2">Moletom Nexus Code Brasil</h3>
-                        <p class="text-slate-600 text-sm mb-4">Moletom canguru com capuz, tecido premium e monograma circuito em contraste.</p>
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-2xl font-black text-[#0A1D37]">R$ 139,90</div>
-                            <div class="text-xs font-semibold text-slate-500">Tamanhos: P ao GG</div>
+                        <p class="text-slate-600 text-sm mb-4 flex-1 leading-relaxed">Moletom canguru com capuz, tecido premium e monograma circuito em contraste.</p>
+                        <div class="mt-auto pt-2">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="text-2xl font-black text-[#0A1D37]">R$ 139,90</div>
+                                <div class="text-xs font-semibold text-slate-500">Tamanhos: P ao GG</div>
+                            </div>
+                            <button onclick="addToCart('moletom')" class="w-full bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] py-3 rounded-xl font-bold text-sm transition-all duration-300">
+                                Adicionar ao Carrinho
+                            </button>
                         </div>
-                        <button onclick="addToCart('moletom')" class="w-full bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] py-3 rounded-xl font-bold text-sm transition-all duration-300">
-                            Adicionar ao Carrinho
-                        </button>
                     </div>
                 </div>
 
                 <!-- Garrafinha (Estampa Padrão sobre Branco) -->
-                <div class="group bg-[#F8FAFC] rounded-2xl overflow-hidden card-hover">
+                <div class="group bg-[#F8FAFC] rounded-2xl overflow-hidden card-hover flex flex-col h-full">
                     <div class="aspect-square bg-white border-b border-slate-200 relative overflow-hidden flex items-center justify-center p-6">
                         <img src="assets/brand/Estampa_Padrao.svg"
                              alt="Garrafinha Térmica Nexus Code Brasil"
@@ -807,21 +811,23 @@
                             Eco
                         </div>
                     </div>
-                    <div class="p-6">
+                    <div class="p-6 flex flex-col flex-1">
                         <h3 class="text-lg font-bold text-[#0A1D37] mb-2">Garrafinha Térmica 500ml</h3>
-                        <p class="text-slate-600 text-sm mb-4">Garrafa térmica inox com estampa padrão Azul Enterprise &amp; Ciano Digital.</p>
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-2xl font-black text-[#0A1D37]">R$ 29,90</div>
-                            <div class="text-xs font-semibold text-slate-500">500ml Inox</div>
+                        <p class="text-slate-600 text-sm mb-4 flex-1 leading-relaxed">Garrafa térmica inox com estampa padrão Azul Enterprise &amp; Ciano Digital.</p>
+                        <div class="mt-auto pt-2">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="text-2xl font-black text-[#0A1D37]">R$ 29,90</div>
+                                <div class="text-xs font-semibold text-slate-500">500ml Inox</div>
+                            </div>
+                            <button onclick="addToCart('garrafinha')" class="w-full bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] py-3 rounded-xl font-bold text-sm transition-all duration-300">
+                                Adicionar ao Carrinho
+                            </button>
                         </div>
-                        <button onclick="addToCart('garrafinha')" class="w-full bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] py-3 rounded-xl font-bold text-sm transition-all duration-300">
-                            Adicionar ao Carrinho
-                        </button>
                     </div>
                 </div>
 
                 <!-- Mochila (Estampa Padrão / Executiva) -->
-                <div class="group bg-[#F8FAFC] rounded-2xl overflow-hidden card-hover">
+                <div class="group bg-[#F8FAFC] rounded-2xl overflow-hidden card-hover flex flex-col h-full">
                     <div class="aspect-square bg-slate-100 border-b border-slate-200 relative overflow-hidden flex items-center justify-center p-6">
                         <img src="assets/brand/Estampa_Padrao.svg"
                              alt="Mochila Executiva Nexus Code Brasil"
@@ -830,16 +836,18 @@
                             Enterprise
                         </div>
                     </div>
-                    <div class="p-6">
+                    <div class="p-6 flex flex-col flex-1">
                         <h3 class="text-lg font-bold text-[#0A1D37] mb-2">Mochila Executiva Tech</h3>
-                        <p class="text-slate-600 text-sm mb-4">Mochila executiva para notebook até 15.6" com emblema oficial Nexus Code Brasil.</p>
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-2xl font-black text-[#0A1D37]">R$ 159,90</div>
-                            <div class="text-xs font-semibold text-slate-500">Até 15.6"</div>
+                        <p class="text-slate-600 text-sm mb-4 flex-1 leading-relaxed">Mochila executiva para notebook até 15.6" com emblema oficial Nexus Code Brasil.</p>
+                        <div class="mt-auto pt-2">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="text-2xl font-black text-[#0A1D37]">R$ 159,90</div>
+                                <div class="text-xs font-semibold text-slate-500">Até 15.6"</div>
+                            </div>
+                            <button onclick="addToCart('mochila')" class="w-full bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] py-3 rounded-xl font-bold text-sm transition-all duration-300">
+                                Adicionar ao Carrinho
+                            </button>
                         </div>
-                        <button onclick="addToCart('mochila')" class="w-full bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] py-3 rounded-xl font-bold text-sm transition-all duration-300">
-                            Adicionar ao Carrinho
-                        </button>
                     </div>
                 </div>
             </div>
@@ -895,7 +903,7 @@
                                 </div>
                                 <div>
                                     <div class="font-bold text-white">E-mail Corporativo</div>
-                                    <div class="text-slate-300 text-sm">contato@nexuscodebrasil.com.br</div>
+                                    <div id="site-contact-email" class="text-slate-300 text-sm">contato@nexuscodebrasil.com.br</div>
                                 </div>
                             </div>
 
@@ -907,7 +915,7 @@
                                 </div>
                                 <div>
                                     <div class="font-bold text-white">Telefone / WhatsApp</div>
-                                    <div class="text-slate-300 text-sm">(27) 99999-9999</div>
+                                    <div id="site-contact-phone" class="text-slate-300 text-sm">(27) 99999-9999</div>
                                 </div>
                             </div>
 
@@ -919,7 +927,7 @@
                                 </div>
                                 <div>
                                     <div class="font-bold text-white">Localização</div>
-                                    <div class="text-slate-300 text-sm">Aracruz, ES - Brasil</div>
+                                    <div id="site-contact-location" class="text-slate-300 text-sm">Aracruz, ES - Brasil</div>
                                 </div>
                             </div>
                         </div>
@@ -1049,7 +1057,7 @@
                         Engenharia de software de alta performance. Conectamos tecnologia de ponta, segurança enterprise e resultados excepcionais para impulsionar o seu negócio.
                     </p>
                     <div class="flex space-x-3">
-                        <a href="mailto:contato@nexuscodebrasil.com.br" class="w-10 h-10 bg-[#0A1D37] border border-[#00B4D8]/30 rounded-lg flex items-center justify-center text-[#00B4D8] hover:bg-[#00B4D8] hover:text-[#0A1D37] transition-colors">
+                        <a id="site-footer-email" href="mailto:contato@nexuscodebrasil.com.br" class="w-10 h-10 bg-[#0A1D37] border border-[#00B4D8]/30 rounded-lg flex items-center justify-center text-[#00B4D8] hover:bg-[#00B4D8] hover:text-[#0A1D37] transition-colors">
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"></rect><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path></svg>
                         </a>
                         <a href="#contact" class="w-10 h-10 bg-[#0A1D37] border border-[#00B4D8]/30 rounded-lg flex items-center justify-center text-[#00B4D8] hover:bg-[#00B4D8] hover:text-[#0A1D37] transition-colors">
@@ -1584,14 +1592,76 @@
                 const totals = this.calculateTotals();
                 const itemsSnapshot = this.items.map((item) => ({ ...item }));
                 const discountPercentSnapshot = this.discountPercent;
-                const orderCode = 'NC-' + Math.floor(100000 + Math.random() * 900000);
-
-                this.items = [];
-                this.discountCode = null;
-                this.discountPercent = 0;
-                this.saveCart();
-                this.updateCartIcon();
                 this.closeCart();
+
+                const buyerModal = document.createElement('div');
+                buyerModal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4';
+                buyerModal.innerHTML = `
+                    <form id="store-checkout-form" class="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-200">
+                        <div class="bg-[#0A1D37] text-white p-6 border-b border-[#00B4D8]/30 flex items-center justify-between">
+                            <div>
+                                <h3 class="text-xl font-bold">Finalizar Pedido</h3>
+                                <p class="text-xs text-[#00B4D8] font-semibold">Total: R$ ${totals.total.toFixed(2).replace('.', ',')}</p>
+                            </div>
+                            <button type="button" data-close-buyer class="text-white hover:text-[#00B4D8] text-2xl font-bold leading-none">&times;</button>
+                        </div>
+                        <div class="p-6 space-y-4 text-sm">
+                            <div>
+                                <label class="block font-bold text-[#0A1D37] mb-1">Nome Completo *</label>
+                                <input type="text" name="nome_comprador" required placeholder="Seu nome" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8]">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-[#0A1D37] mb-1">E-mail para Confirmação e PIX *</label>
+                                <input type="email" name="email_comprador" required placeholder="seu@email.com" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8]">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-[#0A1D37] mb-1">Telefone / WhatsApp</label>
+                                <input type="tel" name="telefone_comprador" placeholder="(27) 99999-9999" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8]">
+                            </div>
+                            <button type="submit" id="store-confirm-btn" class="w-full bg-[#00B4D8] hover:bg-[#0096B4] text-[#0A1D37] py-3 rounded-xl font-extrabold transition-colors">
+                                Confirmar Pedido Oficial
+                            </button>
+                        </div>
+                    </form>
+                `;
+                document.body.appendChild(buyerModal);
+                buyerModal.querySelectorAll('[data-close-buyer]').forEach((b) => (b.onclick = () => buyerModal.remove()));
+
+                buyerModal.querySelector('#store-checkout-form').onsubmit = async (ev) => {
+                    ev.preventDefault();
+                    const btn = buyerModal.querySelector('#store-confirm-btn');
+                    const fd = new FormData(ev.target);
+                    btn.disabled = true;
+                    btn.textContent = 'Registrando pedido...';
+
+                    let orderCode = 'NC-' + Math.floor(100000 + Math.random() * 900000);
+                    try {
+                        const resp = await fetch(`${NEXUS_API_URL}/public/loja/pedidos`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                nome_comprador: String(fd.get('nome_comprador') || '').trim(),
+                                email_comprador: String(fd.get('email_comprador') || '').trim(),
+                                telefone_comprador: String(fd.get('telefone_comprador') || '').trim() || null,
+                                itens_json: JSON.stringify(itemsSnapshot),
+                                subtotal: Number(totals.subtotal.toFixed(2)),
+                                desconto: Number(totals.discount.toFixed(2)),
+                                frete: Number(totals.shipping.toFixed(2)),
+                                valor_total: Number(totals.total.toFixed(2))
+                            })
+                        });
+                        if (resp.ok) {
+                            const savedOrder = await resp.json();
+                            if (savedOrder?.codigo) orderCode = savedOrder.codigo;
+                        }
+                    } catch (_) {}
+
+                    buyerModal.remove();
+                    this.items = [];
+                    this.discountCode = null;
+                    this.discountPercent = 0;
+                    this.saveCart();
+                    this.updateCartIcon();
 
                 const receiptModal = document.createElement('div');
                 receiptModal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4';
@@ -1662,6 +1732,7 @@
                 receiptModal.querySelectorAll('[data-close-receipt]').forEach((b) => (b.onclick = () => receiptModal.remove()));
                 receiptModal.onclick = (e) => { if (e.target === receiptModal) receiptModal.remove(); };
                 this.showNotification('Pedido confirmado com sucesso.', 'success');
+                };
             }
 
             saveCart() {
@@ -1692,13 +1763,117 @@
 
         const cart = new ShoppingCart();
 
+        function escHtml(v) {
+            return String(v ?? '').replace(/[&<>"']/g, (c) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+        }
+
         function addToCart(productId) {
-            if (productId === 'blusa' || productId === 'moletom') {
+            const product = cart.products[productId];
+            if (!product) return;
+            const hasVariants = (product.sizes && product.sizes.length > 1) || (product.colors && product.colors.length > 1);
+            if (hasVariants) {
                 showProductModal(productId);
             } else {
                 cart.addItem(productId);
             }
         }
+
+        function renderDynamicProductsGrid(produtosList) {
+            const gridEl = document.getElementById('loja-products-grid');
+            if (!gridEl || !Array.isArray(produtosList) || !produtosList.length) return;
+
+            const nextProductsMap = {};
+            gridEl.innerHTML = produtosList.map((p) => {
+                let sizes = ['Único'];
+                let colors = ['Padrão'];
+                try {
+                    const parsedS = JSON.parse(p.tamanhos_json || '[]');
+                    if (Array.isArray(parsedS) && parsedS.length) sizes = parsedS;
+                } catch (_) {}
+                try {
+                    const parsedC = JSON.parse(p.cores_json || '[]');
+                    if (Array.isArray(parsedC) && parsedC.length) colors = parsedC;
+                } catch (_) {}
+
+                const key = p.slug || String(p.id);
+                const priceNum = Number(p.preco || 0);
+                const imgSrc = p.imagem_url || 'assets/brand/Estampa_Padrao.svg';
+
+                nextProductsMap[key] = {
+                    name: p.nome,
+                    price: priceNum,
+                    stamp: imgSrc,
+                    darkBg: Boolean(p.fundo_escuro),
+                    description: p.descricao || '',
+                    sizes,
+                    colors
+                };
+
+                const headerBgClass = p.fundo_escuro
+                    ? 'bg-[#0A1D37]'
+                    : 'bg-white border-b border-slate-200';
+                const badgeClass = p.fundo_escuro
+                    ? 'bg-[#00B4D8] text-[#0A1D37]'
+                    : 'bg-[#0A1D37] text-[#00B4D8]';
+
+                return `
+                    <div class="group bg-[#F8FAFC] rounded-2xl overflow-hidden card-hover flex flex-col h-full">
+                        <div class="aspect-square ${headerBgClass} relative overflow-hidden flex items-center justify-center p-6">
+                            <img src="${escHtml(imgSrc)}"
+                                 alt="${escHtml(p.nome)}"
+                                 class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300">
+                            ${p.badge ? `<div class="absolute top-4 right-4 ${badgeClass} rounded-full px-3 py-1 text-xs font-extrabold uppercase">${escHtml(p.badge)}</div>` : ''}
+                        </div>
+                        <div class="p-6 flex flex-col flex-1">
+                            <h3 class="text-lg font-bold text-[#0A1D37] mb-2">${escHtml(p.nome)}</h3>
+                            <p class="text-slate-600 text-sm mb-4 flex-1 leading-relaxed">${escHtml(p.descricao || '')}</p>
+                            <div class="mt-auto pt-2">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="text-2xl font-black text-[#0A1D37]">R$ ${priceNum.toFixed(2).replace('.', ',')}</div>
+                                    <div class="text-xs font-semibold text-slate-500">${escHtml(p.spec_label || sizes.join(', '))}</div>
+                                </div>
+                                <button onclick="addToCart('${escHtml(key)}')" class="w-full bg-[#0A1D37] hover:bg-[#00B4D8] text-white hover:text-[#0A1D37] py-3 rounded-xl font-bold text-sm transition-all duration-300">
+                                    Adicionar ao Carrinho
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            cart.products = nextProductsMap;
+        }
+
+        async function loadDynamicSiteConfig() {
+            try {
+                const res = await fetch(`${NEXUS_API_URL}/public/site-config`);
+                if (!res.ok) return;
+                const data = await res.json();
+
+                if (data.empresa) {
+                    const emp = data.empresa;
+                    const emailEl = document.getElementById('site-contact-email');
+                    const phoneEl = document.getElementById('site-contact-phone');
+                    const locEl = document.getElementById('site-contact-location');
+                    const footerMailEl = document.getElementById('site-footer-email');
+
+                    if (emailEl && emp.email) emailEl.textContent = emp.email;
+                    if (phoneEl && emp.telefone) phoneEl.textContent = emp.telefone;
+                    if (locEl && emp.localizacao) locEl.textContent = emp.localizacao;
+                    if (footerMailEl && emp.email) footerMailEl.href = `mailto:${emp.email}`;
+                }
+
+                if (Array.isArray(data.produtos) && data.produtos.length > 0) {
+                    renderDynamicProductsGrid(data.produtos);
+                }
+            } catch (err) {
+                console.warn('Configuração pública indisponível no momento:', err);
+            }
+        }
+
+        loadDynamicSiteConfig();
 
         function showProductModal(productId) {
             const product = cart.products[productId];

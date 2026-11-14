@@ -508,3 +508,22 @@ class PedidoLoja(Base):
     status = Column(String(25), default="aguardando_pagamento", nullable=False)
     fatura_gerada_id = Column(Integer, ForeignKey("faturas.id", ondelete="SET NULL"), nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
+
+
+class ProdutoLoja(Base):
+    __tablename__ = "produtos_loja"
+
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String(80), unique=True, index=True, nullable=False)
+    nome = Column(String(150), nullable=False)
+    descricao = Column(Text, nullable=True)
+    preco = Column(Numeric(12, 2), default=0.00, nullable=False)
+    badge = Column(String(40), nullable=True)
+    spec_label = Column(String(60), nullable=True)
+    imagem_url = Column(Text, nullable=True)
+    fundo_escuro = Column(Boolean, default=True, nullable=False)
+    tamanhos_json = Column(Text, nullable=True)
+    cores_json = Column(Text, nullable=True)
+    ordem = Column(Integer, default=0, nullable=False)
+    ativo = Column(Boolean, default=True, nullable=False)
+    criado_em = Column(DateTime, default=datetime.utcnow)

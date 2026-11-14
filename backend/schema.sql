@@ -360,3 +360,20 @@ CREATE INDEX IF NOT EXISTS idx_contratos_cliente ON contratos_recorrentes(client
 CREATE INDEX IF NOT EXISTS idx_timesheet_projeto ON apontamentos_horas(projeto_id);
 CREATE INDEX IF NOT EXISTS idx_chamados_cliente ON chamados_suporte(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_notificacoes_usuario ON notificacoes(usuario_id);
+
+CREATE TABLE IF NOT EXISTS produtos_loja (
+    id SERIAL PRIMARY KEY,
+    slug VARCHAR(80) NOT NULL UNIQUE,
+    nome VARCHAR(150) NOT NULL,
+    descricao TEXT NULL,
+    preco NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    badge VARCHAR(40) NULL,
+    spec_label VARCHAR(60) NULL,
+    imagem_url TEXT NULL,
+    fundo_escuro BOOLEAN NOT NULL DEFAULT TRUE,
+    tamanhos_json TEXT NULL,
+    cores_json TEXT NULL,
+    ordem INTEGER NOT NULL DEFAULT 0,
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

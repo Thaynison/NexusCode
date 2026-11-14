@@ -936,3 +936,50 @@ class PedidoLojaOut(BaseModel):
     fatura_gerada_id: Optional[int] = None
     criado_em: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProdutoLojaCreate(BaseModel):
+    slug: Optional[str] = None
+    nome: str = Field(..., min_length=2, max_length=150)
+    descricao: Optional[str] = None
+    preco: Decimal = Field(..., ge=0)
+    badge: Optional[str] = None
+    spec_label: Optional[str] = None
+    imagem_url: Optional[str] = None
+    fundo_escuro: bool = True
+    tamanhos_json: Optional[str] = '["Único"]'
+    cores_json: Optional[str] = '["Padrão"]'
+    ordem: int = 0
+    ativo: bool = True
+
+
+class ProdutoLojaUpdate(BaseModel):
+    nome: Optional[str] = None
+    descricao: Optional[str] = None
+    preco: Optional[Decimal] = Field(default=None, ge=0)
+    badge: Optional[str] = None
+    spec_label: Optional[str] = None
+    imagem_url: Optional[str] = None
+    fundo_escuro: Optional[bool] = None
+    tamanhos_json: Optional[str] = None
+    cores_json: Optional[str] = None
+    ordem: Optional[int] = None
+    ativo: Optional[bool] = None
+
+
+class ProdutoLojaOut(BaseModel):
+    id: int
+    slug: str
+    nome: str
+    descricao: Optional[str] = None
+    preco: Decimal
+    badge: Optional[str] = None
+    spec_label: Optional[str] = None
+    imagem_url: Optional[str] = None
+    fundo_escuro: bool
+    tamanhos_json: Optional[str] = None
+    cores_json: Optional[str] = None
+    ordem: int
+    ativo: bool
+    criado_em: datetime
+    model_config = ConfigDict(from_attributes=True)

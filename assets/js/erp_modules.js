@@ -1300,6 +1300,7 @@ export async function renderEmpresaView(ctx) {
     ['timesheet', 'Timesheet & Apontamento de Horas'],
     ['orcamentos', 'Solicitações & Orçamentos'],
     ['propostas', 'Propostas Comerciais & Contratos'],
+    ['loja', 'Loja & Vitrine do Site'],
     ['clientes', 'Clientes, Leads & Funil de Vendas'],
     ['chamados', 'Suporte & Chamados (Service Desk)'],
     ['financeiro_dre', 'DRE Gerencial & Fluxo de Caixa'],
@@ -1379,7 +1380,7 @@ export async function renderEmpresaView(ctx) {
       <div class="card profile-col-card">
         <div>
           <h4 class="profile-section-title">1. Dados Institucionais &amp; Fiscais</h4>
-          <p class="profile-section-sub">Informações exibidas em propostas comerciais, recibos e portal do cliente.</p>
+          <p class="profile-section-sub">Informações exibidas no <b>site institucional (Canais de Atendimento)</b>, propostas comerciais, recibos e portal do cliente.</p>
           <div class="profile-grid">
             <label class="field-full">Razão Social *
               <input type="text" name="razao_social" value="${esc(cfg?.razao_social || 'Nexus Code Brasil Tecnologia Ltda')}" required class="nc-input">
@@ -1459,5 +1460,330 @@ export async function renderEmpresaView(ctx) {
         </div>
       </div>
     </form>
+  `;
+}
+
+
+// ==================== 9. LOJA & VITRINE DO SITE (SINCRONIZADO COM INDEX.HTML) ====================
+export async function renderLojaView(ctx) {
+  const { cache, user, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS } = ctx;
+  const produtos = (cache.produtos_loja || []).filter((p) =>
+    matchSearch([p.nome, p.descricao, p.badge, p.spec_label, p.slug])
+  );
+  const pedidos = cache.pedidos_loja || [];
+  const cfg = cache.empresa_config || {};
+  const locText = cfg.cidade && cfg.estado
+    ? `${cfg.cidade}, ${cfg.estado} - Brasil`
+    : (cfg.endereco || 'Aracruz, ES - Brasil');
+
+  window.nexusOpenProdutoLojaModal = (prodObj = null) => {
+    const isEdit = Boolean(prodObj && prodObj.id);
+    const tamanhosArr = safeJsonArray(prodObj?.tamanhos_json);
+    const coresArr = safeJsonArray(prodObj?.cores_json);
+    const tamanhosStr = tamanhosArr.length ? tamanhosArr.join(', ') : 'P, M, G, GG';
+    const coresStr = coresArr.length ? coresArr.join(', ') : 'Preto, Azul Enterprise';
+    const curImg = prodObj?.imagem_url || 'assets/brand/Estampa_Negativa_Branca.svg';
+
+    holeriteContainer.innerHTML = `
+      <form id="loja-produto-form">
+        <div class="modal-header">
+          <div class="modal-header-main">
+            <div class="modal-header-icon">${ICONS.briefcase}</div>
+            <div>
+              <h2>${isEdit ? `Editar Produto — ${esc(prodObj.nome)}` : 'Novo Produto na Loja do Site'}</h2>
+              <p class="modal-subtitle">As alterações publicadas aparecem imediatamente na seção "Produtos Exclusivos" de index.html</p>
+            </div>
+          </div>
+          <button type="button" class="modal-close-btn" onclick="document.getElementById('holerite-dialog').close()">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="modal-section-card">
+            <div class="modal-section-title"><span class="modal-section-step">1</span> Informações do Produto</div>
+            <div class="formgrid">
+              <label>Nome do Produto *
+                <input type="text" name="nome" required value="${esc(prodObj?.nome || '')}" placeholder="Ex.: Camiseta Polo Nexus Code">
+              </label>
+              <label>Preço de Venda (R$) *
+                <input type="number" step="0.01" min="0" name="preco" required value="${prodObj ? Number(prodObj.preco).toFixed(2) : '49.90'}">
+              </label>
+              <label>Etiqueta / Badge Superior
+                <input type="text" name="badge" value="${esc(prodObj?.badge || 'Novo')}" placeholder="Ex.: Novo, Destaque, Eco, Enterprise">
+              </label>
+              <label>Texto de Especificação (ao lado do preço)
+                <input type="text" name="spec_label" value="${esc(prodObj?.spec_label || 'Tamanhos: P ao GG')}" placeholder="Ex.: Tamanhos: P ao GG, 500ml Inox">
+              </label>
+              <label>Ordem de Exibição no Site
+                <input type="number" min="0" name="ordem" value="${prodObj?.ordem ?? (produtos.length + 1)}">
+              </label>
+              <label>Visibilidade na Vitrine
+                <select name="ativo">
+                  <option value="true" ${prodObj?.ativo !== false ? 'selected' : ''}>Ativo (Visível no site)</option>
+                  <option value="false" ${prodObj?.ativo === false ? 'selected' : ''}>Oculto (Rascunho)</option>
+                </select>
+              </label>
+            </div>
+            <label class="field-full">Descrição Curta do Card *
+              <textarea name="descricao" rows="2" required placeholder="Descreva o material, acabamento e diferenciais do produto...">${esc(prodObj?.descricao || '')}</textarea>
+            </label>
+          </div>
+
+          <div class="modal-section-card">
+            <div class="modal-section-title"><span class="modal-section-step">2</span> Variações (Tamanhos &amp; Cores)</div>
+            <div class="formgrid">
+              <label>Tamanhos Disponíveis (separados por vírgula)
+                <input type="text" name="tamanhos_csv" value="${esc(tamanhosStr)}" placeholder="Ex.: P, M, G, GG">
+              </label>
+              <label>Cores Disponíveis (separadas por vírgula)
+                <input type="text" name="cores_csv" value="${esc(coresStr)}" placeholder="Ex.: Preto, Azul Enterprise">
+              </label>
+            </div>
+          </div>
+
+          <div class="modal-section-card">
+            <div class="modal-section-title"><span class="modal-section-step">3</span> Imagem / Estampa Oficial do Card</div>
+            <div class="formgrid">
+              <label>Selecionar Estampa ou Mockup Oficial
+                <select id="prod-preset-img">
+                  <option value="">-- Personalizado / Upload abaixo --</option>
+                  <option value="assets/brand/Estampa_Negativa_Branca.svg" ${curImg === 'assets/brand/Estampa_Negativa_Branca.svg' ? 'selected' : ''}>Estampa Negativa Branca (SVG Oficial)</option>
+                  <option value="assets/brand/Estampa_Padrao.svg" ${curImg === 'assets/brand/Estampa_Padrao.svg' ? 'selected' : ''}>Estampa Padrão Azul/Ciano (SVG Oficial)</option>
+                  <option value="img/blusa.png" ${curImg === 'img/blusa.png' ? 'selected' : ''}>Mockup Blusa Preta (img/blusa.png)</option>
+                  <option value="img/moleton.png" ${curImg === 'img/moleton.png' ? 'selected' : ''}>Mockup Moletom (img/moleton.png)</option>
+                  <option value="img/garrafa.png" ${curImg === 'img/garrafa.png' ? 'selected' : ''}>Mockup Garrafa Térmica (img/garrafa.png)</option>
+                  <option value="img/mochila.png" ${curImg === 'img/mochila.png' ? 'selected' : ''}>Mockup Mochila Executiva (img/mochila.png)</option>
+                </select>
+              </label>
+              <label>Estilo de Fundo da Vitrine
+                <select name="fundo_escuro">
+                  <option value="true" ${prodObj?.fundo_escuro !== false ? 'selected' : ''}>Fundo Azul Enterprise Escuro (#0A1D37)</option>
+                  <option value="false" ${prodObj?.fundo_escuro === false ? 'selected' : ''}>Fundo Claro / Branco (#FFFFFF)</option>
+                </select>
+              </label>
+              <label>Caminho / URL da Imagem
+                <input type="text" name="imagem_url" id="prod-img-url" value="${esc(curImg)}" placeholder="assets/brand/Estampa_Padrao.svg">
+              </label>
+              <label>Ou Enviar Nova Foto (PNG/JPG/SVG, máx. 1,5 MB)
+                <input type="file" id="prod-img-file" accept="image/*">
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn secondary" onclick="document.getElementById('holerite-dialog').close()">Cancelar</button>
+          <button type="submit" class="btn" id="prod-save-btn">${isEdit ? 'Salvar Alterações' : 'Publicar Produto no Site'}</button>
+        </div>
+      </form>
+    `;
+
+    document.getElementById('prod-preset-img')?.addEventListener('change', (e) => {
+      if (e.target.value) {
+        document.getElementById('prod-img-url').value = e.target.value;
+      }
+    });
+
+    document.getElementById('prod-img-file')?.addEventListener('change', async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      if (f.size > 1.5 * 1024 * 1024) {
+        showToast('A imagem deve ter no máximo 1,5 MB.', 'error');
+        return;
+      }
+      const dataUrl = await readFileAsDataUrl(f);
+      document.getElementById('prod-img-url').value = dataUrl;
+      showToast('Imagem carregada! Clique em salvar para publicar.', 'info');
+    });
+
+    document.getElementById('loja-produto-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('prod-save-btn');
+      const raw = Object.fromEntries(new FormData(e.target));
+      const tamanhos = String(raw.tamanhos_csv || 'Único').split(',').map((s) => s.trim()).filter(Boolean);
+      const cores = String(raw.cores_csv || 'Padrão').split(',').map((s) => s.trim()).filter(Boolean);
+
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+      try {
+        const payload = {
+          nome: raw.nome.trim(),
+          descricao: raw.descricao.trim(),
+          preco: Number(raw.preco || 0),
+          badge: raw.badge ? raw.badge.trim() : null,
+          spec_label: raw.spec_label ? raw.spec_label.trim() : null,
+          imagem_url: raw.imagem_url ? raw.imagem_url.trim() : 'assets/brand/Estampa_Padrao.svg',
+          fundo_escuro: raw.fundo_escuro === 'true',
+          tamanhos_json: JSON.stringify(tamanhos.length ? tamanhos : ['Único']),
+          cores_json: JSON.stringify(cores.length ? cores : ['Padrão']),
+          ordem: Number(raw.ordem || 0),
+          ativo: raw.ativo === 'true'
+        };
+
+        await apiRequest(isEdit ? `/loja/produtos/${prodObj.id}` : '/loja/produtos', {
+          method: isEdit ? 'PATCH' : 'POST',
+          body: JSON.stringify(payload)
+        });
+        holeriteDialog.close();
+        invalidateCache();
+        showToast(isEdit ? 'Produto atualizado e publicado no site!' : 'Novo produto publicado na loja do site!', 'success');
+        render();
+      } catch (err) {
+        showNoticeModal({ title: 'Erro ao salvar produto', message: err.message, variant: 'error' });
+      } finally {
+        btn.disabled = false;
+      }
+    };
+
+    holeriteDialog.showModal();
+  };
+
+  window.nexusToggleProdutoAtivo = async (id, nextAtivo) => {
+    try {
+      await apiRequest(`/loja/produtos/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ ativo: nextAtivo })
+      });
+      invalidateCache();
+      showToast(nextAtivo ? 'Produto ativado na vitrine do site.' : 'Produto ocultado da vitrine.', 'info');
+      render();
+    } catch (err) {
+      showNoticeModal({ title: 'Erro', message: err.message, variant: 'error' });
+    }
+  };
+
+  window.nexusUpdatePedidoStatus = async (id, status) => {
+    try {
+      await apiRequest(`/pedidos-loja/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status })
+      });
+      invalidateCache();
+      showToast('Status do pedido atualizado!', 'success');
+      render();
+    } catch (err) {
+      showNoticeModal({ title: 'Erro', message: err.message, variant: 'error' });
+    }
+  };
+
+  return `
+    <div class="toolbar">
+      <div>
+        <h1>Loja &amp; Vitrine do Site Principal</h1>
+        <span class="muted">Gerencie os produtos exclusivos e canais de contato exibidos diretamente em <code>index.html</code></span>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <a href="../index.html#loja" target="_blank" rel="noopener" class="btn secondary" style="text-decoration:none;">Abrir Site em Nova Aba ↗</a>
+        <button type="button" class="btn" onclick="window.nexusOpenProdutoLojaModal(null)">${ICONS.plus}<span>Novo Produto</span></button>
+      </div>
+    </div>
+
+    <!-- Resumo dos Canais de Atendimento Sincronizados -->
+    <div class="card" style="margin-bottom:20px; border-left:4px solid #00B4D8;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap;">
+        <div>
+          <span style="font-size:11px; font-weight:800; text-transform:uppercase; color:var(--primary); letter-spacing:0.05em;">Canais de Atendimento Ativos no Site Principal</span>
+          <div style="display:flex; gap:24px; flex-wrap:wrap; margin-top:8px; font-size:13.5px;">
+            <div><b>E-mail Corporativo:</b> ${esc(cfg.email_financeiro || 'contato@nexuscodebrasil.com.br')}</div>
+            <div><b>Telefone / WhatsApp:</b> ${esc(cfg.telefone || '(27) 99999-9999')}</div>
+            <div><b>Localização:</b> ${esc(locText)}</div>
+          </div>
+        </div>
+        <button type="button" class="btn secondary" onclick="window.nexusGo('empresa')">Editar Canais de Atendimento</button>
+      </div>
+    </div>
+
+    <!-- Catálogo de Produtos Exclusivos -->
+    <div class="card table-wrap" style="margin-bottom:22px;">
+      <div style="padding:16px 18px 8px; display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="margin:0; font-size:16px;">Catálogo de Produtos Exclusivos (${produtos.length})</h3>
+      </div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Ordem</th>
+            <th>Produto</th>
+            <th>Etiqueta</th>
+            <th>Preço</th>
+            <th>Variações</th>
+            <th>Status no Site</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${produtos.map((p) => {
+            const tams = safeJsonArray(p.tamanhos_json).join(', ') || '-';
+            const cors = safeJsonArray(p.cores_json).join(', ') || '-';
+            const imgSrc = p.imagem_url && !p.imagem_url.startsWith('data:') && !p.imagem_url.startsWith('http')
+              ? `../${p.imagem_url}`
+              : (p.imagem_url || '../assets/brand/Estampa_Padrao.svg');
+            return `
+              <tr>
+                <td><b>#${p.ordem}</b></td>
+                <td>
+                  <div class="row-entity">
+                    <div style="width:44px; height:44px; border-radius:10px; background:${p.fundo_escuro ? '#0A1D37' : '#f1f5f9'}; padding:6px; display:flex; align-items:center; justify-content:center; flex-shrink:0; border:1px solid var(--border);">
+                      <img src="${esc(imgSrc)}" alt="${esc(p.nome)}" style="max-width:100%; max-height:100%; object-fit:contain;">
+                    </div>
+                    <div>
+                      <b>${esc(p.nome)}</b>
+                      <div class="muted" style="font-size:12px; max-width:340px;">${esc(p.descricao || '')}</div>
+                    </div>
+                  </div>
+                </td>
+                <td>${p.badge ? `<span class="badge">${esc(p.badge)}</span>` : '-'}</td>
+                <td style="font-weight:800; color:var(--primary);">${formatMoney(p.preco)}</td>
+                <td>
+                  <div style="font-size:12px;"><b>Tam:</b> ${esc(tams)}</div>
+                  <div class="muted" style="font-size:11.5px;"><b>Cores:</b> ${esc(cors)}</div>
+                </td>
+                <td>
+                  <span class="badge ${p.ativo ? 'ativo' : 'inativo'}">${p.ativo ? 'Publicado' : 'Oculto'}</span>
+                </td>
+                <td style="white-space:nowrap;">
+                  <button type="button" class="btn secondary" style="padding:5px 10px; font-size:12px;" onclick='window.nexusOpenProdutoLojaModal(${JSON.stringify(p).replace(/'/g, "&apos;")})'>Editar</button>
+                  <button type="button" class="btn secondary" style="padding:5px 10px; font-size:12px;" onclick="window.nexusToggleProdutoAtivo(${p.id}, ${!p.ativo})">${p.ativo ? 'Ocultar' : 'Publicar'}</button>
+                  ${user?.perfil === 'admin' ? `<button type="button" class="btn secondary" style="padding:5px 9px; font-size:12px; color:var(--danger);" data-del="/loja/produtos/${p.id}" data-label="${esc(p.nome)}">Excluir</button>` : ''}
+                </td>
+              </tr>
+            `;
+          }).join('') || '<tr><td colspan="7" class="muted" style="text-align:center; padding:32px;">Nenhum produto cadastrado.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pedidos Recebidos pela Loja do Site -->
+    <div class="card table-wrap">
+      <div style="padding:16px 18px 8px;">
+        <h3 style="margin:0; font-size:16px;">Pedidos Recebidos pelo Site (${pedidos.length})</h3>
+      </div>
+      <table class="table">
+        <thead>
+          <tr><th>Código</th><th>Comprador</th><th>Itens</th><th>Total</th><th>Status</th><th>Data</th></tr>
+        </thead>
+        <tbody>
+          ${pedidos.map((ped) => {
+            const itens = safeJsonArray(ped.itens_json);
+            const resumoItens = itens.map((it) => `${it.quantidade}x ${it.name || it.nome} (${it.size || '-'})`).join(', ');
+            return `
+              <tr>
+                <td><b>${esc(ped.codigo)}</b></td>
+                <td>
+                  <b>${esc(ped.nome_comprador)}</b>
+                  <div class="muted" style="font-size:11.5px;">${esc(ped.email_comprador)} ${ped.telefone_comprador ? '• ' + esc(ped.telefone_comprador) : ''}</div>
+                </td>
+                <td style="font-size:12.5px;">${esc(resumoItens || '-')}</td>
+                <td style="font-weight:800;">${formatMoney(ped.valor_total)}</td>
+                <td>
+                  <select class="nc-input" style="height:32px; padding:2px 8px; font-size:12px; width:auto;" onchange="window.nexusUpdatePedidoStatus(${ped.id}, this.value)">
+                    ${['aguardando_pagamento', 'pago', 'enviado', 'cancelado'].map((st) => `<option value="${st}" ${ped.status === st ? 'selected' : ''}>${st.replace('_', ' ')}</option>`).join('')}
+                  </select>
+                </td>
+                <td>${formatDateTime(ped.criado_em)}</td>
+              </tr>
+            `;
+          }).join('') || '<tr><td colspan="6" class="muted" style="text-align:center; padding:28px;">Nenhum pedido realizado pela loja virtual ainda.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
   `;
 }
