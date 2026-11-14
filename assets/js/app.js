@@ -320,11 +320,45 @@ function applyRolePermissions() {
   const isTenant = cache.organizacao && !cache.organizacao.is_master;
 
   let colabPerms = null;
-  if (user && user.perfil !== 'admin' && cache.empresa_config?.permissoes_json) {
-    try {
-      const parsed = JSON.parse(cache.empresa_config.permissoes_json);
-      colabPerms = parsed?.colaborador || null;
-    } catch (_) {}
+  if (user && user.perfil !== 'admin') {
+    // 1. Permissões padrão dinâmicas baseadas no CBO/Cargo
+    const cboText = ((user.cbo_descricao || '') + ' ' + (user.cbo_codigo || '') + ' ' + (user.cargo || '')).toLowerCase();
+    
+    // Matriz Base
+    const baseDynamicPerms = {
+      projetos: true, tarefas: true, timesheet: true, orcamentos: true,
+      propostas: true, clientes: true, chamados: true, financeiro_dre: false,
+      faturas: true, despesas: false, contratos: false, ponto: true,
+      holerite: true, ativos: true, usuarios: false, auditoria: false, loja: false, reembolsos: true
+    };
+
+    if (cboText.includes('administrativo') || cboText.includes('4110')) {
+      Object.assign(baseDynamicPerms, { projetos: false, orcamentos: false, propostas: false, clientes: false, despesas: true, ativos: false });
+    } else if (cboText.includes('financeiro') || cboText.includes('contabilidade') || cboText.includes('2525') || cboText.includes('2522') || cboText.includes('4131')) {
+      Object.assign(baseDynamicPerms, { projetos: false, orcamentos: false, propostas: false, clientes: false, chamados: false, financeiro_dre: true, despesas: true, contratos: true, ativos: false });
+    } else if (cboText.includes('vendas') || cboText.includes('comercial') || cboText.includes('3541') || cboText.includes('1423')) {
+      Object.assign(baseDynamicPerms, { projetos: false, chamados: false, faturas: false, loja: true });
+    } else if (cboText.includes('desenvolvedor') || cboText.includes('programador') || cboText.includes('engenheiro') || cboText.includes('designer') || cboText.includes('3171') || cboText.includes('2624')) {
+      Object.assign(baseDynamicPerms, { orcamentos: false, propostas: false, clientes: false, faturas: false });
+    } else if (cboText.includes('recursos humanos') || cboText.includes('rh ') || cboText.includes('2524')) {
+      Object.assign(baseDynamicPerms, { projetos: false, orcamentos: false, propostas: false, clientes: false, chamados: false, faturas: false, usuarios: true });
+    }
+
+    colabPerms = baseDynamicPerms;
+
+    // 2. Mesclar com as permissões restritivas salvas pelo Admin no painel da Empresa
+    if (cache.empresa_config?.permissoes_json) {
+      try {
+        const parsed = JSON.parse(cache.empresa_config.permissoes_json);
+        if (parsed?.colaborador) {
+          // As permissões salvas no painel atuam como "limites máximos"
+          // Se o painel bloqueou 'clientes', mesmo o comercial perde acesso.
+          for (const key in parsed.colaborador) {
+             colabPerms[key] = colabPerms[key] && parsed.colaborador[key];
+          }
+        }
+      } catch (_) {}
+    }
   }
 
   const pageToPerm = {

@@ -3,33 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nexus Code Brasil - Engenharia de Software &amp; Soluções Enterprise</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Nexus Code Brasil | Engenharia de Software &amp; Soluções Enterprise</title>
+    <meta name="description" content="Nexus Code Brasil — Engenharia de software corporativo, plataformas SaaS white-label, sistemas web sob medida, aplicativos mobile e arquitetura cloud segura.">
+    <link rel="canonical" href="https://www.nexuscodebrasil.com.br/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Nexus Code Brasil">
+    <meta property="og:title" content="Nexus Code Brasil | Engenharia de Software &amp; Soluções Enterprise">
+    <meta property="og:description" content="Desenvolvemos sistemas corporativos, plataformas cloud e soluções sob medida com arquitetura escalável e segurança enterprise.">
+    <meta property="og:url" content="https://www.nexuscodebrasil.com.br/">
+    <link rel="stylesheet" href="assets/css/tailwind.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@600;700;800;900&display=swap" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="assets/brand/favicon.svg">
-    <link rel="alternate icon" type="image/png" href="img/nexus.png">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'nexus-enterprise': '#0A1D37',
-                        'nexus-deep': '#061224',
-                        'nexus-cyan': '#00B4D8',
-                        'nexus-cyan-dark': '#0096B4',
-                        'nexus-blue': '#00B4D8',
-                        'nexus-dark': '#0A1D37',
-                        'nexus-gray': '#0E2544',
-                        'nexus-light': '#F8FAFC',
-                    },
-                    fontFamily: {
-                        'inter': ['Inter', 'sans-serif'],
-                        'montserrat': ['Montserrat', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
     <style>
         * {
             font-family: 'Inter', sans-serif;
@@ -235,7 +219,7 @@
                     </button>
                 </div>
 
-                <button id="mobile-menu-btn" class="lg:hidden text-white p-2 rounded-lg border border-[#00B4D8]/30">
+                <button id="mobile-menu-btn" type="button" aria-label="Abrir menu de navegação" class="lg:hidden text-white p-2 rounded-lg border border-[#00B4D8]/30">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                     </svg>
@@ -835,7 +819,7 @@
             </div>
 
             <div class="text-center mt-10">
-                <a href="#contact" onclick="const s=document.getElementById('project_type'); if(s) s.value='system';" class="text-sm text-[#00B4D8] hover:underline font-semibold">
+                <a href="#contact" onclick="selectProjectCategory('sistema-web');" class="text-sm text-[#00B4D8] hover:underline font-semibold">
                     Necessita de implantação assistida ou arquitetura dedicada para grandes volumes? Fale com nossos especialistas &rarr;
                 </a>
             </div>
@@ -1021,7 +1005,7 @@
                                 </div>
                                 <div>
                                     <div class="font-bold text-white">Telefone / WhatsApp</div>
-                                    <div id="site-contact-phone" class="text-slate-300 text-sm">(27) 99999-9999</div>
+                                    <div id="site-contact-phone" class="text-slate-300 text-sm">Atendimento Comercial Online</div>
                                 </div>
                             </div>
 
@@ -1048,12 +1032,12 @@
                                 <div class="text-xs text-slate-300">Retorno Comercial</div>
                             </div>
                             <div class="text-center p-3 rounded-xl bg-[#061224]/60">
-                                <div class="text-2xl font-black text-[#00B4D8] mb-1">100%</div>
-                                <div class="text-xs text-slate-300">Projetos Entregues</div>
+                                <div class="text-2xl font-black text-[#00B4D8] mb-1">99,9%</div>
+                                <div class="text-xs text-slate-300">SLA de Disponibilidade</div>
                             </div>
                             <div class="text-center p-3 rounded-xl bg-[#061224]/60">
-                                <div class="text-2xl font-black text-[#00B4D8] mb-1">5★</div>
-                                <div class="text-xs text-slate-300">Satisfação Comprovada</div>
+                                <div class="text-2xl font-black text-[#00B4D8] mb-1">98%</div>
+                                <div class="text-xs text-slate-300">Satisfação dos Clientes</div>
                             </div>
                             <div class="text-center p-3 rounded-xl bg-[#061224]/60">
                                 <div class="text-2xl font-black text-[#00B4D8] mb-1">24/7</div>
@@ -1085,19 +1069,22 @@
                             </div>
                             <div>
                                 <label for="phone" class="block text-slate-200 font-semibold text-sm mb-1.5">Telefone</label>
-                                <input id="phone" name="phone" type="tel" class="w-full px-4 py-3 bg-[#061224]/80 border border-[#00B4D8]/30 rounded-xl focus:outline-none focus:border-[#00B4D8] text-white placeholder-slate-400" placeholder="(27) 99999-9999">
+                                <input id="phone" name="phone" type="tel" maxlength="15" class="w-full px-4 py-3 bg-[#061224]/80 border border-[#00B4D8]/30 rounded-xl focus:outline-none focus:border-[#00B4D8] text-white placeholder-slate-400" placeholder="Ex.: (27) 99876-5432">
                             </div>
                         </div>
 
                         <div>
                             <label for="project_type" class="block text-slate-200 font-semibold text-sm mb-1.5">Tipo de Projeto</label>
                             <select id="project_type" name="project_type" class="w-full px-4 py-3 bg-[#061224]/80 border border-[#00B4D8]/30 rounded-xl focus:outline-none focus:border-[#00B4D8] text-white">
-                                <option value="" class="bg-[#0A1D37] text-white">Selecione o tipo de projeto</option>
-                                <option value="web" class="bg-[#0A1D37] text-white">Desenvolvimento Web</option>
-                                <option value="mobile" class="bg-[#0A1D37] text-white">Aplicativo Mobile</option>
-                                <option value="system" class="bg-[#0A1D37] text-white">Sistema Personalizado</option>
-                                <option value="ecommerce" class="bg-[#0A1D37] text-white">E-commerce</option>
-                                <option value="other" class="bg-[#0A1D37] text-white">Outro</option>
+                                <option value="" class="bg-[#0A1D37] text-white">Selecione a solução desejada</option>
+                                <option value="Site Institucional & Landing Page High-Conversion" data-code="web-institucional" class="bg-[#0A1D37] text-white">Site Institucional &amp; Landing Page High-Conversion</option>
+                                <option value="Sistema Web Personalizado / Portal Corporativo" data-code="sistema-web" class="bg-[#0A1D37] text-white">Sistema Web Personalizado / Portal Corporativo</option>
+                                <option value="Loja Virtual / E-commerce Completo com Checkout PIX" data-code="ecommerce" class="bg-[#0A1D37] text-white">Loja Virtual / E-commerce Corporativo</option>
+                                <option value="Aplicativo Mobile (Android & iOS)" data-code="app-mobile" class="bg-[#0A1D37] text-white">Aplicativo Mobile (Android &amp; iOS)</option>
+                                <option value="Integração de APIs, Webhooks & Automação" data-code="api-integracao" class="bg-[#0A1D37] text-white">Integração de APIs, Webhooks &amp; Automação</option>
+                                <option value="Infraestrutura Cloud, Domínio, CI/CD & Segurança" data-code="cloud-devops" class="bg-[#0A1D37] text-white">Infraestrutura Cloud, Domínio, CI/CD &amp; Segurança</option>
+                                <option value="Implantação Portal Nexus Enterprise White-Label" data-code="whitelabel-saas" class="bg-[#0A1D37] text-white">Implantação Portal Nexus Enterprise White-Label</option>
+                                <option value="Projeto Sob Medida / Consultoria" data-code="custom" class="bg-[#0A1D37] text-white">Projeto Sob Medida / Consultoria Especializada</option>
                             </select>
                         </div>
 
@@ -1163,13 +1150,13 @@
                         Engenharia de software de alta performance. Conectamos tecnologia de ponta, segurança enterprise e resultados excepcionais para impulsionar o seu negócio.
                     </p>
                     <div class="flex space-x-3">
-                        <a id="site-footer-email" href="mailto:contato@nexuscodebrasil.com.br" class="w-10 h-10 bg-[#0A1D37] border border-[#00B4D8]/30 rounded-lg flex items-center justify-center text-[#00B4D8] hover:bg-[#00B4D8] hover:text-[#0A1D37] transition-colors">
+                        <a id="site-footer-email" href="mailto:contato@nexuscodebrasil.com.br" aria-label="Enviar e-mail corporativo" class="w-10 h-10 bg-[#0A1D37] border border-[#00B4D8]/30 rounded-lg flex items-center justify-center text-[#00B4D8] hover:bg-[#00B4D8] hover:text-[#0A1D37] transition-colors">
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"></rect><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path></svg>
                         </a>
-                        <a id="site-footer-phone" href="https://wa.me/5527999999999" target="_blank" rel="noopener" class="w-10 h-10 bg-[#0A1D37] border border-[#00B4D8]/30 rounded-lg flex items-center justify-center text-[#00B4D8] hover:bg-[#00B4D8] hover:text-[#0A1D37] transition-colors">
+                        <a id="site-footer-phone" href="#contact" aria-label="Canal de atendimento comercial" class="w-10 h-10 bg-[#0A1D37] border border-[#00B4D8]/30 rounded-lg flex items-center justify-center text-[#00B4D8] hover:bg-[#00B4D8] hover:text-[#0A1D37] transition-colors">
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect><path d="M12 18h.01"></path></svg>
                         </a>
-                        <a href="login.html" class="w-10 h-10 bg-[#0A1D37] border border-[#00B4D8]/30 rounded-lg flex items-center justify-center text-[#00B4D8] hover:bg-[#00B4D8] hover:text-[#0A1D37] transition-colors">
+                        <a href="login.html" aria-label="Acessar Portal do Cliente" class="w-10 h-10 bg-[#0A1D37] border border-[#00B4D8]/30 rounded-lg flex items-center justify-center text-[#00B4D8] hover:bg-[#00B4D8] hover:text-[#0A1D37] transition-colors">
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="7" rx="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
                         </a>
                     </div>
@@ -1204,7 +1191,7 @@
             <div class="border-t border-slate-800 pt-8">
                 <div class="flex flex-col md:flex-row justify-between items-center gap-4">
                     <div class="text-slate-400 text-sm">
-                        Nexus Code Brasil &copy; Todos os direitos reservados.
+                        &copy; 2026 Nexus Code Brasil. Todos os direitos reservados.
                     </div>
                     <div class="flex space-x-6 text-sm text-slate-400">
                         <button type="button" onclick="openLgpdModal()" class="hover:text-[#00B4D8] transition-colors">Política de Privacidade (LGPD)</button>
@@ -1479,10 +1466,16 @@
             }
 
             updateCartIcon() {
+                const cartIcon = document.getElementById('cart-icon');
                 const cartCount = document.getElementById('cart-count');
                 const totals = this.calculateTotals();
-                cartCount.textContent = totals.itemCount;
-                cartCount.style.display = totals.itemCount > 0 ? 'flex' : 'none';
+                if (cartCount) {
+                    cartCount.textContent = totals.itemCount;
+                    cartCount.style.display = totals.itemCount > 0 ? 'flex' : 'none';
+                }
+                if (cartIcon) {
+                    cartIcon.style.display = totals.itemCount > 0 ? 'flex' : 'none';
+                }
             }
 
             updateCartDisplay() {
@@ -1570,9 +1563,7 @@
                                     Aplicar
                                 </button>
                             </div>
-                            <div class="mt-2 text-xs text-slate-500">
-                                Cupons disponíveis: NEXUS10, PRIMEIRA20, CLIENTE15
-                            </div>
+
                         `}
                     </div>
                 `;
@@ -1722,7 +1713,7 @@
                             </div>
                             <div>
                                 <label class="block font-bold text-[#0A1D37] mb-1">Telefone / WhatsApp</label>
-                                <input type="tel" name="telefone_comprador" placeholder="(27) 99999-9999" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8]">
+                                <input type="tel" name="telefone_comprador" placeholder="Ex.: (27) 99876-5432" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:border-[#00B4D8]">
                             </div>
                             <button type="submit" id="store-confirm-btn" class="w-full bg-[#00B4D8] hover:bg-[#0096B4] text-[#0A1D37] py-3 rounded-xl font-extrabold transition-colors">
                                 Confirmar Pedido Oficial
@@ -1966,13 +1957,19 @@
                     const footerMailEl = document.getElementById('site-footer-email');
 
                     if (emailEl && emp.email) emailEl.textContent = emp.email;
-                    if (phoneEl && emp.telefone) phoneEl.textContent = emp.telefone;
                     if (locEl && emp.localizacao) locEl.textContent = emp.localizacao;
                     if (footerMailEl && emp.email) footerMailEl.href = `mailto:${emp.email}`;
+
+                    const digits = String(emp.telefone || '').replace(/\D/g, '');
+                    const isPlaceholderPhone = !digits || digits.endsWith('999999999');
+                    if (phoneEl && !isPlaceholderPhone) {
+                        phoneEl.textContent = emp.telefone;
+                    }
                     const footerPhoneEl = document.getElementById('site-footer-phone');
-                    if (footerPhoneEl && emp.telefone) {
-                        const digits = String(emp.telefone).replace(/\D/g, '');
-                        if (digits.length >= 10) footerPhoneEl.href = `https://wa.me/${digits.startsWith('55') ? digits : '55' + digits}`;
+                    if (footerPhoneEl && !isPlaceholderPhone && digits.length >= 10) {
+                        footerPhoneEl.href = `https://wa.me/${digits.startsWith('55') ? digits : '55' + digits}`;
+                        footerPhoneEl.target = '_blank';
+                        footerPhoneEl.rel = 'noopener noreferrer';
                     }
                 }
 
@@ -1985,12 +1982,14 @@
                 if (Array.isArray(data.catalogo_servicos) && data.catalogo_servicos.length > 0) {
                     const sel = document.getElementById('project_type');
                     if (sel) {
-                        sel.innerHTML = '<option value="" class="bg-[#0A1D37] text-white">Selecione o tipo de projeto (Catálogo Precificado)</option>' +
-                            data.catalogo_servicos.map((s) => {
-                                const precoFmt = Number(s.valor_base || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                                return `<option value="${escHtml(s.nome)}" class="bg-[#0A1D37] text-white">${escHtml(s.nome)} — A partir de ${precoFmt} (${s.prazo_dias} dias)</option>`;
-                            }).join('') +
-                            '<option value="Projeto Personalizado" class="bg-[#0A1D37] text-white">Outro / Projeto Sob Medida</option>';
+                        const servicosB2B = data.catalogo_servicos.filter(
+                            (s) => s.ativo !== false && s.codigo !== 'modpack-server'
+                        );
+                        sel.innerHTML = '<option value="" class="bg-[#0A1D37] text-white">Selecione a solução desejada</option>' +
+                            servicosB2B.map((s) =>
+                                `<option value="${escHtml(s.nome)}" data-code="${escHtml(s.codigo || '')}" class="bg-[#0A1D37] text-white">${escHtml(s.nome)}</option>`
+                            ).join('') +
+                            '<option value="Projeto Sob Medida / Consultoria" data-code="custom" class="bg-[#0A1D37] text-white">Projeto Sob Medida / Consultoria Especializada</option>';
                     }
                 }
             } catch (err) {
@@ -2100,6 +2099,45 @@
             });
         }
 
+        function selectProjectCategory(codeOrName) {
+            const sel = document.getElementById('project_type');
+            if (!sel) return;
+            const target = String(codeOrName || '').toLowerCase();
+            const aliasMap = {
+                mobile: 'app-mobile',
+                system: 'sistema-web',
+                web: 'web-institucional',
+                ecommerce: 'ecommerce'
+            };
+            const mappedCode = aliasMap[target] || target;
+            for (const opt of sel.options) {
+                const optCode = String(opt.dataset.code || '').toLowerCase();
+                const optVal = String(opt.value || '').toLowerCase();
+                if (optCode === mappedCode || optVal === target || (mappedCode && optVal.includes(mappedCode))) {
+                    sel.value = opt.value;
+                    return;
+                }
+            }
+        }
+
+        function formatBrazilPhone(raw) {
+            let v = String(raw || '').replace(/\D/g, '').slice(0, 11);
+            if (v.length > 6) {
+                return v.replace(/^(\d{2})(\d{5})(\d{0,4}).*/, '($1) $2-$3');
+            }
+            if (v.length > 2) {
+                return v.replace(/^(\d{2})(\d{0,5})/, '($1) $2');
+            }
+            if (v.length > 0) {
+                return v.replace(/^(\d{0,2})/, '($1');
+            }
+            return '';
+        }
+
+        document.getElementById('phone')?.addEventListener('input', (e) => {
+            e.target.value = formatBrazilPhone(e.target.value);
+        });
+
         function openCaseStudyModal(caseKey) {
             const cases = {
                 ecommerce: {
@@ -2167,8 +2205,7 @@
             modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
             modal.querySelector('[data-quote-case]').onclick = () => {
                 modal.remove();
-                const sel = document.getElementById('project_type');
-                if (sel) sel.value = item.typeValue;
+                selectProjectCategory(item.typeValue);
                 document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
             };
         }
