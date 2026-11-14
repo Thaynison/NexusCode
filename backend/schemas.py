@@ -415,6 +415,7 @@ class FaturaOut(FaturaCreate):
     id: int
     comprovante_nome: Optional[str] = None
     comprovante_data: Optional[str] = None
+    mp_order_id: Optional[str] = None
     mp_payment_id: Optional[str] = None
     mp_preference_id: Optional[str] = None
     mp_qr_code: Optional[str] = None
@@ -428,6 +429,7 @@ class FaturaOut(FaturaCreate):
 class FaturaListOut(FaturaCreate):
     id: int
     comprovante_nome: Optional[str] = None
+    mp_order_id: Optional[str] = None
     mp_payment_id: Optional[str] = None
     mp_qr_code: Optional[str] = None
     mp_qr_code_base64: Optional[str] = None
@@ -659,6 +661,7 @@ class ConfiguracaoEmpresaUpdate(BaseModel):
     juros_mensal_percent: Optional[Decimal] = None
     permissoes_json: Optional[str] = None
     mp_ativo: Optional[bool] = None
+    mp_api_tipo: Optional[str] = None
     mp_ambiente: Optional[str] = None
     mp_public_key: Optional[str] = None
     mp_access_token: Optional[str] = None
@@ -1188,6 +1191,7 @@ class PedidoDominioOut(BaseModel):
     fatura_id: Optional[int] = None
     ativo_id: Optional[int] = None
     contrato_id: Optional[int] = None
+    mp_order_id: Optional[str] = None
     mp_payment_id: Optional[str] = None
     mp_qr_code: Optional[str] = None
     mp_qr_code_base64: Optional[str] = None

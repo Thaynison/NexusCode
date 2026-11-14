@@ -1619,11 +1619,15 @@ async function renderHolerite(useCache = false) {
         <td style="color:var(--danger); font-weight:600;">-${formatMoney(h.descontos)}</td>
         <td style="font-weight:800; color:var(--primary);">${formatMoney(h.valor_liquido)}</td>
         <td>${formatDate(h.data_pagamento)}</td>
-        <td><span class="badge ${esc(h.status === 'pago' ? 'pago' : 'pendente')}">${esc(h.status)}</span></td>
+        <td>
+          <span class="badge ${esc(h.status === 'pago' ? 'pago' : 'pendente')}">${esc(h.status)}</span>
+          ${h.mp_payout_id ? `<div style="font-size:10px; color:var(--ok); font-weight:800; margin-top:3px;">✓ PIX MP</div>` : ''}
+        </td>
         <td style="white-space:nowrap;">
           <button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px;" onclick="window.nexusViewHolerite(${h.id})">${ICONS.fileText}<span>Demonstrativo</span></button>
           ${(h.anexo_data || h.anexo_nome) ? `<button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px;" onclick="window.nexusDownloadHoleriteAnexo(${h.id}, 'holerite')">PDF</button>` : ''}
-          ${isAdmin && h.status !== 'pago' ? `<button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--ok);" onclick="window.nexusPayHolerite(${h.id})">Pagar</button>` : ''}
+          ${isAdmin && h.status !== 'pago' ? `<button type="button" class="btn" style="padding:6px 10px; font-size:12px; background:#00B4D8; color:#0A1D37; font-weight:800;" onclick="window.nexusPayHoleriteMP(${h.id})">Pagar PIX (MP)</button>` : ''}
+          ${isAdmin && h.status !== 'pago' ? `<button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--ok);" onclick="window.nexusPayHolerite(${h.id})">Baixa Manual</button>` : ''}
           ${isAdmin ? `<button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/holerites/${h.id}" data-label="Holerite ${esc(h.competencia)} - ${esc(emp.nome)}">Excluir</button>` : ''}
         </td>
       </tr>
@@ -1772,6 +1776,22 @@ window.nexusSetHoleriteTab = (tab) => {
 window.nexusSetHoleriteUser = (uid) => {
   holeriteUserFilter = uid;
   render(true);
+};
+
+window.nexusPayHoleriteMP = (id) => {
+  showConfirmModal({
+    title: 'Disparar Pagamento PIX via Mercado Pago',
+    message: 'Deseja transferir o valor líquido deste holerite imediatamente para a Chave PIX cadastrada do colaborador?',
+    detail: 'O pagamento utiliza a conta PJ Mercado Pago configurada em Empresa & Permissões > Integrações.',
+    confirmText: 'Transferir PIX Agora',
+    variant: 'primary',
+    onConfirm: async () => {
+      await apiRequest(`/holerites/${id}/pagar-mercadopago`, { method: 'POST' });
+      invalidateCache();
+      showToast('Pagamento PIX disparado e liquidado via Mercado Pago!', 'success');
+      await render();
+    }
+  });
 };
 
 window.nexusPayHolerite = (id) => {
@@ -3498,6 +3518,23 @@ async function openRecordModal(editObj = null) {
             <input name="valor_vt_mensal" type="number" step="0.01" value="${editObj?.valor_vt_mensal ?? 0}">
           </label>
         </div>
+      </div>
+
+      <div class="modal-section-card">
+        <div class="modal-section-title"><span class="modal-section-step">4</span> Dados PIX para Pagamento de Folha (Mercado Pago)</div>
+        <div class="formgrid">
+          <label>Tipo de Chave PIX
+            <select name="pix_tipo">
+              <option value="cpf" ${(editObj?.pix_tipo || 'cpf') === 'cpf' ? 'selected' : ''}>CPF</option>
+              <option value="email" ${editObj?.pix_tipo === 'email' ? 'selected' : ''}>E-mail</option>
+              <option value="telefone" ${editObj?.pix_tipo === 'telefone' ? 'selected' : ''}>Telefone / Celular</option>
+              <option value="aleatoria" ${editObj?.pix_tipo === 'aleatoria' ? 'selected' : ''}>Chave Aleatória (EVP)</option>
+            </select>
+          </label>
+          <label>Chave PIX do Colaborador
+            <input name="pix_chave" value="${esc(editObj?.pix_chave || '')}" placeholder="Informe a chave PIX para transferência">
+          </label>
+        </div>
       </div>`;
 
     // Bind CBO live autocomplete & contract period toggle
@@ -3665,6 +3702,8 @@ recordForm.onsubmit = async (e) => {
           dependentes_irrf: Number(raw.dependentes_irrf || 0),
           vale_transporte: raw.vale_transporte === 'true',
           valor_vt_mensal: Number(raw.valor_vt_mensal || 0),
+          pix_tipo: raw.pix_tipo || 'cpf',
+          pix_chave: raw.pix_chave ? raw.pix_chave.trim() : null,
           ativo: raw.ativo === 'true',
           ...(raw.senha ? { senha: raw.senha } : {})
         })

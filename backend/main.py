@@ -4332,8 +4332,11 @@ from integrations import (
     normalizar_dominio_busca,
     pesquisar_dominios_com_sugestoes,
     mp_criar_pagamento_pix,
+    mp_criar_order_pix,
+    mp_criar_cobranca_pix_unificada,
     mp_criar_checkout_pro,
     mp_consultar_pagamento,
+    mp_consultar_order,
     mp_validar_assinatura_webhook,
     mp_enviar_pix_colaborador,
     registrar_dominio_no_provedor,
@@ -4440,25 +4443,13 @@ def _executar_ativacao_dominio_pago(db: Session, pedido: PedidoDominio, cfg: Con
     return pedido
 
 
-# ==================== PESQUISA & VENDA AUTOMÁTICA DE DOMÍNIOS ====================
-@router.get("/public/dominios/pesquisar", tags=["Domínios"])
-def pesquisar_dominio_publico(q: str, req: Request, db: Session = Depends(get_db)):
-    org = _resolver_org_por_request(req, db)
-    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first()
-    pricing = get_tld_pricing(cfg.dominio_precos_json if cfg else None)
-    try:
-        return pesquisar_dominios_com_sugestoes(q, pricing)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.post("/public/dominios/checkout", response_model=PedidoDominioOut, status_code=201, tags=["Domínios"])
-def checkout_dominio_automatico(
+def _processar_checkout_dominio(
+    db: Session,
+    org: Organizacao,
     dados: PedidoDominioCreate,
-    req: Request,
-    db: Session = Depends(get_db),
-):
-    org = _resolver_org_por_request(req, db)
+    base_url: str,
+    usuario_logado: Optional[Usuario] = None,
+) -> PedidoDominio:
     cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first()
     if not cfg or not cfg.mp_ativo or not cfg.mp_access_token:
         raise HTTPException(status_code=400, detail="Gateway Mercado Pago não habilitado no painel administrativo.")
@@ -4473,7 +4464,11 @@ def checkout_dominio_automatico(
     valor_total = round(float(tld_info["venda"]) * dados.anos, 2)
     custo_total = round(float(tld_info["custo"]) * dados.anos, 2)
 
-    cliente = db.query(Cliente).filter(Cliente.organizacao_id == org.id, Cliente.email == dados.titular_email).first()
+    cliente = None
+    if usuario_logado:
+        cliente = _garantir_cliente_para_portal(db, usuario_logado)
+    if not cliente:
+        cliente = db.query(Cliente).filter(Cliente.organizacao_id == org.id, Cliente.email == dados.titular_email).first()
     if not cliente:
         cliente = Cliente(
             organizacao_id=org.id,
@@ -4481,8 +4476,8 @@ def checkout_dominio_automatico(
             contato_nome=dados.titular_nome.strip(),
             email=dados.titular_email,
             telefone=dados.titular_telefone,
-            cpf_cnpj=dados.titular_documento,
-            status_funil="cliente_ativo",
+            documento=dados.titular_documento,
+            status_funil="ativo",
             origem="Registro de Domínios",
         )
         db.add(cliente)
@@ -4507,6 +4502,7 @@ def checkout_dominio_automatico(
         organizacao_id=org.id,
         codigo=codigo,
         cliente_id=cliente.id,
+        usuario_id=usuario_logado.id if usuario_logado else None,
         dominio=dominio_norm,
         extensao=ext,
         anos=dados.anos,
@@ -4524,14 +4520,15 @@ def checkout_dominio_automatico(
     db.add(pedido)
     db.flush()
 
-    base_url = str(req.base_url).rstrip("/")
-    webhook_url = f"{base_url}/api/webhooks/mercadopago?org_id={org.id}"
+    clean_base = base_url.rstrip("/")
+    webhook_url = f"{clean_base}/api/webhooks/mercadopago?org_id={org.id}"
     ext_ref = f"DOMINIO:{pedido.id}"
 
     try:
         if dados.metodo_pagamento == "pix":
-            mp_res = mp_criar_pagamento_pix(
+            mp_res = mp_criar_cobranca_pix_unificada(
                 access_token=cfg.mp_access_token,
+                api_tipo=getattr(cfg, "mp_api_tipo", "orders"),
                 valor=valor_total,
                 descricao=f"Domínio {dominio_norm} ({dados.anos} ano) - {codigo}",
                 external_reference=ext_ref,
@@ -4539,21 +4536,24 @@ def checkout_dominio_automatico(
                 pagador_nome=dados.titular_nome,
                 notification_url=webhook_url,
             )
-            pedido.mp_payment_id = mp_res["payment_id"]
-            pedido.mp_qr_code = mp_res["qr_code"]
-            pedido.mp_qr_code_base64 = mp_res["qr_code_base64"]
-            pedido.mp_checkout_url = mp_res["ticket_url"]
-            fatura.mp_payment_id = mp_res["payment_id"]
-            fatura.mp_qr_code = mp_res["qr_code"]
-            fatura.mp_qr_code_base64 = mp_res["qr_code_base64"]
+            pedido.mp_order_id = mp_res.get("order_id")
+            pedido.mp_payment_id = mp_res.get("payment_id")
+            pedido.mp_qr_code = mp_res.get("qr_code")
+            pedido.mp_qr_code_base64 = mp_res.get("qr_code_base64")
+            pedido.mp_checkout_url = mp_res.get("ticket_url")
+            fatura.mp_order_id = mp_res.get("order_id")
+            fatura.mp_payment_id = mp_res.get("payment_id")
+            fatura.mp_qr_code = mp_res.get("qr_code")
+            fatura.mp_qr_code_base64 = mp_res.get("qr_code_base64")
         else:
+            back_page = f"{clean_base}/app/portal.html" if usuario_logado else f"{clean_base}/index.html"
             mp_res = mp_criar_checkout_pro(
                 access_token=cfg.mp_access_token,
                 titulo=f"Registro de Domínio {dominio_norm} ({dados.anos} ano)",
                 valor=valor_total,
                 external_reference=ext_ref,
                 pagador_email=dados.titular_email,
-                back_url_base=f"{base_url}/index.html",
+                back_url_base=back_page,
                 notification_url=webhook_url,
             )
             pedido.mp_checkout_url = mp_res["init_point"]
@@ -4568,6 +4568,54 @@ def checkout_dominio_automatico(
     return pedido
 
 
+# ==================== PESQUISA & VENDA AUTOMÁTICA DE DOMÍNIOS ====================
+@router.get("/public/dominios/precos", tags=["Domínios"])
+def obter_tabela_precos_dominios(req: Request, db: Session = Depends(get_db)):
+    org = _resolver_org_por_request(req, db)
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first()
+    pricing = get_tld_pricing(cfg.dominio_precos_json if cfg else None)
+    return {
+        "mp_ativo": bool(cfg and cfg.mp_ativo and cfg.mp_access_token),
+        "extensoes": [
+            {"extensao": ext, "label": info.get("label", ext), "venda": info.get("venda", 99.9), "destaque": bool(info.get("destaque", False))}
+            for ext, info in pricing.items()
+            if info.get("ativo", True)
+        ],
+    }
+
+
+@router.get("/public/dominios/pesquisar", tags=["Domínios"])
+def pesquisar_dominio_publico(q: str, req: Request, db: Session = Depends(get_db)):
+    org = _resolver_org_por_request(req, db)
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org.id).first()
+    pricing = get_tld_pricing(cfg.dominio_precos_json if cfg else None)
+    try:
+        return pesquisar_dominios_com_sugestoes(q, pricing)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/public/dominios/checkout", response_model=PedidoDominioOut, status_code=201, tags=["Domínios"])
+def checkout_dominio_automatico(
+    dados: PedidoDominioCreate,
+    req: Request,
+    db: Session = Depends(get_db),
+):
+    org = _resolver_org_por_request(req, db)
+    return _processar_checkout_dominio(db, org, dados, str(req.base_url), usuario_logado=None)
+
+
+@router.post("/portal/dominios/checkout", response_model=PedidoDominioOut, status_code=201, tags=["Domínios"])
+def checkout_dominio_portal_cliente(
+    dados: PedidoDominioCreate,
+    req: Request,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_db),
+):
+    org = _get_org_or_404(db, usuario.organizacao_id)
+    return _processar_checkout_dominio(db, org, dados, str(req.base_url), usuario_logado=usuario)
+
+
 @router.get("/public/dominios/pedidos/{codigo}/status", response_model=PedidoDominioOut, tags=["Domínios"])
 def verificar_status_pedido_dominio(codigo: str, db: Session = Depends(get_db)):
     pedido = db.query(PedidoDominio).filter(PedidoDominio.codigo == codigo).first()
@@ -4575,8 +4623,13 @@ def verificar_status_pedido_dominio(codigo: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Pedido de domínio não encontrado.")
 
     cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == pedido.organizacao_id).first()
-    if pedido.status == "aguardando_pagamento" and pedido.mp_payment_id and cfg and cfg.mp_access_token:
-        info = mp_consultar_pagamento(cfg.mp_access_token, pedido.mp_payment_id)
+    if pedido.status == "aguardando_pagamento" and cfg and cfg.mp_access_token:
+        info = {"status": "pending"}
+        if pedido.mp_order_id:
+            info = mp_consultar_order(cfg.mp_access_token, pedido.mp_order_id)
+        elif pedido.mp_payment_id:
+            info = mp_consultar_pagamento(cfg.mp_access_token, pedido.mp_payment_id)
+
         if info.get("status") == "approved":
             if pedido.fatura_id:
                 fat = db.query(Fatura).filter(Fatura.id == pedido.fatura_id).first()
@@ -4616,7 +4669,7 @@ def verificar_dns_pedido_dominio(pedido_id: int, db: Session = Depends(get_db), 
     return {"dominio": pedido.dominio, **res}
 
 
-# ==================== MERCADO PAGO: FATURAS, WEBHOOK & PAYOUTS RH ====================
+# ==================== MERCADO PAGO: FATURAS (ORDERS & PAYMENTS), WEBHOOK & PAYOUTS RH ====================
 @router.post("/faturas/{fatura_id}/mercadopago", response_model=FaturaOut, tags=["Mercado Pago"])
 def gerar_cobranca_mercadopago_fatura(
     fatura_id: int,
@@ -4644,8 +4697,9 @@ def gerar_cobranca_mercadopago_fatura(
 
     try:
         if dados.metodo == "pix":
-            mp_res = mp_criar_pagamento_pix(
+            mp_res = mp_criar_cobranca_pix_unificada(
                 access_token=cfg.mp_access_token,
+                api_tipo=getattr(cfg, "mp_api_tipo", "orders"),
                 valor=float(fat.valor),
                 descricao=fat.descricao,
                 external_reference=ext_ref,
@@ -4654,10 +4708,11 @@ def gerar_cobranca_mercadopago_fatura(
                 notification_url=webhook_url,
             )
             fat.forma_pagamento = "Mercado Pago PIX"
-            fat.mp_payment_id = mp_res["payment_id"]
-            fat.mp_qr_code = mp_res["qr_code"]
-            fat.mp_qr_code_base64 = mp_res["qr_code_base64"]
-            fat.mp_checkout_url = mp_res["ticket_url"]
+            fat.mp_order_id = mp_res.get("order_id")
+            fat.mp_payment_id = mp_res.get("payment_id")
+            fat.mp_qr_code = mp_res.get("qr_code")
+            fat.mp_qr_code_base64 = mp_res.get("qr_code_base64")
+            fat.mp_checkout_url = mp_res.get("ticket_url")
         else:
             mp_res = mp_criar_checkout_pro(
                 access_token=cfg.mp_access_token,
@@ -4679,13 +4734,49 @@ def gerar_cobranca_mercadopago_fatura(
     return fat
 
 
+@router.get("/faturas/{fatura_id}/mercadopago/status", response_model=FaturaListOut, tags=["Mercado Pago"])
+def verificar_status_pagamento_fatura_mp(
+    fatura_id: int,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_atual),
+):
+    fat = db.query(Fatura).filter(Fatura.id == fatura_id, Fatura.organizacao_id == usuario.organizacao_id).first()
+    if not fat:
+        raise HTTPException(status_code=404, detail="Fatura não encontrada.")
+    if fat.status == "pago":
+        return fat
+
+    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == usuario.organizacao_id).first()
+    if cfg and cfg.mp_access_token and (fat.mp_order_id or fat.mp_payment_id):
+        info = (
+            mp_consultar_order(cfg.mp_access_token, fat.mp_order_id)
+            if fat.mp_order_id
+            else mp_consultar_pagamento(cfg.mp_access_token, fat.mp_payment_id)
+        )
+        if info.get("status") == "approved":
+            fat.status = "pago"
+            fat.mp_status_detalhe = info.get("status_detail")
+            fat.pago_em = datetime.utcnow()
+            ped_loja = db.query(PedidoLoja).filter(PedidoLoja.fatura_gerada_id == fat.id).first()
+            if ped_loja:
+                ped_loja.status = "pago"
+            db.commit()
+            db.refresh(fat)
+
+    return fat
+
+
 @router.post("/webhooks/mercadopago", tags=["Mercado Pago"])
 async def webhook_mercadopago(req: Request, org_id: int = 1, db: Session = Depends(get_db)):
     body = await req.json() if req.headers.get("content-type", "").startswith("application/json") else {}
     data_id = str((body.get("data") or {}).get("id") or req.query_params.get("data.id") or req.query_params.get("id") or "")
-    topic = str(body.get("type") or req.query_params.get("topic") or "")
+    topic = str(body.get("type") or req.query_params.get("topic") or "").lower()
 
-    if not data_id or (topic and topic not in ("payment", "merchant_order")):
+    if not data_id:
+        return {"received": True}
+
+    is_order_event = topic == "order" or data_id.upper().startswith("ORD")
+    if topic and topic not in ("order", "payment", "merchant_order") and not is_order_event:
         return {"received": True}
 
     cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == org_id).first()
@@ -4700,7 +4791,11 @@ async def webhook_mercadopago(req: Request, org_id: int = 1, db: Session = Depen
     ):
         raise HTTPException(status_code=401, detail="Assinatura HMAC Mercado Pago inválida.")
 
-    info = mp_consultar_pagamento(cfg.mp_access_token, data_id)
+    info = (
+        mp_consultar_order(cfg.mp_access_token, data_id)
+        if is_order_event
+        else mp_consultar_pagamento(cfg.mp_access_token, data_id)
+    )
     if info.get("status") != "approved":
         return {"received": True, "status": info.get("status")}
 
@@ -4721,7 +4816,10 @@ async def webhook_mercadopago(req: Request, org_id: int = 1, db: Session = Depen
         fat = db.query(Fatura).filter(Fatura.id == fat_id).first()
         if fat and fat.status != "pago":
             fat.status = "pago"
-            fat.mp_payment_id = str(data_id)
+            if is_order_event:
+                fat.mp_order_id = str(data_id)
+            else:
+                fat.mp_payment_id = str(data_id)
             fat.mp_status_detalhe = info.get("status_detail")
             fat.pago_em = datetime.utcnow()
             ped_loja = db.query(PedidoLoja).filter(PedidoLoja.fatura_gerada_id == fat.id).first()

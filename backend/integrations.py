@@ -306,6 +306,158 @@ def mp_criar_checkout_pro(
     }
 
 
+
+def mp_criar_order_pix(
+    access_token: str,
+    valor: float,
+    descricao: str,
+    external_reference: str,
+    pagador_email: str,
+    pagador_nome: str = "Cliente",
+) -> Dict[str, Any]:
+    """
+    Cria uma Order online com pagamento PIX via nova API de Orders do Mercado Pago (POST /v1/orders).
+    """
+    if not access_token or not access_token.strip():
+        raise ValueError("Access Token do Mercado Pago não configurado em Empresa & Permissões > Integrações.")
+
+    parts = (pagador_nome or "Cliente Nexus").strip().split(" ", 1)
+    first_name = parts[0]
+    last_name = parts[1] if len(parts) > 1 else "Cliente"
+    amount_str = f"{round(float(valor), 2):.2f}"
+
+    body: Dict[str, Any] = {
+        "type": "online",
+        "processing_mode": "automatic",
+        "total_amount": amount_str,
+        "external_reference": external_reference,
+        "description": descricao[:250],
+        "payer": {
+            "email": pagador_email or "financeiro@nexuscodebrasil.com.br",
+            "first_name": first_name[:60],
+            "last_name": last_name[:60],
+        },
+        "transactions": {
+            "payments": [
+                {
+                    "amount": amount_str,
+                    "payment_method": {
+                        "id": "pix",
+                        "type": "bank_transfer",
+                    },
+                }
+            ]
+        },
+    }
+
+    idem = f"nc-ord-{external_reference}-{uuid.uuid4().hex[:10]}"
+    status, data = _http_json_request(
+        "https://api.mercadopago.com/v1/orders",
+        method="POST",
+        headers=_mp_headers(access_token, idem),
+        payload=body,
+        timeout=15,
+    )
+    if status not in (200, 201):
+        err_list = data.get("errors") if isinstance(data.get("errors"), list) else []
+        detail = err_list[0].get("message") if err_list and isinstance(err_list[0], dict) else (data.get("message") or data.get("error") or "Falha ao criar Order PIX.")
+        raise RuntimeError(f"Mercado Pago Orders ({status}): {detail}")
+
+    order_id = str(data.get("id") or "")
+    payments_arr = (data.get("transactions") or {}).get("payments") or []
+    pay0 = payments_arr[0] if payments_arr and isinstance(payments_arr[0], dict) else {}
+    payment_id = str(pay0.get("id") or "")
+    pm_obj = pay0.get("payment_method") if isinstance(pay0.get("payment_method"), dict) else {}
+    poi_tx = ((pay0.get("point_of_interaction") or {}).get("transaction_data") or {})
+
+    qr_code = pm_obj.get("qr_code") or poi_tx.get("qr_code") or ""
+    qr_code_base64 = pm_obj.get("qr_code_base64") or poi_tx.get("qr_code_base64") or ""
+    ticket_url = pm_obj.get("ticket_url") or poi_tx.get("ticket_url") or ""
+
+    return {
+        "order_id": order_id,
+        "payment_id": payment_id,
+        "status": data.get("status", "action_required"),
+        "status_detail": data.get("status_detail", ""),
+        "qr_code": qr_code,
+        "qr_code_base64": qr_code_base64,
+        "ticket_url": ticket_url,
+    }
+
+
+def mp_consultar_order(access_token: str, order_id: str) -> Dict[str, Any]:
+    """Consulta uma Order na nova API do Mercado Pago (GET /v1/orders/{id})."""
+    if not access_token or not order_id:
+        return {"status": "unknown"}
+    status, data = _http_json_request(
+        f"https://api.mercadopago.com/v1/orders/{urllib.parse.quote(str(order_id))}",
+        method="GET",
+        headers=_mp_headers(access_token),
+        timeout=12,
+    )
+    if status != 200:
+        return {"status": "error", "http_status": status, "detail": data.get("message", "")}
+
+    raw_status = str(data.get("status") or "").lower()
+    payments_arr = (data.get("transactions") or {}).get("payments") or []
+    pay0 = payments_arr[0] if payments_arr and isinstance(payments_arr[0], dict) else {}
+    pay_status = str(pay0.get("status") or "").lower()
+
+    is_paid = raw_status in ("processed", "approved") or pay_status in ("processed", "approved")
+    return {
+        "order_id": str(data.get("id") or order_id),
+        "payment_id": str(pay0.get("id") or ""),
+        "status": "approved" if is_paid else raw_status,
+        "status_detail": data.get("status_detail") or pay0.get("status_detail") or "",
+        "external_reference": data.get("external_reference", ""),
+        "transaction_amount": data.get("total_amount", 0),
+    }
+
+
+def mp_criar_cobranca_pix_unificada(
+    access_token: str,
+    api_tipo: Optional[str],
+    valor: float,
+    descricao: str,
+    external_reference: str,
+    pagador_email: str,
+    pagador_nome: str = "Cliente",
+    notification_url: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Gera cobrança PIX usando a nova API de Orders (/v1/orders) como padrão,
+    com suporte completo à API de Payments (/v1/payments).
+    """
+    modo = (api_tipo or "orders").strip().lower()
+    if modo == "orders":
+        try:
+            res = mp_criar_order_pix(
+                access_token=access_token,
+                valor=valor,
+                descricao=descricao,
+                external_reference=external_reference,
+                pagador_email=pagador_email,
+                pagador_nome=pagador_nome,
+            )
+            if res.get("qr_code") or res.get("order_id"):
+                return res
+        except RuntimeError as e:
+            # Se a conta ainda não tiver /v1/orders habilitado, faz fallback seguro para /v1/payments
+            if "(404)" not in str(e) and "(405)" not in str(e):
+                raise
+
+    pay_res = mp_criar_pagamento_pix(
+        access_token=access_token,
+        valor=valor,
+        descricao=descricao,
+        external_reference=external_reference,
+        pagador_email=pagador_email,
+        pagador_nome=pagador_nome,
+        notification_url=notification_url,
+    )
+    return {"order_id": None, **pay_res}
+
+
 def mp_consultar_pagamento(access_token: str, payment_id: str) -> Dict[str, Any]:
     if not access_token or not payment_id:
         return {"status": "unknown"}

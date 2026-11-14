@@ -213,35 +213,8 @@ export async function renderTimesheetView(ctx) {
     );
   };
 
-  window.nexusSetEmpresaTab = (tab) => {
-    document.querySelectorAll('.empresa-tab-view').forEach(e => e.style.display = 'none');
-    document.getElementById(`empresa-tab-${tab}`).style.display = 'block';
-    document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
-    document.getElementById(`tab-btn-${tab}`).classList.add('active');
-  };
-
   return `
     <div class="toolbar">
-      <div>
-        <h1>Empresa, White-Label &amp; Integrações</h1>
-        <span class="muted">Gerencie a identidade corporativa, parâmetros fiscais e chaves de API (Mercado Pago, Vercel e Domínios)</span>
-      </div>
-      ${org.slug ? `
-        <div style="display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); padding:8px 14px; border-radius:10px; font-size:12.5px;">
-          <span class="muted">Plano Ativo:</span>
-          <span class="badge ativo" style="text-transform:uppercase;">${esc(org.plano || 'Enterprise')}</span>
-        </div>
-      ` : ''}
-    </div>
-
-    <div class="filter-bar">
-      <button type="button" id="tab-btn-geral" class="filter-pill active" onclick="window.nexusSetEmpresaTab('geral')">Geral &amp; Identidade</button>
-      <button type="button" id="tab-btn-integracoes" class="filter-pill" onclick="window.nexusSetEmpresaTab('integracoes')">Integrações de API (Master)</button>
-    </div>
-
-    <!-- TAB 1: GERAL & WHITE LABEL -->
-    <div id="empresa-tab-geral" class="empresa-tab-view">
-
       <div>
         <h1>Timesheet &amp; Rentabilidade de Projetos</h1>
         <span class="muted">Controle de horas investidas, custo operacional de equipe e margem real por contrato</span>
@@ -547,35 +520,8 @@ export async function renderPropostasView(ctx) {
     });
   };
 
-  window.nexusSetEmpresaTab = (tab) => {
-    document.querySelectorAll('.empresa-tab-view').forEach(e => e.style.display = 'none');
-    document.getElementById(`empresa-tab-${tab}`).style.display = 'block';
-    document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
-    document.getElementById(`tab-btn-${tab}`).classList.add('active');
-  };
-
   return `
     <div class="toolbar">
-      <div>
-        <h1>Empresa, White-Label &amp; Integrações</h1>
-        <span class="muted">Gerencie a identidade corporativa, parâmetros fiscais e chaves de API (Mercado Pago, Vercel e Domínios)</span>
-      </div>
-      ${org.slug ? `
-        <div style="display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); padding:8px 14px; border-radius:10px; font-size:12.5px;">
-          <span class="muted">Plano Ativo:</span>
-          <span class="badge ativo" style="text-transform:uppercase;">${esc(org.plano || 'Enterprise')}</span>
-        </div>
-      ` : ''}
-    </div>
-
-    <div class="filter-bar">
-      <button type="button" id="tab-btn-geral" class="filter-pill active" onclick="window.nexusSetEmpresaTab('geral')">Geral &amp; Identidade</button>
-      <button type="button" id="tab-btn-integracoes" class="filter-pill" onclick="window.nexusSetEmpresaTab('integracoes')">Integrações de API (Master)</button>
-    </div>
-
-    <!-- TAB 1: GERAL & WHITE LABEL -->
-    <div id="empresa-tab-geral" class="empresa-tab-view">
-
       <div>
         <h1>Propostas Comerciais &amp; Contratos</h1>
         <span class="muted">Envie propostas ao Portal do Cliente e converta aprovações em projetos e faturas com 1 clique</span>
@@ -813,35 +759,8 @@ export async function renderChamadosView(ctx) {
     holeriteDialog.showModal();
   };
 
-  window.nexusSetEmpresaTab = (tab) => {
-    document.querySelectorAll('.empresa-tab-view').forEach(e => e.style.display = 'none');
-    document.getElementById(`empresa-tab-${tab}`).style.display = 'block';
-    document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
-    document.getElementById(`tab-btn-${tab}`).classList.add('active');
-  };
-
   return `
     <div class="toolbar">
-      <div>
-        <h1>Empresa, White-Label &amp; Integrações</h1>
-        <span class="muted">Gerencie a identidade corporativa, parâmetros fiscais e chaves de API (Mercado Pago, Vercel e Domínios)</span>
-      </div>
-      ${org.slug ? `
-        <div style="display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); padding:8px 14px; border-radius:10px; font-size:12.5px;">
-          <span class="muted">Plano Ativo:</span>
-          <span class="badge ativo" style="text-transform:uppercase;">${esc(org.plano || 'Enterprise')}</span>
-        </div>
-      ` : ''}
-    </div>
-
-    <div class="filter-bar">
-      <button type="button" id="tab-btn-geral" class="filter-pill active" onclick="window.nexusSetEmpresaTab('geral')">Geral &amp; Identidade</button>
-      <button type="button" id="tab-btn-integracoes" class="filter-pill" onclick="window.nexusSetEmpresaTab('integracoes')">Integrações de API (Master)</button>
-    </div>
-
-    <!-- TAB 1: GERAL & WHITE LABEL -->
-    <div id="empresa-tab-geral" class="empresa-tab-view">
-
       <div>
         <h1>Central de Suporte &amp; Chamados (Service Desk)</h1>
         <span class="muted">Atendimento integrado com o Portal do Cliente, controle de SLA e histórico de mensagens</span>
@@ -891,35 +810,8 @@ export async function renderDreView(ctx) {
     );
   };
 
-  window.nexusSetEmpresaTab = (tab) => {
-    document.querySelectorAll('.empresa-tab-view').forEach(e => e.style.display = 'none');
-    document.getElementById(`empresa-tab-${tab}`).style.display = 'block';
-    document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
-    document.getElementById(`tab-btn-${tab}`).classList.add('active');
-  };
-
   return `
     <div class="toolbar">
-      <div>
-        <h1>Empresa, White-Label &amp; Integrações</h1>
-        <span class="muted">Gerencie a identidade corporativa, parâmetros fiscais e chaves de API (Mercado Pago, Vercel e Domínios)</span>
-      </div>
-      ${org.slug ? `
-        <div style="display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); padding:8px 14px; border-radius:10px; font-size:12.5px;">
-          <span class="muted">Plano Ativo:</span>
-          <span class="badge ativo" style="text-transform:uppercase;">${esc(org.plano || 'Enterprise')}</span>
-        </div>
-      ` : ''}
-    </div>
-
-    <div class="filter-bar">
-      <button type="button" id="tab-btn-geral" class="filter-pill active" onclick="window.nexusSetEmpresaTab('geral')">Geral &amp; Identidade</button>
-      <button type="button" id="tab-btn-integracoes" class="filter-pill" onclick="window.nexusSetEmpresaTab('integracoes')">Integrações de API (Master)</button>
-    </div>
-
-    <!-- TAB 1: GERAL & WHITE LABEL -->
-    <div id="empresa-tab-geral" class="empresa-tab-view">
-
       <div>
         <h1>DRE Gerencial &amp; Fluxo de Caixa</h1>
         <span class="muted">Demonstrativo consolidado de receitas realizadas, despesas operacionais, folha e margem líquida</span>
@@ -1220,35 +1112,8 @@ export async function renderDespesasView(ctx) {
     });
   };
 
-  window.nexusSetEmpresaTab = (tab) => {
-    document.querySelectorAll('.empresa-tab-view').forEach(e => e.style.display = 'none');
-    document.getElementById(`empresa-tab-${tab}`).style.display = 'block';
-    document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
-    document.getElementById(`tab-btn-${tab}`).classList.add('active');
-  };
-
   return `
     <div class="toolbar">
-      <div>
-        <h1>Empresa, White-Label &amp; Integrações</h1>
-        <span class="muted">Gerencie a identidade corporativa, parâmetros fiscais e chaves de API (Mercado Pago, Vercel e Domínios)</span>
-      </div>
-      ${org.slug ? `
-        <div style="display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); padding:8px 14px; border-radius:10px; font-size:12.5px;">
-          <span class="muted">Plano Ativo:</span>
-          <span class="badge ativo" style="text-transform:uppercase;">${esc(org.plano || 'Enterprise')}</span>
-        </div>
-      ` : ''}
-    </div>
-
-    <div class="filter-bar">
-      <button type="button" id="tab-btn-geral" class="filter-pill active" onclick="window.nexusSetEmpresaTab('geral')">Geral &amp; Identidade</button>
-      <button type="button" id="tab-btn-integracoes" class="filter-pill" onclick="window.nexusSetEmpresaTab('integracoes')">Integrações de API (Master)</button>
-    </div>
-
-    <!-- TAB 1: GERAL & WHITE LABEL -->
-    <div id="empresa-tab-geral" class="empresa-tab-view">
-
       <div>
         <h1>Contas a Pagar &amp; Despesas</h1>
         <span class="muted">Controle de saídas financeiras, fornecedores, infraestrutura e custos por projeto</span>
@@ -1426,35 +1291,8 @@ export async function renderContratosView(ctx) {
     });
   };
 
-  window.nexusSetEmpresaTab = (tab) => {
-    document.querySelectorAll('.empresa-tab-view').forEach(e => e.style.display = 'none');
-    document.getElementById(`empresa-tab-${tab}`).style.display = 'block';
-    document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
-    document.getElementById(`tab-btn-${tab}`).classList.add('active');
-  };
-
   return `
     <div class="toolbar">
-      <div>
-        <h1>Empresa, White-Label &amp; Integrações</h1>
-        <span class="muted">Gerencie a identidade corporativa, parâmetros fiscais e chaves de API (Mercado Pago, Vercel e Domínios)</span>
-      </div>
-      ${org.slug ? `
-        <div style="display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); padding:8px 14px; border-radius:10px; font-size:12.5px;">
-          <span class="muted">Plano Ativo:</span>
-          <span class="badge ativo" style="text-transform:uppercase;">${esc(org.plano || 'Enterprise')}</span>
-        </div>
-      ` : ''}
-    </div>
-
-    <div class="filter-bar">
-      <button type="button" id="tab-btn-geral" class="filter-pill active" onclick="window.nexusSetEmpresaTab('geral')">Geral &amp; Identidade</button>
-      <button type="button" id="tab-btn-integracoes" class="filter-pill" onclick="window.nexusSetEmpresaTab('integracoes')">Integrações de API (Master)</button>
-    </div>
-
-    <!-- TAB 1: GERAL & WHITE LABEL -->
-    <div id="empresa-tab-geral" class="empresa-tab-view">
-
       <div>
         <h1>Contratos Recorrentes &amp; Assinaturas (MRR)</h1>
         <span class="muted">Gestão de mensalidades de suporte, manutenção e geração automática de cobranças</span>
@@ -1608,35 +1446,8 @@ export async function renderAtivosView(ctx) {
     showToast('Credencial copiada para a área de transferência!', 'info');
   };
 
-  window.nexusSetEmpresaTab = (tab) => {
-    document.querySelectorAll('.empresa-tab-view').forEach(e => e.style.display = 'none');
-    document.getElementById(`empresa-tab-${tab}`).style.display = 'block';
-    document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
-    document.getElementById(`tab-btn-${tab}`).classList.add('active');
-  };
-
   return `
     <div class="toolbar">
-      <div>
-        <h1>Empresa, White-Label &amp; Integrações</h1>
-        <span class="muted">Gerencie a identidade corporativa, parâmetros fiscais e chaves de API (Mercado Pago, Vercel e Domínios)</span>
-      </div>
-      ${org.slug ? `
-        <div style="display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); padding:8px 14px; border-radius:10px; font-size:12.5px;">
-          <span class="muted">Plano Ativo:</span>
-          <span class="badge ativo" style="text-transform:uppercase;">${esc(org.plano || 'Enterprise')}</span>
-        </div>
-      ` : ''}
-    </div>
-
-    <div class="filter-bar">
-      <button type="button" id="tab-btn-geral" class="filter-pill active" onclick="window.nexusSetEmpresaTab('geral')">Geral &amp; Identidade</button>
-      <button type="button" id="tab-btn-integracoes" class="filter-pill" onclick="window.nexusSetEmpresaTab('integracoes')">Integrações de API (Master)</button>
-    </div>
-
-    <!-- TAB 1: GERAL & WHITE LABEL -->
-    <div id="empresa-tab-geral" class="empresa-tab-view">
-
       <div>
         <h1>Ativos, Domínios &amp; Cofre de Acessos</h1>
         <span class="muted">Inventário técnico da empresa e clientes, datas de renovação e credenciais seguras</span>
@@ -1838,18 +1649,87 @@ export async function renderEmpresaView(ctx) {
     };
   }, 30);
 
+  const defaultTlds = [
+    { ext: '.com.br', label: 'Nacional Brasil (.com.br)', custo: 40.00, venda: 79.90 },
+    { ext: '.com', label: 'Global Comercial (.com)', custo: 58.00, venda: 109.90 },
+    { ext: '.net', label: 'Infraestrutura & Rede (.net)', custo: 64.00, venda: 119.90 },
+    { ext: '.org', label: 'Organizações (.org)', custo: 62.00, venda: 114.90 },
+    { ext: '.tech', label: 'Tecnologia & Startups (.tech)', custo: 45.00, venda: 99.90 },
+    { ext: '.online', label: 'Presença Digital (.online)', custo: 25.00, venda: 69.90 },
+    { ext: '.app', label: 'Aplicativos & SaaS (.app)', custo: 78.00, venda: 139.90 },
+    { ext: '.io', label: 'Tech & Sistemas (.io)', custo: 195.00, venda: 299.90 }
+  ];
+  let savedTlds = {};
+  if (cfg?.dominio_precos_json) {
+    try { savedTlds = JSON.parse(cfg.dominio_precos_json) || {}; } catch (_) {}
+  }
+
   window.nexusSetEmpresaTab = (tab) => {
-    document.querySelectorAll('.empresa-tab-view').forEach(e => e.style.display = 'none');
-    document.getElementById(`empresa-tab-${tab}`).style.display = 'block';
-    document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
-    document.getElementById(`tab-btn-${tab}`).classList.add('active');
+    document.querySelectorAll('.empresa-tab-view').forEach((el) => { el.style.display = 'none'; });
+    const target = document.getElementById(`empresa-tab-${tab}`);
+    if (target) target.style.display = 'block';
+    document.querySelectorAll('#empresa-tabs-bar .filter-pill').forEach((b) => b.classList.remove('active'));
+    const btn = document.getElementById(`tab-btn-${tab}`);
+    if (btn) btn.classList.add('active');
+  };
+
+  window.nexusSaveIntegracoesApi = async () => {
+    const frm = document.getElementById('empresa-integracoes-form');
+    const btn = document.getElementById('save-integrations-btn');
+    if (!frm || !btn) return;
+    const raw = Object.fromEntries(new FormData(frm));
+
+    const precosMap = {};
+    defaultTlds.forEach((t) => {
+      const slugKey = t.ext.replace(/\./g, '_');
+      const custoVal = Number(raw[`tld_custo_${slugKey}`] ?? t.custo);
+      const vendaVal = Number(raw[`tld_venda_${slugKey}`] ?? t.venda);
+      precosMap[t.ext] = {
+        label: t.label,
+        custo: custoVal,
+        venda: vendaVal,
+        destaque: ['.com.br', '.com', '.tech'].includes(t.ext),
+        ativo: true
+      };
+    });
+
+    btn.disabled = true;
+    btn.textContent = 'Salvando Integrações...';
+    try {
+      await apiRequest('/empresa', {
+        method: 'PUT',
+        body: JSON.stringify({
+          mp_ativo: raw.mp_ativo === 'true',
+          mp_api_tipo: raw.mp_api_tipo || 'orders',
+          mp_ambiente: raw.mp_ambiente || 'producao',
+          mp_public_key: (raw.mp_public_key || '').trim() || null,
+          mp_access_token: (raw.mp_access_token || '').trim() || null,
+          mp_webhook_secret: (raw.mp_webhook_secret || '').trim() || null,
+          registrar_provedor: raw.registrar_provedor || 'sandbox',
+          registrar_api_user: (raw.registrar_api_user || '').trim() || null,
+          registrar_api_key: (raw.registrar_api_key || '').trim() || null,
+          registrar_client_ip: (raw.registrar_client_ip || '').trim() || null,
+          vercel_token: (raw.vercel_token || '').trim() || null,
+          vercel_project_id: (raw.vercel_project_id || '').trim() || null,
+          vercel_team_id: (raw.vercel_team_id || '').trim() || null,
+          dominio_precos_json: JSON.stringify(precosMap)
+        })
+      });
+      invalidateCache();
+      showToast('Integrações Mercado Pago (Orders API), Registrador e Vercel salvas com sucesso!', 'success');
+    } catch (err) {
+      showNoticeModal({ title: 'Erro ao salvar integrações', message: err.message, variant: 'error' });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Salvar Todas as Integrações';
+    }
   };
 
   return `
     <div class="toolbar">
       <div>
         <h1>Empresa, White-Label &amp; Integrações</h1>
-        <span class="muted">Gerencie a identidade corporativa, parâmetros fiscais e chaves de API (Mercado Pago, Vercel e Domínios)</span>
+        <span class="muted">Gerencie a identidade corporativa, permissões, Mercado Pago (Orders API) e venda automática de domínios</span>
       </div>
       ${org.slug ? `
         <div style="display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); padding:8px 14px; border-radius:10px; font-size:12.5px;">
@@ -1859,14 +1739,14 @@ export async function renderEmpresaView(ctx) {
       ` : ''}
     </div>
 
-    <div class="filter-bar">
-      <button type="button" id="tab-btn-geral" class="filter-pill active" onclick="window.nexusSetEmpresaTab('geral')">Geral &amp; Identidade</button>
-      <button type="button" id="tab-btn-integracoes" class="filter-pill" onclick="window.nexusSetEmpresaTab('integracoes')">Integrações de API (Master)</button>
+    <div class="filter-bar" id="empresa-tabs-bar">
+      <button type="button" id="tab-btn-geral" class="filter-pill active" onclick="window.nexusSetEmpresaTab('geral')">Geral, Marca &amp; Permissões</button>
+      <button type="button" id="tab-btn-integracoes" class="filter-pill" onclick="window.nexusSetEmpresaTab('integracoes')">Integrações Mercado Pago &amp; Domínios</button>
     </div>
 
     <!-- TAB 1: GERAL & WHITE LABEL -->
     <div id="empresa-tab-geral" class="empresa-tab-view">
-
+    <div class="toolbar">
       <div>
         <h1>Empresa, White-Label &amp; Permissões</h1>
         <span class="muted">Gerencie a identidade visual corporativa, domínio de acesso, parâmetros fiscais, dados bancários e permissões</span>
@@ -2058,96 +1938,121 @@ export async function renderEmpresaView(ctx) {
 
     <!-- TAB 2: INTEGRAÇÕES & APIS -->
     <div id="empresa-tab-integracoes" class="empresa-tab-view" style="display:none;">
-      <form id="empresa-integracoes-form" class="profile-columns">
-        
-        <div class="card profile-col-card">
-          <div>
-            <h4 class="profile-section-title">Gateway de Pagamentos &amp; Payouts (Mercado Pago)</h4>
-            <p class="profile-section-sub">Ative para processar faturas via PIX/Cartão e disparar pagamento automático de folha (Payouts PIX).</p>
-            <div class="profile-grid">
-              <label class="field-full">Habilitar Mercado Pago?
-                <select name="mp_ativo" class="nc-input">
-                  <option value="false" ${!cfg?.mp_ativo ? 'selected' : ''}>Desativado</option>
-                  <option value="true" ${cfg?.mp_ativo ? 'selected' : ''}>Ativo e Operacional</option>
-                </select>
-              </label>
-              <label class="field-full">Ambiente
-                <select name="mp_ambiente" class="nc-input">
-                  <option value="sandbox" ${cfg?.mp_ambiente === 'sandbox' ? 'selected' : ''}>Sandbox (Testes)</option>
-                  <option value="producao" ${cfg?.mp_ambiente === 'producao' ? 'selected' : ''}>Produção (Dinheiro Real)</option>
-                </select>
-              </label>
-              <label class="field-full">Public Key
-                <input type="text" name="mp_public_key" value="${esc(cfg?.mp_public_key || '')}" class="nc-input">
-              </label>
-              <label class="field-full">Access Token
-                <input type="password" name="mp_access_token" value="${esc(cfg?.mp_access_token || '')}" placeholder="APP_USR-..." class="nc-input">
-              </label>
-              <label class="field-full">Webhook Secret (Para validação de assinatura HMAC)
-                <input type="password" name="mp_webhook_secret" value="${esc(cfg?.mp_webhook_secret || '')}" class="nc-input">
-              </label>
+      <form id="empresa-integracoes-form" style="display:flex; flex-direction:column; gap:20px;">
+        <div class="profile-columns">
+          <div class="card profile-col-card">
+            <div>
+              <h4 class="profile-section-title">1. Mercado Pago (Checkout, PIX &amp; Folha Payouts)</h4>
+              <p class="profile-section-sub">Compatível nativamente com a nova <b>API de Orders (/v1/orders)</b> do Mercado Pago e com a API de Payments.</p>
+              <div class="profile-grid">
+                <label class="field-full">Status do Gateway *
+                  <select name="mp_ativo" class="nc-input">
+                    <option value="false" ${!cfg?.mp_ativo ? 'selected' : ''}>Desativado</option>
+                    <option value="true" ${cfg?.mp_ativo ? 'selected' : ''}>Ativo e Operacional</option>
+                  </select>
+                </label>
+                <label class="field-full">Tipo de API Mercado Pago *
+                  <select name="mp_api_tipo" class="nc-input">
+                    <option value="orders" ${(cfg?.mp_api_tipo || 'orders') === 'orders' ? 'selected' : ''}>API de Orders (/v1/orders) — Nova API Recomendada</option>
+                    <option value="payments" ${cfg?.mp_api_tipo === 'payments' ? 'selected' : ''}>API de Payments (/v1/payments) — Legado</option>
+                  </select>
+                </label>
+                <label class="field-full">Ambiente de Operação
+                  <select name="mp_ambiente" class="nc-input">
+                    <option value="producao" ${(cfg?.mp_ambiente || 'producao') === 'producao' ? 'selected' : ''}>Produção (Recebimentos Reais)</option>
+                    <option value="sandbox" ${cfg?.mp_ambiente === 'sandbox' ? 'selected' : ''}>Sandbox (Credenciais de Teste)</option>
+                  </select>
+                </label>
+                <label class="field-full">Public Key
+                  <input type="text" name="mp_public_key" value="${esc(cfg?.mp_public_key || '')}" placeholder="APP_USR-..." class="nc-input">
+                </label>
+                <label class="field-full">Access Token *
+                  <input type="password" name="mp_access_token" value="${esc(cfg?.mp_access_token || '')}" placeholder="APP_USR-..." class="nc-input">
+                </label>
+                <label class="field-full">Webhook Secret (Assinatura Secreta HMAC)
+                  <input type="password" name="mp_webhook_secret" value="${esc(cfg?.mp_webhook_secret || '')}" placeholder="Cole a assinatura secreta do Webhook" class="nc-input">
+                </label>
+              </div>
+              <div style="background:rgba(0,180,216,0.09); border:1px solid rgba(0,180,216,0.35); border-radius:10px; padding:12px 14px; margin-top:14px; font-size:12px; line-height:1.5;">
+                <div><b>URL de Notificação Webhook:</b></div>
+                <code style="display:block; margin:4px 0; font-weight:700; color:var(--primary);">https://www.nexuscodebrasil.com.br/api/webhooks/mercadopago?org_id=${org.id || 1}</code>
+                <span class="muted">No painel Webhooks do Mercado Pago, marque o evento <b>Orders</b> (se usar API de Orders) ou <b>Pagamentos</b> (se usar API de Payments).</span>
+              </div>
             </div>
-            <div style="background:rgba(0,180,216,0.1); border:1px solid rgba(0,180,216,0.3); border-radius:8px; padding:12px; margin-top:14px; font-size:12px;">
-              <b>Webhook URL:</b> <code>https://SEU_DOMINIO/api/webhooks/mercadopago?org_id=1</code>
+          </div>
+
+          <div class="card profile-col-card">
+            <div>
+              <h4 class="profile-section-title">2. Registrador de Domínios &amp; Auto-SSL Vercel</h4>
+              <p class="profile-section-sub">Após o pagamento confirmado no Mercado Pago, o sistema registra o domínio e emite o certificado HTTPS sozinho.</p>
+              <div class="profile-grid">
+                <label class="field-full">Provedor Registrador (Revenda)
+                  <select name="registrar_provedor" class="nc-input">
+                    <option value="sandbox" ${(cfg?.registrar_provedor || 'sandbox') === 'sandbox' ? 'selected' : ''}>Sandbox (Homologação / Registro Simulado)</option>
+                    <option value="namecheap" ${cfg?.registrar_provedor === 'namecheap' ? 'selected' : ''}>Namecheap API (Registro + DNS Automático)</option>
+                    <option value="resellerclub" ${cfg?.registrar_provedor === 'resellerclub' ? 'selected' : ''}>ResellerClub API</option>
+                  </select>
+                </label>
+                <label class="field-full">API User / Auth-ID (Registrador)
+                  <input type="text" name="registrar_api_user" value="${esc(cfg?.registrar_api_user || '')}" class="nc-input">
+                </label>
+                <label class="field-full">API Key / Token (Registrador)
+                  <input type="password" name="registrar_api_key" value="${esc(cfg?.registrar_api_key || '')}" class="nc-input">
+                </label>
+                <label class="field-full">Client IP Autorizado (Namecheap)
+                  <input type="text" name="registrar_client_ip" value="${esc(cfg?.registrar_client_ip || '')}" placeholder="Ex.: 177.x.x.x" class="nc-input">
+                </label>
+                <label class="field-full">Vercel API Token (Para SSL/HTTPS Automático)
+                  <input type="password" name="vercel_token" value="${esc(cfg?.vercel_token || '')}" class="nc-input">
+                </label>
+                <label class="field-full">Vercel Project ID
+                  <input type="text" name="vercel_project_id" value="${esc(cfg?.vercel_project_id || '')}" placeholder="prj_..." class="nc-input">
+                </label>
+                <label class="field-full">Vercel Team ID (Opcional)
+                  <input type="text" name="vercel_team_id" value="${esc(cfg?.vercel_team_id || '')}" placeholder="team_..." class="nc-input">
+                </label>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="card profile-col-card">
-          <div>
-            <h4 class="profile-section-title">Venda de Domínios Automática (Registrador &amp; Vercel)</h4>
-            <p class="profile-section-sub">Automatize a venda, registro e apontamento de novos domínios diretamente pelo portal.</p>
-            <div class="profile-grid">
-              <label class="field-full">Provedor Oficial (Registrador)
-                <select name="registrar_provedor" class="nc-input">
-                  <option value="sandbox" ${cfg?.registrar_provedor === 'sandbox' ? 'selected' : ''}>Sandbox (Simulação Local)</option>
-                  <option value="namecheap" ${cfg?.registrar_provedor === 'namecheap' ? 'selected' : ''}>Namecheap API (Revenda Oficial)</option>
-                  <option value="resellerclub" ${cfg?.registrar_provedor === 'resellerclub' ? 'selected' : ''}>ResellerClub API</option>
-                </select>
-              </label>
-              <label class="field-full">API User / Auth-ID (Registrador)
-                <input type="text" name="registrar_api_user" value="${esc(cfg?.registrar_api_user || '')}" class="nc-input">
-              </label>
-              <label class="field-full">API Key / Token (Registrador)
-                <input type="password" name="registrar_api_key" value="${esc(cfg?.registrar_api_key || '')}" class="nc-input">
-              </label>
-              <label class="field-full">Client IP Permitido (Se exigido pelo Registrador)
-                <input type="text" name="registrar_client_ip" value="${esc(cfg?.registrar_client_ip || '')}" placeholder="Seu IP estático" class="nc-input">
-              </label>
-              <label class="field-full">Vercel API Token (Para Auto-SSL)
-                <input type="password" name="vercel_token" value="${esc(cfg?.vercel_token || '')}" class="nc-input">
-              </label>
-              <label class="field-full">Vercel Project ID
-                <input type="text" name="vercel_project_id" value="${esc(cfg?.vercel_project_id || '')}" placeholder="prj_..." class="nc-input">
-              </label>
-            </div>
+        <div class="card">
+          <h4 class="profile-section-title">3. Tabela de Preços Anuais por Extensão de Domínio (Sua Margem de Lucro)</h4>
+          <p class="profile-section-sub">Defina o custo base no registrador e o preço anual cobrado do cliente no site e no Portal do Cliente.</p>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Extensão</th>
+                  <th>Descrição Comercial</th>
+                  <th>Custo Registrador (R$/ano)</th>
+                  <th>Preço Venda Cliente (R$/ano)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${defaultTlds.map((t) => {
+                  const cur = savedTlds[t.ext] || t;
+                  const slugKey = t.ext.replace(/\./g, '_');
+                  return `
+                    <tr>
+                      <td><b style="color:var(--primary);">${esc(t.ext)}</b></td>
+                      <td>${esc(t.label)}</td>
+                      <td><input type="number" step="0.01" min="0" name="tld_custo_${slugKey}" value="${Number(cur.custo ?? t.custo).toFixed(2)}" class="nc-input" style="max-width:140px;"></td>
+                      <td><input type="number" step="0.01" min="0" name="tld_venda_${slugKey}" value="${Number(cur.venda ?? t.venda).toFixed(2)}" class="nc-input" style="max-width:140px; font-weight:700;"></td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
           </div>
-          <div class="profile-footer-actions">
-            <button type="button" class="btn" id="save-integrations-btn" onclick="
-              const frm = document.getElementById('empresa-integracoes-form');
-              const fd = new FormData(frm);
-              const pl = Object.fromEntries(fd);
-              pl.mp_ativo = pl.mp_ativo === 'true';
-              frm.querySelector('button').disabled = true;
-              frm.querySelector('button').textContent = 'Salvando Integrações...';
-              fetch('/api/empresa', {
-                method: 'PUT',
-                headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('nexus_token')},
-                body: JSON.stringify(pl)
-              }).then(r=>r.json()).then(d=>{
-                frm.querySelector('button').disabled = false;
-                frm.querySelector('button').textContent = 'Salvar Integrações';
-                alert('Integrações e APIs atualizadas com sucesso!');
-              });
-            ">Salvar Integrações</button>
+          <div class="profile-footer-actions" style="margin-top:16px;">
+            <button type="button" class="btn" id="save-integrations-btn" onclick="window.nexusSaveIntegracoesApi()">Salvar Todas as Integrações</button>
           </div>
         </div>
-
       </form>
     </div>
   `;
 }
-
 
 // ==================== 8B. GESTÃO MASTER SAAS: PORTAIS COMPRADORES, SUBDOMÍNIOS & MÓDULOS ====================
 let saasMasterTab = 'portais'; // 'portais' | 'planos'
@@ -2628,35 +2533,8 @@ export async function renderSaasMasterView(ctx) {
     holeriteDialog.showModal();
   };
 
-  window.nexusSetEmpresaTab = (tab) => {
-    document.querySelectorAll('.empresa-tab-view').forEach(e => e.style.display = 'none');
-    document.getElementById(`empresa-tab-${tab}`).style.display = 'block';
-    document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
-    document.getElementById(`tab-btn-${tab}`).classList.add('active');
-  };
-
   return `
     <div class="toolbar">
-      <div>
-        <h1>Empresa, White-Label &amp; Integrações</h1>
-        <span class="muted">Gerencie a identidade corporativa, parâmetros fiscais e chaves de API (Mercado Pago, Vercel e Domínios)</span>
-      </div>
-      ${org.slug ? `
-        <div style="display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); padding:8px 14px; border-radius:10px; font-size:12.5px;">
-          <span class="muted">Plano Ativo:</span>
-          <span class="badge ativo" style="text-transform:uppercase;">${esc(org.plano || 'Enterprise')}</span>
-        </div>
-      ` : ''}
-    </div>
-
-    <div class="filter-bar">
-      <button type="button" id="tab-btn-geral" class="filter-pill active" onclick="window.nexusSetEmpresaTab('geral')">Geral &amp; Identidade</button>
-      <button type="button" id="tab-btn-integracoes" class="filter-pill" onclick="window.nexusSetEmpresaTab('integracoes')">Integrações de API (Master)</button>
-    </div>
-
-    <!-- TAB 1: GERAL & WHITE LABEL -->
-    <div id="empresa-tab-geral" class="empresa-tab-view">
-
       <div>
         <h1>Portais &amp; Clientes SaaS (White-Label Multi-Tenant)</h1>
         <span class="muted">Provisione ambientes corporativos isolados, gerencie subdomínios, domínios Enterprise (CNAME) e planos</span>
@@ -2993,35 +2871,8 @@ export async function renderLojaView(ctx) {
     }
   };
 
-  window.nexusSetEmpresaTab = (tab) => {
-    document.querySelectorAll('.empresa-tab-view').forEach(e => e.style.display = 'none');
-    document.getElementById(`empresa-tab-${tab}`).style.display = 'block';
-    document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
-    document.getElementById(`tab-btn-${tab}`).classList.add('active');
-  };
-
   return `
     <div class="toolbar">
-      <div>
-        <h1>Empresa, White-Label &amp; Integrações</h1>
-        <span class="muted">Gerencie a identidade corporativa, parâmetros fiscais e chaves de API (Mercado Pago, Vercel e Domínios)</span>
-      </div>
-      ${org.slug ? `
-        <div style="display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); padding:8px 14px; border-radius:10px; font-size:12.5px;">
-          <span class="muted">Plano Ativo:</span>
-          <span class="badge ativo" style="text-transform:uppercase;">${esc(org.plano || 'Enterprise')}</span>
-        </div>
-      ` : ''}
-    </div>
-
-    <div class="filter-bar">
-      <button type="button" id="tab-btn-geral" class="filter-pill active" onclick="window.nexusSetEmpresaTab('geral')">Geral &amp; Identidade</button>
-      <button type="button" id="tab-btn-integracoes" class="filter-pill" onclick="window.nexusSetEmpresaTab('integracoes')">Integrações de API (Master)</button>
-    </div>
-
-    <!-- TAB 1: GERAL & WHITE LABEL -->
-    <div id="empresa-tab-geral" class="empresa-tab-view">
-
       <div>
         <h1>Loja &amp; Vitrine do Site Principal</h1>
         <span class="muted">Gerencie os produtos exclusivos e canais de contato exibidos diretamente em <code>index.html</code></span>
