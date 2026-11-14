@@ -868,6 +868,9 @@ def extrair_repo_full_name(repo_url_ou_slug: Optional[str], default_owner: Optio
 
 def _build_starter_repo_files(repo_name: str, descricao: str, template: str, org_name: str) -> List[Dict[str, str]]:
     desc_clean = (descricao or f"Projeto corporativo provisionado pelo Portal {org_name}.").strip()
+    first_line_html = re.sub(r"[\r\n\t]+", " ", desc_clean.splitlines()[0] if desc_clean else "").strip()[:180]
+    if not first_line_html or "DEMONSTRATIVO" in first_line_html.upper():
+        first_line_html = f"Aplicação corporativa gerenciada via {org_name} & Nexus CodeSpaces."
     tpl = (template or "fullstack").strip().lower()
 
     readme = (
@@ -939,7 +942,7 @@ def _build_starter_repo_files(repo_name: str, descricao: str, template: str, org
                 "path": "public/index.html",
                 "content": (
                     f"<!DOCTYPE html>\n<html lang=\"pt-BR\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>{repo_name}</title>\n</head>\n"
-                    f"<body style=\"font-family:system-ui;background:#0A1D37;color:#fff;padding:40px;\">\n  <h1>{repo_name}</h1>\n  <p>{desc_clean}</p>\n</body>\n</html>\n"
+                    f"<body style=\"font-family:system-ui;background:#0A1D37;color:#fff;padding:40px;\">\n  <h1>{repo_name}</h1>\n  <p>{first_line_html}</p>\n</body>\n</html>\n"
                 ),
             })
     else:
@@ -949,7 +952,7 @@ def _build_starter_repo_files(repo_name: str, descricao: str, template: str, org
                 "content": (
                     f"<!DOCTYPE html>\n<html lang=\"pt-BR\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>{repo_name}</title>\n"
                     "  <link rel=\"stylesheet\" href=\"assets/css/style.css\">\n</head>\n"
-                    f"<body>\n  <main class=\"hero\"><h1>{repo_name}</h1><p>{desc_clean}</p></main>\n  <script src=\"assets/js/app.js\"></script>\n</body>\n</html>\n"
+                    f"<body>\n  <main class=\"hero\"><h1>{repo_name}</h1><p>{first_line_html}</p></main>\n  <script src=\"assets/js/app.js\"></script>\n</body>\n</html>\n"
                 ),
             },
             {"path": "assets/css/style.css", "content": "body { margin: 0; font-family: system-ui, sans-serif; background: #061224; color: #f8fafc; }\n.hero { max-width: 860px; margin: 80px auto; padding: 32px; }\n"},

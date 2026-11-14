@@ -1277,7 +1277,7 @@ def raiz(db: int = 0):
     return {
         "status": "online" if db_status != "error" else "degraded",
         "sistema": "Nexus Code Enterprise SaaS ERP & CRM API",
-        "versao": "2.5.0-prod",
+        "versao": "2.5.1-prod",
         "regiao": os.getenv("VERCEL_REGION", "local"),
         "database_url_configurada": bool(os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")),
         "db_status": db_status,

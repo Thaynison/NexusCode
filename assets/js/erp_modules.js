@@ -890,13 +890,25 @@ export async function renderDreView(ctx) {
   `;
 }
 
-// ==================== 5. CONTAS A PAGAR & DESPESAS ====================
+// ==================== 5. CONTAS A PAGAR & REEMBOLSOS ====================
+let despesasActiveTab = 'despesas'; // 'despesas' | 'reembolsos'
+
 export async function renderDespesasView(ctx) {
   const { cache, user, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS } = ctx;
   const projMap = Object.fromEntries((cache.projetos || []).map((p) => [p.id, p.titulo]));
   const despesas = (cache.despesas || []).filter((d) =>
     matchSearch([d.descricao, d.categoria, d.fornecedor, d.status, projMap[d.projeto_id]])
   );
+  const reembolsos = (cache.reembolsos || []).filter((rb) => {
+    const uName = (cache.usuarios || []).find((u) => u.id === rb.usuario_id)?.nome || '';
+    return matchSearch([rb.descricao, uName, rb.status, projMap[rb.projeto_id]]);
+  });
+  const reembPendentes = reembolsos.filter((r) => r.status === 'pendente').length;
+
+  window.nexusSetDespesasTab = (tab) => {
+    despesasActiveTab = tab;
+    render(true);
+  };
 
   window.nexusOpenNewDespesaModal = () => {
     const projs = cache.projetos || [];
@@ -999,7 +1011,6 @@ export async function renderDespesasView(ctx) {
 
     holeriteDialog.showModal();
   };
-
 
   window.nexusOpenNewReembolsoModal = () => {
     const projs = cache.projetos || [];
@@ -1115,69 +1126,79 @@ export async function renderDespesasView(ctx) {
   return `
     <div class="toolbar">
       <div>
-        <h1>Contas a Pagar &amp; Despesas</h1>
-        <span class="muted">Controle de saídas financeiras, fornecedores, infraestrutura e custos por projeto</span>
+        <h1>Contas a Pagar &amp; Reembolsos</h1>
+        <span class="muted">Controle de saídas financeiras, fornecedores, infraestrutura e reembolsos da equipe</span>
       </div>
-      <button type="button" class="btn" onclick="window.nexusOpenNewDespesaModal()">${ICONS.plus}<span>Nova Despesa</span></button>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button type="button" class="btn secondary" onclick="window.nexusOpenNewReembolsoModal()">${ICONS.plus}<span>Solicitar Reembolso</span></button>
+        <button type="button" class="btn" onclick="window.nexusOpenNewDespesaModal()">${ICONS.plus}<span>Nova Despesa</span></button>
+      </div>
     </div>
 
-    <div class="card table-wrap" style="margin-bottom:22px;">
-      <table class="table">
-        <thead>
-          <tr><th>Descrição</th><th>Categoria</th><th>Fornecedor</th><th>Projeto</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Ações</th></tr>
-        </thead>
-        <tbody>
-          ${despesas.map((d) => `
-            <tr>
-              <td><b>${esc(d.descricao)}</b>${d.recorrente ? ' <span class="badge" style="font-size:10px;">Recorrente</span>' : ''}</td>
-              <td style="text-transform:capitalize;">${esc(d.categoria.replace(/_/g, ' '))}</td>
-              <td>${esc(d.fornecedor || '-')}</td>
-              <td>${esc(projMap[d.projeto_id] || 'Empresa (Fixo)')}</td>
-              <td style="font-weight:700; color:var(--danger);">${formatMoney(d.valor)}</td>
-              <td>${formatDate(d.vencimento)}</td>
-              <td><span class="badge ${esc(d.status)}">${esc(d.status)}</span></td>
-              <td style="white-space:nowrap;">
-                ${d.status !== 'pago' ? `<button type="button" class="btn secondary" style="padding:5px 9px; font-size:11.5px; color:var(--ok);" onclick="window.nexusPayDespesa(${d.id})">Pagar</button>` : ''}
-                ${user?.perfil === 'admin' ? `<button type="button" class="btn secondary" style="padding:5px 9px; font-size:11.5px; color:var(--danger);" data-del="/despesas/${d.id}" data-label="${esc(d.descricao)}">Excluir</button>` : ''}
-              </td>
-            </tr>
-          `).join('') || '<tr><td colspan="8" class="muted" style="text-align:center; padding:32px;">Nenhuma despesa cadastrada.</td></tr>'}
-        </tbody>
-      </table>
+    <div class="filter-bar">
+      <button type="button" class="filter-pill ${despesasActiveTab === 'despesas' ? 'active' : ''}" onclick="window.nexusSetDespesasTab('despesas')">
+        Contas a Pagar &amp; Despesas <span class="filter-count">${despesas.length}</span>
+      </button>
+      <button type="button" class="filter-pill ${despesasActiveTab === 'reembolsos' ? 'active' : ''}" onclick="window.nexusSetDespesasTab('reembolsos')">
+        Reembolsos da Equipe <span class="filter-count">${reembolsos.length}${reembPendentes ? ` (${reembPendentes} pendente)` : ''}</span>
+      </button>
     </div>
 
-    <div class="card table-wrap">
-      <div style="padding:16px 18px 8px; display:flex; justify-content:space-between; align-items:center;">
-        <h3 style="margin:0; font-size:15.5px;">Solicitações de Reembolso da Equipe (${(cache.reembolsos || []).length})</h3>
-        <button type="button" class="btn secondary" style="padding:6px 12px; font-size:12px;" onclick="window.nexusOpenNewReembolsoModal()">+ Solicitar Reembolso</button>
-      </div>
-      <table class="table">
-        <thead>
-          <tr><th>Colaborador</th><th>Descrição</th><th>Projeto</th><th>Data</th><th>Valor</th><th>Status</th><th>Ações</th></tr>
-        </thead>
-        <tbody>
-          ${(cache.reembolsos || []).map((rb) => {
-            const uName = (cache.usuarios || []).find((u) => u.id === rb.usuario_id)?.nome || ('Colaborador #' + rb.usuario_id);
-            return `
+    ${despesasActiveTab === 'despesas' ? `
+      <div class="card table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th>Descrição</th><th>Categoria</th><th>Fornecedor</th><th>Projeto</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Ações</th></tr>
+          </thead>
+          <tbody>
+            ${despesas.map((d) => `
               <tr>
-                <td><b>${esc(uName)}</b></td>
-                <td>${esc(rb.descricao)}</td>
-                <td>${esc(projMap[rb.projeto_id] || 'Geral')}</td>
-                <td>${formatDate(rb.data_despesa)}</td>
-                <td style="font-weight:700;">${formatMoney(rb.valor)}</td>
-                <td><span class="badge ${rb.status === 'aprovado' || rb.status === 'pago' ? 'ativo' : rb.status === 'recusado' ? 'cancelado' : 'pendente'}">${esc(rb.status)}</span></td>
+                <td><b>${esc(d.descricao)}</b>${d.recorrente ? ' <span class="badge" style="font-size:10px;">Recorrente</span>' : ''}</td>
+                <td style="text-transform:capitalize;">${esc(d.categoria.replace(/_/g, ' '))}</td>
+                <td>${esc(d.fornecedor || '-')}</td>
+                <td>${esc(projMap[d.projeto_id] || 'Empresa (Fixo)')}</td>
+                <td style="font-weight:700; color:var(--danger);">${formatMoney(d.valor)}</td>
+                <td>${formatDate(d.vencimento)}</td>
+                <td><span class="badge ${esc(d.status)}">${esc(d.status)}</span></td>
                 <td style="white-space:nowrap;">
-                  ${user?.perfil === 'admin' && rb.status === 'pendente' ? `
-                    <button type="button" class="btn" style="padding:5px 10px; font-size:11.5px;" onclick="window.nexusJulgarReembolso(${rb.id}, 'aprovado')">Aprovar</button>
-                    <button type="button" class="btn secondary" style="padding:5px 10px; font-size:11.5px; color:var(--danger);" onclick="window.nexusJulgarReembolso(${rb.id}, 'recusado')">Recusar</button>
-                  ` : '-'}
+                  ${d.status !== 'pago' ? `<button type="button" class="btn secondary" style="padding:5px 9px; font-size:11.5px; color:var(--ok);" onclick="window.nexusPayDespesa(${d.id})">Pagar</button>` : ''}
+                  ${user?.perfil === 'admin' ? `<button type="button" class="btn secondary" style="padding:5px 9px; font-size:11.5px; color:var(--danger);" data-del="/despesas/${d.id}" data-label="${esc(d.descricao)}">Excluir</button>` : ''}
                 </td>
               </tr>
-            `;
-          }).join('') || '<tr><td colspan="7" class="muted" style="text-align:center; padding:24px;">Nenhuma solicitação de reembolso registrada.</td></tr>'}
-        </tbody>
-      </table>
-    </div>
+            `).join('') || '<tr><td colspan="8" class="muted" style="text-align:center; padding:32px;">Nenhuma despesa cadastrada.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    ` : `
+      <div class="card table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th>Colaborador</th><th>Descrição</th><th>Projeto</th><th>Data</th><th>Valor</th><th>Status</th><th>Ações</th></tr>
+          </thead>
+          <tbody>
+            ${reembolsos.map((rb) => {
+              const uName = (cache.usuarios || []).find((u) => u.id === rb.usuario_id)?.nome || ('Colaborador #' + rb.usuario_id);
+              return `
+                <tr>
+                  <td><b>${esc(uName)}</b></td>
+                  <td>${esc(rb.descricao)}</td>
+                  <td>${esc(projMap[rb.projeto_id] || 'Geral')}</td>
+                  <td>${formatDate(rb.data_despesa)}</td>
+                  <td style="font-weight:700;">${formatMoney(rb.valor)}</td>
+                  <td><span class="badge ${rb.status === 'aprovado' || rb.status === 'pago' ? 'ativo' : rb.status === 'recusado' ? 'cancelado' : 'pendente'}">${esc(rb.status)}</span></td>
+                  <td style="white-space:nowrap;">
+                    ${user?.perfil === 'admin' && rb.status === 'pendente' ? `
+                      <button type="button" class="btn" style="padding:5px 10px; font-size:11.5px;" onclick="window.nexusJulgarReembolso(${rb.id}, 'aprovado')">Aprovar</button>
+                      <button type="button" class="btn secondary" style="padding:5px 10px; font-size:11.5px; color:var(--danger);" onclick="window.nexusJulgarReembolso(${rb.id}, 'recusado')">Recusar</button>
+                    ` : '-'}
+                  </td>
+                </tr>
+              `;
+            }).join('') || '<tr><td colspan="7" class="muted" style="text-align:center; padding:24px;">Nenhuma solicitação de reembolso registrada.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    `}
   `;
 }
 
@@ -1490,9 +1511,12 @@ export async function renderAtivosView(ctx) {
   `;
 }
 
-// ==================== 8. CONFIGURAÇÕES DA EMPRESA, WHITE-LABEL & PERMISSÕES ====================
+// ==================== 8. CONFIGURAÇÕES DA EMPRESA, WHITE-LABEL, PERMISSÕES & INTEGRAÇÕES ====================
+let empresaActiveTab = 'whitelabel'; // 'whitelabel' | 'institucional' | 'permissoes' | 'catalogo' | 'integracoes'
+let empresaIntTag = 'todas'; // 'todas' | 'pagamentos' | 'dominios' | 'devops' | 'precos'
+
 export async function renderEmpresaView(ctx) {
-  const { cache, user, invalidateCache, render, ICONS } = ctx;
+  const { cache, user, invalidateCache, render } = ctx;
   const cfg = cache.empresa_config || await apiRequest('/empresa');
   const org = cache.organizacao || {};
   const brand = org.branding || {};
@@ -1516,7 +1540,7 @@ export async function renderEmpresaView(ctx) {
 
   const modulosLista = [
     ['projetos', 'Projetos & Homologação'],
-    ['tarefas', 'Tarefas & Planner Kanban'],
+    ['tarefas', 'Quadro Kanban & Tarefas'],
     ['timesheet', 'Timesheet & Apontamento de Horas'],
     ['orcamentos', 'Solicitações & Orçamentos'],
     ['propostas', 'Propostas Comerciais & Contratos'],
@@ -1524,132 +1548,14 @@ export async function renderEmpresaView(ctx) {
     ['chamados', 'Suporte & Chamados (Service Desk)'],
     ['financeiro_dre', 'DRE Gerencial & Fluxo de Caixa'],
     ['faturas', 'Faturas & Cobranças'],
-    ['despesas', 'Contas a Pagar & Despesas'],
+    ['despesas', 'Contas a Pagar & Reembolsos'],
     ['contratos', 'Contratos Recorrentes (MRR)'],
     ['ponto', 'Gestão de Ponto'],
     ['holerite', 'Holerite & Rendimentos'],
     ['ativos', 'Ativos, Domínios & Cofre'],
-    ['usuarios', 'Usuários & CBO'],
+    ['usuarios', 'Usuários & Perfis (CBO)'],
     ['auditoria', 'Logs de Auditoria']
   ];
-
-  setTimeout(() => {
-    const logoFileInp = document.getElementById('wl-logo-file');
-    logoFileInp?.addEventListener('change', async (e) => {
-      const f = e.target.files?.[0];
-      if (!f) return;
-      if (f.size > 1.5 * 1024 * 1024) {
-        showToast('O arquivo do logotipo deve ter no máximo 1,5 MB.', 'error');
-        return;
-      }
-      const dataUrl = await readFileAsDataUrl(f);
-      document.getElementById('wl-logo-url').value = dataUrl;
-      const prev = document.getElementById('wl-logo-preview');
-      if (prev) prev.innerHTML = `<img src="${dataUrl}" alt="Logotipo" style="max-height:36px; max-width:160px; object-fit:contain;">`;
-      showToast('Logotipo carregado. Clique em "Salvar Identidade & Domínio" para aplicar.', 'info');
-    });
-
-    const brandForm = document.getElementById('whitelabel-branding-form');
-    if (brandForm) {
-      brandForm.onsubmit = async (e) => {
-        e.preventDefault();
-        if (!isAdmin) {
-          showNoticeModal({ title: 'Acesso Restrito', message: 'Apenas administradores podem alterar a identidade visual e o domínio da organização.', variant: 'warning' });
-          return;
-        }
-        const btn = document.getElementById('save-wl-btn');
-        const raw = Object.fromEntries(new FormData(brandForm));
-        btn.disabled = true;
-        btn.textContent = 'Aplicando Configurações...';
-        try {
-          const payload = {
-            nome_plataforma: raw.nome_plataforma.trim(),
-            subtitulo_plataforma: raw.subtitulo_plataforma.trim(),
-            logo_url: raw.logo_url.trim(),
-            cor_primaria: raw.cor_primaria,
-            cor_secundaria: raw.cor_secundaria,
-            cor_sidebar: raw.cor_sidebar,
-            tema_padrao: raw.tema_padrao,
-            ocultar_powered_by: Boolean(brandForm.querySelector('[name="ocultar_powered_by"]')?.checked),
-            ...(canCustomDomain ? { dominio_customizado: (raw.dominio_customizado || '').trim() } : {})
-          };
-          const res = await apiRequest('/empresa/branding', {
-            method: 'PUT',
-            body: JSON.stringify(payload)
-          });
-          if (cache.organizacao) {
-            cache.organizacao.branding = res.branding;
-            if ('dominio_customizado' in res) {
-              cache.organizacao.dominio_customizado = res.dominio_customizado;
-            }
-            applyWhiteLabelBranding(cache.organizacao);
-          }
-          invalidateCache();
-          showToast('Identidade visual e configurações de domínio atualizadas!', 'success');
-          render();
-        } catch (err) {
-          showNoticeModal({ title: 'Erro ao salvar configurações', message: err.message, variant: 'error' });
-        } finally {
-          btn.disabled = false;
-          btn.textContent = 'Salvar Identidade & Domínio';
-        }
-      };
-    }
-
-    const form = document.getElementById('empresa-config-form');
-    if (!form) return;
-    form.onsubmit = async (e) => {
-      e.preventDefault();
-      if (!isAdmin) {
-        showNoticeModal({ title: 'Acesso Restrito', message: 'Apenas administradores podem salvar configurações institucionais.', variant: 'warning' });
-        return;
-      }
-      const btn = document.getElementById('save-empresa-btn');
-      const raw = Object.fromEntries(new FormData(form));
-      const colabPerms = {};
-      modulosLista.forEach(([key]) => {
-        colabPerms[key] = Boolean(form.querySelector(`[name="perm_colab_${key}"]`)?.checked);
-      });
-
-      btn.disabled = true;
-      btn.textContent = 'Salvando...';
-      try {
-        await apiRequest('/empresa', {
-          method: 'PUT',
-          body: JSON.stringify({
-            razao_social: raw.razao_social,
-            nome_fantasia: raw.nome_fantasia,
-            cnpj: raw.cnpj,
-            inscricao_estadual: raw.inscricao_estadual || null,
-            email_financeiro: raw.email_financeiro || null,
-            telefone: raw.telefone || null,
-            endereco: raw.endereco || null,
-            cidade: raw.cidade || null,
-            estado: raw.estado || null,
-            cep: raw.cep || null,
-            banco_nome: raw.banco_nome || null,
-            agencia: raw.agencia || null,
-            conta: raw.conta || null,
-            chave_pix: raw.chave_pix || null,
-            titular_pix: raw.titular_pix || null,
-            multa_atraso_percent: Number(raw.multa_atraso_percent ?? 2),
-            juros_mensal_percent: Number(raw.juros_mensal_percent ?? 1),
-            multa_rescisao_percent: Number(raw.multa_rescisao_percent ?? 10),
-            imposto_servico_percent: Number(raw.imposto_servico_percent ?? 6),
-            permissoes_json: JSON.stringify({ admin: true, colaborador: colabPerms })
-          })
-        });
-        invalidateCache();
-        showToast('Configurações institucionais e permissões atualizadas!', 'success');
-        render();
-      } catch (err) {
-        showNoticeModal({ title: 'Erro ao salvar configurações', message: err.message, variant: 'error' });
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Salvar Configurações da Empresa';
-      }
-    };
-  }, 30);
 
   const defaultTlds = [
     { ext: '.com.br', label: 'Nacional Brasil (.com.br)', custo: 40.00, venda: 79.90 },
@@ -1665,9 +1571,56 @@ export async function renderEmpresaView(ctx) {
   if (cfg?.dominio_precos_json) {
     try { savedTlds = JSON.parse(cfg.dominio_precos_json) || {}; } catch (_) {}
   }
-
-  
   const catalogoServicos = Array.isArray(cache.catalogo_servicos) ? [...cache.catalogo_servicos] : [];
+
+  window.nexusSetEmpresaTab = (tab) => {
+    empresaActiveTab = tab;
+    render(true);
+  };
+
+  window.nexusSetEmpresaIntTag = (tag) => {
+    empresaIntTag = tag;
+    render(true);
+  };
+
+  window.nexusToggleAllColabPerms = (mode) => {
+    const defaults = {
+      projetos: true, tarefas: true, timesheet: true, orcamentos: true,
+      propostas: true, clientes: true, chamados: true, financeiro_dre: false,
+      faturas: true, despesas: false, contratos: false, ponto: true,
+      holerite: true, ativos: true, usuarios: false, auditoria: false
+    };
+    modulosLista.forEach(([key]) => {
+      const cb = document.querySelector(`[name="perm_colab_${key}"]`);
+      if (cb) cb.checked = mode === 'all' ? true : Boolean(defaults[key]);
+    });
+  };
+
+  window.nexusSavePermissoesPerfil = async () => {
+    if (!isAdmin) {
+      showNoticeModal({ title: 'Acesso Restrito', message: 'Apenas administradores podem alterar permissões.', variant: 'warning' });
+      return;
+    }
+    const colabPerms = {};
+    modulosLista.forEach(([key]) => {
+      colabPerms[key] = Boolean(document.querySelector(`[name="perm_colab_${key}"]`)?.checked);
+    });
+    const btn = document.getElementById('save-perms-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Salvando Permissões...'; }
+    try {
+      await apiRequest('/empresa', {
+        method: 'PUT',
+        body: JSON.stringify({ permissoes_json: JSON.stringify({ admin: true, colaborador: colabPerms }) })
+      });
+      invalidateCache();
+      showToast('Matriz de permissões atualizada com sucesso!', 'success');
+      render();
+    } catch (err) {
+      showNoticeModal({ title: 'Erro ao salvar permissões', message: err.message, variant: 'error' });
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Salvar Matriz de Permissões'; }
+    }
+  };
 
   window.nexusSaveCatalogoServicos = async () => {
     const rows = [...document.querySelectorAll('[data-cat-row]')];
@@ -1720,16 +1673,6 @@ export async function renderEmpresaView(ctx) {
     tbody.appendChild(tr);
   };
 
-  window.nexusSetEmpresaTab = (tab) => {
-    document.querySelectorAll('.empresa-tab-view').forEach((el) => { el.style.display = 'none'; });
-    const target = document.getElementById(`empresa-tab-${tab}`);
-    if (target) target.style.display = 'block';
-    document.querySelectorAll('#empresa-tabs-bar .filter-pill').forEach((b) => b.classList.remove('active'));
-    const btn = document.getElementById(`tab-btn-${tab}`);
-    if (btn) btn.classList.add('active');
-  };
-
-  
   window.nexusTestarGithubConexao = async () => {
     const token = document.getElementById('cfg-gh-token')?.value || '';
     const orgName = document.getElementById('cfg-gh-org')?.value || '';
@@ -1738,7 +1681,7 @@ export async function renderEmpresaView(ctx) {
         method: 'POST',
         body: JSON.stringify({ github_token: token, github_org: orgName })
       });
-      showToast(`Conectado ao GitHub: ${res.organizacao} (${res.tipo_conta} • ${res.tipo_token || 'PAT'}) — Lembre-se de clicar em "Salvar Todas as Integrações".`, 'success');
+      showToast(`Conectado ao GitHub: ${res.organizacao} (${res.tipo_conta} • ${res.tipo_token || 'PAT'}) — Lembre-se de clicar em "Salvar Integrações".`, 'success');
     } catch (err) {
       showNoticeModal({ title: 'Falha na Conexão GitHub', message: err.message, variant: 'error' });
     }
@@ -1791,20 +1734,134 @@ export async function renderEmpresaView(ctx) {
         })
       });
       invalidateCache();
-      showToast('Integrações Mercado Pago (Orders API), Registrador e Vercel salvas com sucesso!', 'success');
+      showToast('Integrações e parâmetros de API salvos com sucesso!', 'success');
     } catch (err) {
       showNoticeModal({ title: 'Erro ao salvar integrações', message: err.message, variant: 'error' });
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Salvar Todas as Integrações';
+      btn.textContent = 'Salvar Integrações';
     }
   };
+
+  setTimeout(() => {
+    const logoFileInp = document.getElementById('wl-logo-file');
+    logoFileInp?.addEventListener('change', async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      if (f.size > 1.5 * 1024 * 1024) {
+        showToast('O arquivo do logotipo deve ter no máximo 1,5 MB.', 'error');
+        return;
+      }
+      const dataUrl = await readFileAsDataUrl(f);
+      document.getElementById('wl-logo-url').value = dataUrl;
+      const prev = document.getElementById('wl-logo-preview');
+      if (prev) prev.innerHTML = `<img src="${dataUrl}" alt="Logotipo" style="max-height:36px; max-width:160px; object-fit:contain;">`;
+      showToast('Logotipo carregado. Clique em "Salvar Identidade & Domínio" para aplicar.', 'info');
+    });
+
+    const brandForm = document.getElementById('whitelabel-branding-form');
+    if (brandForm) {
+      brandForm.onsubmit = async (e) => {
+        e.preventDefault();
+        if (!isAdmin) {
+          showNoticeModal({ title: 'Acesso Restrito', message: 'Apenas administradores podem alterar a identidade visual.', variant: 'warning' });
+          return;
+        }
+        const btn = document.getElementById('save-wl-btn');
+        const raw = Object.fromEntries(new FormData(brandForm));
+        btn.disabled = true;
+        btn.textContent = 'Aplicando...';
+        try {
+          const payload = {
+            nome_plataforma: raw.nome_plataforma.trim(),
+            subtitulo_plataforma: raw.subtitulo_plataforma.trim(),
+            logo_url: raw.logo_url.trim(),
+            cor_primaria: raw.cor_primaria,
+            cor_secundaria: raw.cor_secundaria,
+            cor_sidebar: raw.cor_sidebar,
+            tema_padrao: raw.tema_padrao,
+            ocultar_powered_by: Boolean(brandForm.querySelector('[name="ocultar_powered_by"]')?.checked),
+            ...(canCustomDomain ? { dominio_customizado: (raw.dominio_customizado || '').trim() } : {})
+          };
+          const res = await apiRequest('/empresa/branding', {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+          });
+          if (cache.organizacao) {
+            cache.organizacao.branding = res.branding;
+            if ('dominio_customizado' in res) cache.organizacao.dominio_customizado = res.dominio_customizado;
+            applyWhiteLabelBranding(cache.organizacao);
+          }
+          invalidateCache();
+          showToast('Identidade visual e domínio atualizados!', 'success');
+          render();
+        } catch (err) {
+          showNoticeModal({ title: 'Erro ao salvar identidade', message: err.message, variant: 'error' });
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Salvar Identidade & Domínio';
+        }
+      };
+    }
+
+    const form = document.getElementById('empresa-config-form');
+    if (form) {
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        if (!isAdmin) {
+          showNoticeModal({ title: 'Acesso Restrito', message: 'Apenas administradores podem salvar dados institucionais.', variant: 'warning' });
+          return;
+        }
+        const btn = document.getElementById('save-empresa-btn');
+        const raw = Object.fromEntries(new FormData(form));
+        btn.disabled = true;
+        btn.textContent = 'Salvando...';
+        try {
+          await apiRequest('/empresa', {
+            method: 'PUT',
+            body: JSON.stringify({
+              razao_social: raw.razao_social,
+              nome_fantasia: raw.nome_fantasia,
+              cnpj: raw.cnpj,
+              inscricao_estadual: raw.inscricao_estadual || null,
+              email_financeiro: raw.email_financeiro || null,
+              telefone: raw.telefone || null,
+              endereco: raw.endereco || null,
+              cidade: raw.cidade || null,
+              estado: raw.estado || null,
+              cep: raw.cep || null,
+              banco_nome: raw.banco_nome || null,
+              agencia: raw.agencia || null,
+              conta: raw.conta || null,
+              chave_pix: raw.chave_pix || null,
+              titular_pix: raw.titular_pix || null,
+              multa_atraso_percent: Number(raw.multa_atraso_percent ?? 2),
+              juros_mensal_percent: Number(raw.juros_mensal_percent ?? 1),
+              multa_rescisao_percent: Number(raw.multa_rescisao_percent ?? 10),
+              imposto_servico_percent: Number(raw.imposto_servico_percent ?? 6)
+            })
+          });
+          invalidateCache();
+          showToast('Dados fiscais, bancários e parâmetros financeiros salvos!', 'success');
+          render();
+        } catch (err) {
+          showNoticeModal({ title: 'Erro ao salvar dados', message: err.message, variant: 'error' });
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Salvar Dados Fiscais & Financeiro';
+        }
+      };
+    }
+  }, 30);
+
+  const showIntCard = (tag) => empresaIntTag === 'todas' || empresaIntTag === tag;
+  const activeColabPermsCount = modulosLista.filter(([k]) => perms.colaborador[k]).length;
 
   return `
     <div class="toolbar">
       <div>
-        <h1>Empresa, White-Label &amp; Integrações</h1>
-        <span class="muted">Gerencie a identidade corporativa, permissões, Mercado Pago (Orders API) e venda automática de domínios</span>
+        <h1>Empresa, Permissões &amp; Integrações</h1>
+        <span class="muted">Configurações organizadas por área funcional: identidade visual, dados fiscais, acessos, serviços e APIs</span>
       </div>
       ${org.slug ? `
         <div style="display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); padding:8px 14px; border-radius:10px; font-size:12.5px;">
@@ -1814,340 +1871,355 @@ export async function renderEmpresaView(ctx) {
       ` : ''}
     </div>
 
-    <div class="filter-bar" id="empresa-tabs-bar">
-      <button type="button" id="tab-btn-geral" class="filter-pill active" onclick="window.nexusSetEmpresaTab('geral')">Geral, Marca &amp; Permissões</button>
-      <button type="button" id="tab-btn-integracoes" class="filter-pill" onclick="window.nexusSetEmpresaTab('integracoes')">Integrações Mercado Pago &amp; Domínios</button>
+    <div class="filter-bar">
+      <button type="button" class="filter-pill ${empresaActiveTab === 'whitelabel' ? 'active' : ''}" onclick="window.nexusSetEmpresaTab('whitelabel')">Identidade &amp; White-Label</button>
+      <button type="button" class="filter-pill ${empresaActiveTab === 'institucional' ? 'active' : ''}" onclick="window.nexusSetEmpresaTab('institucional')">Dados Fiscais &amp; Financeiro</button>
+      <button type="button" class="filter-pill ${empresaActiveTab === 'permissoes' ? 'active' : ''}" onclick="window.nexusSetEmpresaTab('permissoes')">Permissões por Perfil <span class="filter-count">${activeColabPermsCount}/${modulosLista.length}</span></button>
+      <button type="button" class="filter-pill ${empresaActiveTab === 'catalogo' ? 'active' : ''}" onclick="window.nexusSetEmpresaTab('catalogo')">Catálogo de Serviços <span class="filter-count">${catalogoServicos.length}</span></button>
+      <button type="button" class="filter-pill ${empresaActiveTab === 'integracoes' ? 'active' : ''}" onclick="window.nexusSetEmpresaTab('integracoes')">Integrações &amp; APIs <span class="filter-count">4</span></button>
     </div>
 
-    <!-- TAB 1: GERAL & WHITE LABEL -->
-    <div id="empresa-tab-geral" class="empresa-tab-view">
-    <div class="toolbar">
-      <div>
-        <h1>Empresa, White-Label &amp; Permissões</h1>
-        <span class="muted">Gerencie a identidade visual corporativa, domínio de acesso, parâmetros fiscais, dados bancários e permissões</span>
-      </div>
-      ${org.slug ? `
-        <div style="display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); padding:8px 14px; border-radius:10px; font-size:12.5px;">
-          <span class="muted">Plano Ativo:</span>
-          <span class="badge ativo" style="text-transform:uppercase;">${esc(org.plano || 'Enterprise')}</span>
-        </div>
-      ` : ''}
-    </div>
-
-    <!-- Card White-Label (Logotipo, Cores, Nome & Domínio Corporativo) -->
-    <form id="whitelabel-branding-form" class="card" style="margin-bottom:20px; border-left:4px solid var(--primary);">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
-        <div>
-          <h4 class="profile-section-title" style="font-size:16px;">Identidade Visual White-Label &amp; Domínio de Acesso</h4>
-          <p class="profile-section-sub" style="margin:0;">Personalize o logotipo, a paleta cromática e o endereço de acesso da tela de login, painel administrativo e Portal do Cliente.</p>
-        </div>
-        <div id="wl-logo-preview" style="background:${esc(brand.cor_sidebar || '#0A1D37')}; color:#fff; padding:8px 14px; border-radius:10px; display:flex; align-items:center; gap:10px;">
-          ${brand.logo_url
-            ? `<img src="${esc(brand.logo_url)}" alt="Logotipo" style="max-height:32px; max-width:140px; object-fit:contain;">`
-            : `<span style="font-weight:800; letter-spacing:0.04em;">${esc(brand.nome_plataforma || org.nome || 'PORTAL')}</span>`}
-        </div>
-      </div>
-
-      <div class="formgrid-3" style="margin-bottom:14px;">
-        <label class="field-full">Nome da Plataforma / Marca *
-          <input type="text" name="nome_plataforma" value="${esc(brand.nome_plataforma || org.nome || '')}" required class="nc-input" placeholder="Ex.: Minha Organização ERP">
-        </label>
-        <label class="field-full">Subtítulo Institucional
-          <input type="text" name="subtitulo_plataforma" value="${esc(brand.subtitulo_plataforma || '')}" class="nc-input" placeholder="Ex.: GESTÃO CORPORATIVA">
-        </label>
-        <label class="field-full">Tema Padrão da Interface
-          <select name="tema_padrao" class="nc-input">
-            <option value="light" ${(brand.tema_padrao || 'light') === 'light' ? 'selected' : ''}>Claro Executivo (Light)</option>
-            <option value="dark" ${brand.tema_padrao === 'dark' ? 'selected' : ''}>Escuro Enterprise (Dark)</option>
-          </select>
-        </label>
-      </div>
-
-      <div class="formgrid-3" style="margin-bottom:14px;">
-        <label class="field-full">Cor Primária (Ações &amp; Destaques)
-          <div style="display:flex; gap:8px; align-items:center;">
-            <input type="color" name="cor_primaria" value="${esc(brand.cor_primaria || '#0096B4')}" style="width:46px; height:38px; padding:2px; border:1px solid var(--border); border-radius:8px; cursor:pointer;">
-            <span class="muted" style="font-size:12px;">${esc(brand.cor_primaria || '#0096B4')}</span>
-          </div>
-        </label>
-        <label class="field-full">Cor Secundária / Hover
-          <div style="display:flex; gap:8px; align-items:center;">
-            <input type="color" name="cor_secundaria" value="${esc(brand.cor_secundaria || '#0A1D37')}" style="width:46px; height:38px; padding:2px; border:1px solid var(--border); border-radius:8px; cursor:pointer;">
-            <span class="muted" style="font-size:12px;">${esc(brand.cor_secundaria || '#0A1D37')}</span>
-          </div>
-        </label>
-        <label class="field-full">Cor do Menu Lateral (Sidebar)
-          <div style="display:flex; gap:8px; align-items:center;">
-            <input type="color" name="cor_sidebar" value="${esc(brand.cor_sidebar || '#0A1D37')}" style="width:46px; height:38px; padding:2px; border:1px solid var(--border); border-radius:8px; cursor:pointer;">
-            <span class="muted" style="font-size:12px;">${esc(brand.cor_sidebar || '#0A1D37')}</span>
-          </div>
-        </label>
-      </div>
-
-      <div class="formgrid" style="margin-bottom:14px;">
-        <label class="field-full">URL do Logotipo (ou selecione um arquivo ao lado)
-          <input type="text" name="logo_url" id="wl-logo-url" value="${esc(brand.logo_url || '')}" class="nc-input" placeholder="https://... ou vazio para monograma institucional">
-        </label>
-        <label class="field-full">Enviar Arquivo de Logotipo (PNG, JPG ou SVG, máx. 1,5 MB)
-          <input type="file" id="wl-logo-file" accept="image/*,.svg" class="nc-input">
-        </label>
-      </div>
-
-      <!-- Configuração de Endereço & Domínio Próprio (Exclusivo Enterprise Full) -->
-      <div style="padding:14px 16px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); margin-bottom:14px;">
-        <div class="formgrid">
-          <label class="field-full">Subdomínio Gerenciado (Infraestrutura Nexus Code)
-            <input type="text" value="${esc(org.slug || 'portal')}.nexuscodebrasil.com.br" readonly class="nc-input" style="font-weight:700; color:var(--primary);">
-            <span class="muted" style="font-size:11.5px;">Endereço padrão ativo com certificado SSL gerenciado.</span>
-          </label>
-          ${canCustomDomain ? `
-            <label class="field-full">Domínio Corporativo Próprio — CNAME (Plano Enterprise Full)
-              <input type="text" name="dominio_customizado" value="${esc(org.dominio_customizado || '')}" class="nc-input" placeholder="Ex.: portal.suaempresa.com.br">
-              <span class="muted" style="font-size:11.5px;">Para ativar, crie um registro <b>CNAME</b> no DNS do seu domínio apontando para <code>cname.vercel-dns.com</code>.</span>
-            </label>
-          ` : `
-            <div class="field-full" style="display:flex; flex-direction:column; justify-content:center; gap:4px;">
-              <span style="font-size:12.5px; font-weight:700;">Domínio Corporativo Próprio (CNAME)</span>
-              <span class="muted" style="font-size:12px; line-height:1.45;">
-                No plano <b>${esc((org.plano || 'Starter').toUpperCase())}</b>, o portal opera exclusivamente sob o subdomínio gerenciado <code>.nexuscodebrasil.com.br</code>. O apontamento de domínio próprio está disponível no plano <b>Enterprise Full</b>.
-              </span>
-            </div>
-          `}
-        </div>
-      </div>
-
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-        <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; cursor:pointer;">
-          <input type="checkbox" name="ocultar_powered_by" ${brand.ocultar_powered_by ? 'checked' : ''} style="width:16px; height:16px; accent-color:var(--primary);">
-          <span>Modo White-Label Integral (ocultar referência tecnológica no rodapé de autenticação)</span>
-        </label>
-        <button type="submit" class="btn" id="save-wl-btn">Salvar Identidade &amp; Domínio</button>
-      </div>
-    </form>
-
-    <form id="empresa-config-form" class="profile-columns">
-      <div class="card profile-col-card">
-        <div>
-          <h4 class="profile-section-title">1. Dados Institucionais &amp; Fiscais</h4>
-          <p class="profile-section-sub">Informações exibidas nas propostas comerciais, holerites, recibos e Portal do Cliente.</p>
-          <div class="profile-grid">
-            <label class="field-full">Razão Social *
-              <input type="text" name="razao_social" value="${esc(cfg?.razao_social || org.nome || 'Nexus Code Brasil Tecnologia Ltda')}" required class="nc-input">
-            </label>
-            <label class="field-full">Nome Fantasia *
-              <input type="text" name="nome_fantasia" value="${esc(cfg?.nome_fantasia || org.nome || 'Nexus Code Brasil')}" required class="nc-input">
-            </label>
-            <label class="field-full">CNPJ
-              <input type="text" name="cnpj" value="${esc(cfg?.cnpj || '')}" class="nc-input">
-            </label>
-            <label class="field-full">Inscrição Estadual / Municipal
-              <input type="text" name="inscricao_estadual" value="${esc(cfg?.inscricao_estadual || '')}" class="nc-input">
-            </label>
-            <label class="field-full">E-mail Financeiro / Comercial
-              <input type="email" name="email_financeiro" value="${esc(cfg?.email_financeiro || '')}" class="nc-input">
-            </label>
-            <label class="field-full">Telefone Corporativo
-              <input type="text" name="telefone" value="${esc(cfg?.telefone || '')}" class="nc-input">
-            </label>
-            <label class="field-full">Endereço
-              <input type="text" name="endereco" value="${esc(cfg?.endereco || '')}" class="nc-input">
-            </label>
-            <label class="field-full">Cidade / UF
-              <div style="display:grid; grid-template-columns:1fr 70px; gap:8px;">
-                <input type="text" name="cidade" value="${esc(cfg?.cidade || '')}" class="nc-input">
-                <input type="text" name="estado" value="${esc(cfg?.estado || '')}" maxlength="2" class="nc-input">
-              </div>
-            </label>
-          </div>
-        </div>
-
-        <div class="profile-section">
-          <h4 class="profile-section-title">2. Dados Bancários &amp; Chave PIX (Portal do Cliente)</h4>
-          <p class="profile-section-sub">Parâmetros exibidos automaticamente ao cliente na liquidação de faturas.</p>
-          <div class="profile-grid">
-            <label class="field-full">Chave PIX Oficial *
-              <input type="text" name="chave_pix" value="${esc(cfg?.chave_pix || '')}" class="nc-input">
-            </label>
-            <label class="field-full">Favorecido / Titular PIX
-              <input type="text" name="titular_pix" value="${esc(cfg?.titular_pix || '')}" class="nc-input">
-            </label>
-            <label class="field-full">Instituição Bancária
-              <input type="text" name="banco_nome" value="${esc(cfg?.banco_nome || '')}" class="nc-input">
-            </label>
-            <label class="field-full">Agência / Conta
-              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                <input type="text" name="agencia" placeholder="Agência" value="${esc(cfg?.agencia || '')}" class="nc-input">
-                <input type="text" name="conta" placeholder="Conta" value="${esc(cfg?.conta || '')}" class="nc-input">
-              </div>
-            </label>
-            <label class="field-full">Impostos sobre Serviços (%) — Orçamentos
-              <input type="number" step="0.1" name="imposto_servico_percent" value="${cfg?.imposto_servico_percent ?? 6.0}" class="nc-input">
-            </label>
-            <label class="field-full">Multa Rescisória Contratual (%)
-              <input type="number" step="0.1" name="multa_rescisao_percent" value="${cfg?.multa_rescisao_percent ?? 10.0}" class="nc-input">
-            </label>
-            <label class="field-full">Multa por Atraso (%)
-              <input type="number" step="0.1" name="multa_atraso_percent" value="${cfg?.multa_atraso_percent ?? 2.0}" class="nc-input">
-            </label>
-            <label class="field-full">Juros Mensais (%)
-              <input type="number" step="0.1" name="juros_mensal_percent" value="${cfg?.juros_mensal_percent ?? 1.0}" class="nc-input">
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <div class="card profile-col-card">
-        <div>
-          <h4 class="profile-section-title">3. Matriz de Permissões Granulares por Perfil</h4>
-          <p class="profile-section-sub">Administradores possuem acesso irrestrito aos módulos contratados. Defina os módulos visíveis para o perfil <b>Colaborador</b>.</p>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-            ${modulosLista.map(([key, label]) => `
-              <label style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface2); font-size:12.5px; font-weight:600; cursor:pointer;">
-                <input type="checkbox" name="perm_colab_${key}" ${perms.colaborador[key] ? 'checked' : ''} style="width:16px; height:16px; accent-color:var(--primary);">
-                <span>${esc(label)}</span>
-              </label>
-            `).join('')}
-          </div>
-        </div>
-
-        <div class="profile-footer-actions">
-          <button type="submit" class="btn" id="save-empresa-btn">Salvar Configurações da Empresa</button>
-        </div>
-      </div>
-    </form>
-
-    <div class="card" style="margin-top:20px; border-left: 4px solid #00B4D8;">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
-        <div>
-          <h4 class="profile-section-title" style="font-size:16px;">4. Catálogo Oficial de Serviços Precificados (Orçamentos Automáticos)</h4>
-          <p class="profile-section-sub" style="margin:0;">Estes serviços e valores base aparecem automaticamente no Gerador de Orçamentos, no Portal do Cliente e no Site.</p>
-        </div>
-        <div style="display:flex; gap:8px;">
-          <button type="button" class="btn secondary" onclick="window.nexusAddCatalogoServicoRow()">+ Adicionar Serviço</button>
-          <button type="button" class="btn" onclick="window.nexusSaveCatalogoServicos()">Salvar Catálogo de Serviços</button>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Categoria</th>
-              <th>Serviço &amp; Descrição Comercial</th>
-              <th>Custo Base (R$)</th>
-              <th>Prazo (dias)</th>
-              <th>Parcelas</th>
-              <th>Ação</th>
-            </tr>
-          </thead>
-          <tbody id="catalogo-servicos-tbody">
-            ${catalogoServicos.map((s) => `
-              <tr data-cat-row="1" data-cat-code="${esc(s.codigo)}">
-                <td><input type="text" data-f="categoria" value="${esc(s.categoria || '')}" class="nc-input" style="min-width:130px;"></td>
-                <td>
-                  <input type="text" data-f="nome" value="${esc(s.nome || '')}" class="nc-input" style="font-weight:700; margin-bottom:4px;">
-                  <input type="text" data-f="descricao" value="${esc(s.descricao || '')}" class="nc-input" style="font-size:12px;">
-                </td>
-                <td><input type="number" step="0.01" min="0" data-f="valor_base" value="${Number(s.valor_base || 0).toFixed(2)}" class="nc-input" style="max-width:130px; font-weight:700;"></td>
-                <td><input type="number" min="1" max="365" data-f="prazo_dias" value="${Number(s.prazo_dias || 15)}" class="nc-input" style="max-width:90px;"></td>
-                <td><input type="number" min="1" max="24" data-f="parcelas_padrao" value="${Number(s.parcelas_padrao || 2)}" class="nc-input" style="max-width:80px;"></td>
-                <td><button type="button" class="btn secondary" style="padding:5px 9px; font-size:11.5px; color:var(--danger);" onclick="this.closest('tr').remove()">Remover</button></td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-    </div>
-
-    <!-- TAB 2: INTEGRAÇÕES & APIS -->
-    <div id="empresa-tab-integracoes" class="empresa-tab-view" style="display:none;">
-      <form id="empresa-integracoes-form" style="display:flex; flex-direction:column; gap:20px;">
-        <div class="profile-columns">
-          <div class="card profile-col-card">
-            <div>
-              <h4 class="profile-section-title">1. Mercado Pago (Checkout, PIX &amp; Folha Payouts)</h4>
-              <p class="profile-section-sub">Compatível nativamente com a nova <b>API de Orders (/v1/orders)</b> do Mercado Pago e com a API de Payments.</p>
-              <div class="profile-grid">
-                <label class="field-full">Status do Gateway *
-                  <select name="mp_ativo" class="nc-input">
-                    <option value="false" ${!cfg?.mp_ativo ? 'selected' : ''}>Desativado</option>
-                    <option value="true" ${cfg?.mp_ativo ? 'selected' : ''}>Ativo e Operacional</option>
-                  </select>
-                </label>
-                <label class="field-full">Tipo de API Mercado Pago *
-                  <select name="mp_api_tipo" class="nc-input">
-                    <option value="orders" ${(cfg?.mp_api_tipo || 'orders') === 'orders' ? 'selected' : ''}>API de Orders (/v1/orders) — Nova API Recomendada</option>
-                    <option value="payments" ${cfg?.mp_api_tipo === 'payments' ? 'selected' : ''}>API de Payments (/v1/payments) — Legado</option>
-                  </select>
-                </label>
-                <label class="field-full">Ambiente de Operação
-                  <select name="mp_ambiente" class="nc-input">
-                    <option value="producao" ${(cfg?.mp_ambiente || 'producao') === 'producao' ? 'selected' : ''}>Produção (Recebimentos Reais)</option>
-                    <option value="sandbox" ${cfg?.mp_ambiente === 'sandbox' ? 'selected' : ''}>Sandbox (Credenciais de Teste)</option>
-                  </select>
-                </label>
-                <label class="field-full">Public Key
-                  <input type="text" name="mp_public_key" value="${esc(cfg?.mp_public_key || '')}" placeholder="APP_USR-..." class="nc-input">
-                </label>
-                <label class="field-full">Access Token *
-                  <input type="password" name="mp_access_token" value="${esc(cfg?.mp_access_token || '')}" placeholder="APP_USR-..." class="nc-input">
-                </label>
-                <label class="field-full">Webhook Secret (Assinatura Secreta HMAC)
-                  <input type="password" name="mp_webhook_secret" value="${esc(cfg?.mp_webhook_secret || '')}" placeholder="Cole a assinatura secreta do Webhook" class="nc-input">
-                </label>
-              </div>
-              <div style="background:rgba(0,180,216,0.09); border:1px solid rgba(0,180,216,0.35); border-radius:10px; padding:12px 14px; margin-top:14px; font-size:12px; line-height:1.5;">
-                <div><b>URL de Notificação Webhook:</b></div>
-                <code style="display:block; margin:4px 0; font-weight:700; color:var(--primary);">https://www.nexuscodebrasil.com.br/api/webhooks/mercadopago?org_id=${org.id || 1}</code>
-                <span class="muted">No painel Webhooks do Mercado Pago, marque o evento <b>Orders</b> (se usar API de Orders) ou <b>Pagamentos</b> (se usar API de Payments).</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="card profile-col-card">
-            <div>
-              <h4 class="profile-section-title">2. Registrador de Domínios &amp; Auto-SSL Vercel</h4>
-              <p class="profile-section-sub">Após o pagamento confirmado no Mercado Pago, o sistema registra o domínio e emite o certificado HTTPS sozinho.</p>
-              <div class="profile-grid">
-                <label class="field-full">Provedor Registrador (Revenda)
-                  <select name="registrar_provedor" class="nc-input">
-                    <option value="sandbox" ${(cfg?.registrar_provedor || 'sandbox') === 'sandbox' ? 'selected' : ''}>Sandbox (Homologação / Registro Simulado)</option>
-                    <option value="namecheap" ${cfg?.registrar_provedor === 'namecheap' ? 'selected' : ''}>Namecheap API (Registro + DNS Automático)</option>
-                    <option value="resellerclub" ${cfg?.registrar_provedor === 'resellerclub' ? 'selected' : ''}>ResellerClub API</option>
-                  </select>
-                </label>
-                <label class="field-full">API User / Auth-ID (Registrador)
-                  <input type="text" name="registrar_api_user" value="${esc(cfg?.registrar_api_user || '')}" class="nc-input">
-                </label>
-                <label class="field-full">API Key / Token (Registrador)
-                  <input type="password" name="registrar_api_key" value="${esc(cfg?.registrar_api_key || '')}" class="nc-input">
-                </label>
-                <label class="field-full">Client IP Autorizado (Namecheap)
-                  <input type="text" name="registrar_client_ip" value="${esc(cfg?.registrar_client_ip || '')}" placeholder="Ex.: 177.x.x.x" class="nc-input">
-                </label>
-                <label class="field-full">Vercel API Token (Para SSL/HTTPS Automático)
-                  <input type="password" name="vercel_token" value="${esc(cfg?.vercel_token || '')}" class="nc-input">
-                </label>
-                <label class="field-full">Vercel Project ID
-                  <input type="text" name="vercel_project_id" value="${esc(cfg?.vercel_project_id || '')}" placeholder="prj_..." class="nc-input">
-                </label>
-                <label class="field-full">Vercel Team ID (Opcional)
-                  <input type="text" name="vercel_team_id" value="${esc(cfg?.vercel_team_id || '')}" placeholder="team_..." class="nc-input">
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-
-                <div class="card profile-col-card" style="border-left: 4px solid #00B4D8;">
+    ${empresaActiveTab === 'whitelabel' ? `
+      <form id="whitelabel-branding-form" class="card" style="border-left:4px solid var(--primary);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
           <div>
-            <h4 class="profile-section-title">GitHub Enterprise &amp; Automação de Repositórios</h4>
-            <p class="profile-section-sub">Cria repositórios automaticamente na organização GitHub da empresa ao criar projetos e habilita a IDE VS Code / Codespaces integrada.</p>
+            <span class="int-type-tag pagamentos">Identidade Visual &amp; Domínio</span>
+            <h4 class="profile-section-title" style="font-size:16px;">White-Label, Cores &amp; Endereço do Portal</h4>
+            <p class="profile-section-sub" style="margin:0;">Personalize o logotipo, paleta cromática e domínio de acesso do painel e Portal do Cliente.</p>
+          </div>
+          <div id="wl-logo-preview" style="background:${esc(brand.cor_sidebar || '#0A1D37')}; color:#fff; padding:8px 14px; border-radius:10px; display:flex; align-items:center; gap:10px;">
+            ${brand.logo_url
+              ? `<img src="${esc(brand.logo_url)}" alt="Logotipo" style="max-height:32px; max-width:140px; object-fit:contain;">`
+              : `<span style="font-weight:800; letter-spacing:0.04em;">${esc(brand.nome_plataforma || org.nome || 'PORTAL')}</span>`}
+          </div>
+        </div>
+
+        <div class="formgrid-3" style="margin-bottom:14px;">
+          <label class="field-full">Nome da Plataforma / Marca *
+            <input type="text" name="nome_plataforma" value="${esc(brand.nome_plataforma || org.nome || '')}" required class="nc-input">
+          </label>
+          <label class="field-full">Subtítulo Institucional
+            <input type="text" name="subtitulo_plataforma" value="${esc(brand.subtitulo_plataforma || '')}" class="nc-input">
+          </label>
+          <label class="field-full">Tema Padrão da Interface
+            <select name="tema_padrao" class="nc-input">
+              <option value="light" ${(brand.tema_padrao || 'light') === 'light' ? 'selected' : ''}>Claro Executivo (Light)</option>
+              <option value="dark" ${brand.tema_padrao === 'dark' ? 'selected' : ''}>Escuro Enterprise (Dark)</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="formgrid-3" style="margin-bottom:14px;">
+          <label class="field-full">Cor Primária (Ações &amp; Destaques)
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input type="color" name="cor_primaria" value="${esc(brand.cor_primaria || '#0096B4')}" style="width:46px; height:38px; padding:2px; border:1px solid var(--border); border-radius:8px; cursor:pointer;">
+              <span class="muted" style="font-size:12px;">${esc(brand.cor_primaria || '#0096B4')}</span>
+            </div>
+          </label>
+          <label class="field-full">Cor Secundária / Hover
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input type="color" name="cor_secundaria" value="${esc(brand.cor_secundaria || '#0A1D37')}" style="width:46px; height:38px; padding:2px; border:1px solid var(--border); border-radius:8px; cursor:pointer;">
+              <span class="muted" style="font-size:12px;">${esc(brand.cor_secundaria || '#0A1D37')}</span>
+            </div>
+          </label>
+          <label class="field-full">Cor do Menu Lateral (Sidebar)
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input type="color" name="cor_sidebar" value="${esc(brand.cor_sidebar || '#0A1D37')}" style="width:46px; height:38px; padding:2px; border:1px solid var(--border); border-radius:8px; cursor:pointer;">
+              <span class="muted" style="font-size:12px;">${esc(brand.cor_sidebar || '#0A1D37')}</span>
+            </div>
+          </label>
+        </div>
+
+        <div class="formgrid" style="margin-bottom:14px;">
+          <label class="field-full">URL do Logotipo (ou envie um arquivo ao lado)
+            <input type="text" name="logo_url" id="wl-logo-url" value="${esc(brand.logo_url || '')}" class="nc-input" placeholder="https://...">
+          </label>
+          <label class="field-full">Enviar Arquivo de Logotipo (PNG, JPG ou SVG, máx. 1,5 MB)
+            <input type="file" id="wl-logo-file" accept="image/*,.svg" class="nc-input">
+          </label>
+        </div>
+
+        <div style="padding:14px 16px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); margin-bottom:14px;">
+          <div class="formgrid">
+            <label class="field-full">Subdomínio Gerenciado (SSL Ativo)
+              <input type="text" value="${esc(org.slug || 'portal')}.nexuscodebrasil.com.br" readonly class="nc-input" style="font-weight:700; color:var(--primary);">
+            </label>
+            ${canCustomDomain ? `
+              <label class="field-full">Domínio Corporativo Próprio — CNAME (Enterprise Full)
+                <input type="text" name="dominio_customizado" value="${esc(org.dominio_customizado || '')}" class="nc-input" placeholder="Ex.: portal.suaempresa.com.br">
+              </label>
+            ` : `
+              <div class="field-full" style="display:flex; flex-direction:column; justify-content:center;">
+                <span style="font-size:12.5px; font-weight:700;">Domínio Corporativo Próprio (CNAME)</span>
+                <span class="muted" style="font-size:12px;">Disponível exclusivamente no plano <b>Enterprise Full</b>.</span>
+              </div>
+            `}
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; cursor:pointer;">
+            <input type="checkbox" name="ocultar_powered_by" ${brand.ocultar_powered_by ? 'checked' : ''} style="width:16px; height:16px; accent-color:var(--primary);">
+            <span>Modo White-Label Integral (ocultar rodapé técnico na tela de login)</span>
+          </label>
+          <button type="submit" class="btn" id="save-wl-btn">Salvar Identidade &amp; Domínio</button>
+        </div>
+      </form>
+    ` : ''}
+
+    ${empresaActiveTab === 'institucional' ? `
+      <form id="empresa-config-form" class="profile-columns">
+        <div class="card profile-col-card">
+          <div>
+            <span class="int-type-tag dominios">Cadastro &amp; Fiscal</span>
+            <h4 class="profile-section-title">Dados Institucionais da Empresa</h4>
+            <p class="profile-section-sub">Exibidos em propostas comerciais, holerites, recibos digitais e Portal do Cliente.</p>
+            <div class="profile-grid">
+              <label class="field-full">Razão Social *
+                <input type="text" name="razao_social" value="${esc(cfg?.razao_social || org.nome || 'Nexus Code Brasil Tecnologia Ltda')}" required class="nc-input">
+              </label>
+              <label class="field-full">Nome Fantasia *
+                <input type="text" name="nome_fantasia" value="${esc(cfg?.nome_fantasia || org.nome || 'Nexus Code Brasil')}" required class="nc-input">
+              </label>
+              <label class="field-full">CNPJ
+                <input type="text" name="cnpj" value="${esc(cfg?.cnpj || '')}" class="nc-input">
+              </label>
+              <label class="field-full">Inscrição Estadual / Municipal
+                <input type="text" name="inscricao_estadual" value="${esc(cfg?.inscricao_estadual || '')}" class="nc-input">
+              </label>
+              <label class="field-full">E-mail Financeiro / Comercial
+                <input type="email" name="email_financeiro" value="${esc(cfg?.email_financeiro || '')}" class="nc-input">
+              </label>
+              <label class="field-full">Telefone Corporativo
+                <input type="text" name="telefone" value="${esc(cfg?.telefone || '')}" class="nc-input">
+              </label>
+              <label class="field-full">Endereço
+                <input type="text" name="endereco" value="${esc(cfg?.endereco || '')}" class="nc-input">
+              </label>
+              <label class="field-full">Cidade / UF
+                <div style="display:grid; grid-template-columns:1fr 70px; gap:8px;">
+                  <input type="text" name="cidade" value="${esc(cfg?.cidade || '')}" class="nc-input">
+                  <input type="text" name="estado" value="${esc(cfg?.estado || '')}" maxlength="2" class="nc-input">
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="card profile-col-card">
+          <div>
+            <span class="int-type-tag precos">Recebimentos &amp; Regras</span>
+            <h4 class="profile-section-title">Dados Bancários, PIX &amp; Parâmetros Contratuais</h4>
+            <p class="profile-section-sub">Chave PIX exibida no Portal do Cliente e alíquotas padrão dos orçamentos.</p>
+            <div class="profile-grid">
+              <label class="field-full">Chave PIX Oficial *
+                <input type="text" name="chave_pix" value="${esc(cfg?.chave_pix || '')}" class="nc-input">
+              </label>
+              <label class="field-full">Favorecido / Titular PIX
+                <input type="text" name="titular_pix" value="${esc(cfg?.titular_pix || '')}" class="nc-input">
+              </label>
+              <label class="field-full">Instituição Bancária
+                <input type="text" name="banco_nome" value="${esc(cfg?.banco_nome || '')}" class="nc-input">
+              </label>
+              <label class="field-full">Agência / Conta
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                  <input type="text" name="agencia" placeholder="Agência" value="${esc(cfg?.agencia || '')}" class="nc-input">
+                  <input type="text" name="conta" placeholder="Conta" value="${esc(cfg?.conta || '')}" class="nc-input">
+                </div>
+              </label>
+              <label class="field-full">Impostos sobre Serviços (%)
+                <input type="number" step="0.1" name="imposto_servico_percent" value="${cfg?.imposto_servico_percent ?? 6.0}" class="nc-input">
+              </label>
+              <label class="field-full">Multa Rescisória Contratual (%)
+                <input type="number" step="0.1" name="multa_rescisao_percent" value="${cfg?.multa_rescisao_percent ?? 10.0}" class="nc-input">
+              </label>
+              <label class="field-full">Multa por Atraso (%)
+                <input type="number" step="0.1" name="multa_atraso_percent" value="${cfg?.multa_atraso_percent ?? 2.0}" class="nc-input">
+              </label>
+              <label class="field-full">Juros Mensais (%)
+                <input type="number" step="0.1" name="juros_mensal_percent" value="${cfg?.juros_mensal_percent ?? 1.0}" class="nc-input">
+              </label>
+            </div>
+          </div>
+          <div class="profile-footer-actions">
+            <button type="submit" class="btn" id="save-empresa-btn">Salvar Dados Fiscais &amp; Financeiro</button>
+          </div>
+        </div>
+      </form>
+    ` : ''}
+
+    ${empresaActiveTab === 'permissoes' ? `
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+          <div>
+            <span class="int-type-tag devops">Controle de Acesso (RBAC)</span>
+            <h4 class="profile-section-title">Matriz de Permissões Granulares por Perfil</h4>
+            <p class="profile-section-sub" style="margin:0;">Administradores possuem acesso total. Selecione abaixo os módulos liberados para o perfil <b>Colaborador</b>.</p>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn secondary" style="padding:6px 11px; font-size:12px;" onclick="window.nexusToggleAllColabPerms('all')">Liberar Todos</button>
+            <button type="button" class="btn secondary" style="padding:6px 11px; font-size:12px;" onclick="window.nexusToggleAllColabPerms('default')">Padrão Operacional</button>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:10px;">
+          ${modulosLista.map(([key, label]) => `
+            <label style="display:flex; align-items:center; gap:9px; padding:10px 12px; border:1px solid var(--border); border-radius:9px; background:var(--surface2); font-size:13px; font-weight:600; cursor:pointer;">
+              <input type="checkbox" name="perm_colab_${key}" ${perms.colaborador[key] ? 'checked' : ''} style="width:16px; height:16px; accent-color:var(--primary);">
+              <span>${esc(label)}</span>
+            </label>
+          `).join('')}
+        </div>
+
+        <div class="profile-footer-actions" style="margin-top:18px;">
+          <button type="button" class="btn" id="save-perms-btn" onclick="window.nexusSavePermissoesPerfil()">Salvar Matriz de Permissões</button>
+        </div>
+      </div>
+    ` : ''}
+
+    ${empresaActiveTab === 'catalogo' ? `
+      <div class="card" style="border-left:4px solid #00B4D8;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+          <div>
+            <span class="int-type-tag pagamentos">Tabela Comercial</span>
+            <h4 class="profile-section-title" style="font-size:16px;">Catálogo Oficial de Serviços Precificados</h4>
+            <p class="profile-section-sub" style="margin:0;">Valores base utilizados automaticamente no Gerador de Orçamentos, Portal do Cliente e Site.</p>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button type="button" class="btn secondary" onclick="window.nexusAddCatalogoServicoRow()">+ Adicionar Serviço</button>
+            <button type="button" class="btn" onclick="window.nexusSaveCatalogoServicos()">Salvar Catálogo</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Categoria</th>
+                <th>Serviço &amp; Descrição Comercial</th>
+                <th>Custo Base (R$)</th>
+                <th>Prazo (dias)</th>
+                <th>Parcelas</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody id="catalogo-servicos-tbody">
+              ${catalogoServicos.map((s) => `
+                <tr data-cat-row="1" data-cat-code="${esc(s.codigo)}">
+                  <td><input type="text" data-f="categoria" value="${esc(s.categoria || '')}" class="nc-input" style="min-width:130px;"></td>
+                  <td>
+                    <input type="text" data-f="nome" value="${esc(s.nome || '')}" class="nc-input" style="font-weight:700; margin-bottom:4px;">
+                    <input type="text" data-f="descricao" value="${esc(s.descricao || '')}" class="nc-input" style="font-size:12px;">
+                  </td>
+                  <td><input type="number" step="0.01" min="0" data-f="valor_base" value="${Number(s.valor_base || 0).toFixed(2)}" class="nc-input" style="max-width:130px; font-weight:700;"></td>
+                  <td><input type="number" min="1" max="365" data-f="prazo_dias" value="${Number(s.prazo_dias || 15)}" class="nc-input" style="max-width:90px;"></td>
+                  <td><input type="number" min="1" max="24" data-f="parcelas_padrao" value="${Number(s.parcelas_padrao || 2)}" class="nc-input" style="max-width:80px;"></td>
+                  <td><button type="button" class="btn secondary" style="padding:5px 9px; font-size:11.5px; color:var(--danger);" onclick="this.closest('tr').remove()">Remover</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    ` : ''}
+
+    ${empresaActiveTab === 'integracoes' ? `
+      <div class="filter-bar" style="margin-bottom:14px;">
+        <span class="muted" style="font-size:12px; font-weight:700; margin-right:4px;">Filtrar por Tipo:</span>
+        <button type="button" class="filter-pill ${empresaIntTag === 'todas' ? 'active' : ''}" onclick="window.nexusSetEmpresaIntTag('todas')">Todas as Integrações (4)</button>
+        <button type="button" class="filter-pill ${empresaIntTag === 'pagamentos' ? 'active' : ''}" onclick="window.nexusSetEmpresaIntTag('pagamentos')">Pagamentos &amp; PIX (Mercado Pago)</button>
+        <button type="button" class="filter-pill ${empresaIntTag === 'dominios' ? 'active' : ''}" onclick="window.nexusSetEmpresaIntTag('dominios')">Domínios &amp; Auto-SSL (Vercel)</button>
+        <button type="button" class="filter-pill ${empresaIntTag === 'devops' ? 'active' : ''}" onclick="window.nexusSetEmpresaIntTag('devops')">DevOps &amp; GitHub (CodeSpaces)</button>
+        <button type="button" class="filter-pill ${empresaIntTag === 'precos' ? 'active' : ''}" onclick="window.nexusSetEmpresaIntTag('precos')">Preços de Domínios (TLD)</button>
+      </div>
+
+      <form id="empresa-integracoes-form" style="display:flex; flex-direction:column; gap:18px;">
+        <div class="card profile-col-card" style="display:${showIntCard('pagamentos') ? 'flex' : 'none'}; border-left:4px solid #00B4D8;">
+          <div>
+            <span class="int-type-tag pagamentos">Gateway de Pagamentos • PIX &amp; Checkout</span>
+            <h4 class="profile-section-title">Mercado Pago (Orders API, PIX &amp; Folha Payouts)</h4>
+            <p class="profile-section-sub">Compatível com a nova <b>API de Orders (/v1/orders)</b> e com a API de Payments (/v1/payments).</p>
+            <div class="profile-grid">
+              <label class="field-full">Status do Gateway *
+                <select name="mp_ativo" class="nc-input">
+                  <option value="false" ${!cfg?.mp_ativo ? 'selected' : ''}>Desativado</option>
+                  <option value="true" ${cfg?.mp_ativo ? 'selected' : ''}>Ativo e Operacional</option>
+                </select>
+              </label>
+              <label class="field-full">Tipo de API Mercado Pago *
+                <select name="mp_api_tipo" class="nc-input">
+                  <option value="orders" ${(cfg?.mp_api_tipo || 'orders') === 'orders' ? 'selected' : ''}>API de Orders (/v1/orders) — Recomendada</option>
+                  <option value="payments" ${cfg?.mp_api_tipo === 'payments' ? 'selected' : ''}>API de Payments (/v1/payments) — Legado</option>
+                </select>
+              </label>
+              <label class="field-full">Ambiente de Operação
+                <select name="mp_ambiente" class="nc-input">
+                  <option value="producao" ${(cfg?.mp_ambiente || 'producao') === 'producao' ? 'selected' : ''}>Produção (Recebimentos Reais)</option>
+                  <option value="sandbox" ${cfg?.mp_ambiente === 'sandbox' ? 'selected' : ''}>Sandbox (Credenciais de Teste)</option>
+                </select>
+              </label>
+              <label class="field-full">Public Key
+                <input type="text" name="mp_public_key" value="${esc(cfg?.mp_public_key || '')}" placeholder="APP_USR-..." class="nc-input">
+              </label>
+              <label class="field-full">Access Token *
+                <input type="password" name="mp_access_token" value="${esc(cfg?.mp_access_token || '')}" placeholder="APP_USR-..." class="nc-input">
+              </label>
+              <label class="field-full">Webhook Secret (Assinatura Secreta HMAC)
+                <input type="password" name="mp_webhook_secret" value="${esc(cfg?.mp_webhook_secret || '')}" placeholder="Cole a assinatura secreta do Webhook" class="nc-input">
+              </label>
+            </div>
+            <div style="background:rgba(0,180,216,0.09); border:1px solid rgba(0,180,216,0.35); border-radius:10px; padding:12px 14px; margin-top:14px; font-size:12px; line-height:1.5;">
+              <div><b>URL de Notificação Webhook:</b></div>
+              <code style="display:block; margin:4px 0; font-weight:700; color:var(--primary);">https://www.nexuscodebrasil.com.br/api/webhooks/mercadopago?org_id=${org.id || 1}</code>
+              <span class="muted">No painel Webhooks do Mercado Pago, marque <b>Orders</b> (para API de Orders) ou <b>Pagamentos</b> (para Payments).</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card profile-col-card" style="display:${showIntCard('dominios') ? 'flex' : 'none'}; border-left:4px solid #16a34a;">
+          <div>
+            <span class="int-type-tag dominios">Infraestrutura DNS &amp; Certificados SSL</span>
+            <h4 class="profile-section-title">Registrador de Domínios &amp; Auto-SSL Vercel</h4>
+            <p class="profile-section-sub">Após o pagamento confirmado no Mercado Pago, registra o domínio e emite o certificado HTTPS automaticamente.</p>
+            <div class="profile-grid">
+              <label class="field-full">Provedor Registrador (Revenda)
+                <select name="registrar_provedor" class="nc-input">
+                  <option value="sandbox" ${(cfg?.registrar_provedor || 'sandbox') === 'sandbox' ? 'selected' : ''}>Sandbox (Homologação / Registro Simulado)</option>
+                  <option value="namecheap" ${cfg?.registrar_provedor === 'namecheap' ? 'selected' : ''}>Namecheap API (Registro + DNS Automático)</option>
+                  <option value="resellerclub" ${cfg?.registrar_provedor === 'resellerclub' ? 'selected' : ''}>ResellerClub API</option>
+                </select>
+              </label>
+              <label class="field-full">API User / Auth-ID (Registrador)
+                <input type="text" name="registrar_api_user" value="${esc(cfg?.registrar_api_user || '')}" class="nc-input">
+              </label>
+              <label class="field-full">API Key / Token (Registrador)
+                <input type="password" name="registrar_api_key" value="${esc(cfg?.registrar_api_key || '')}" class="nc-input">
+              </label>
+              <label class="field-full">Client IP Autorizado (Namecheap)
+                <input type="text" name="registrar_client_ip" value="${esc(cfg?.registrar_client_ip || '')}" placeholder="Ex.: 177.x.x.x" class="nc-input">
+              </label>
+              <label class="field-full">Vercel API Token (SSL &amp; Deploy Automático)
+                <input type="password" name="vercel_token" value="${esc(cfg?.vercel_token || '')}" class="nc-input">
+              </label>
+              <label class="field-full">Vercel Project ID
+                <input type="text" name="vercel_project_id" value="${esc(cfg?.vercel_project_id || '')}" placeholder="prj_..." class="nc-input">
+              </label>
+              <label class="field-full">Vercel Team ID (Opcional)
+                <input type="text" name="vercel_team_id" value="${esc(cfg?.vercel_team_id || '')}" placeholder="team_..." class="nc-input">
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="card profile-col-card" style="display:${showIntCard('devops') ? 'flex' : 'none'}; border-left:4px solid #6366f1;">
+          <div>
+            <span class="int-type-tag devops">DevOps, Repositórios &amp; Cloud IDE</span>
+            <h4 class="profile-section-title">GitHub Enterprise &amp; Nexus CodeSpaces</h4>
+            <p class="profile-section-sub">Cria repositórios automaticamente ao iniciar projetos e habilita o ambiente <b>Nexus CodeSpaces</b> integrado.</p>
             <div class="profile-grid">
               <label class="field-full">Status Integração GitHub *
                 <select name="github_ativo" class="nc-input">
                   <option value="false" ${!cfg?.github_ativo ? 'selected' : ''}>Desativado</option>
-                  <option value="true" ${cfg?.github_ativo ? 'selected' : ''}>Ativo (Criar Repos &amp; IDE Automáticos)</option>
+                  <option value="true" ${cfg?.github_ativo ? 'selected' : ''}>Ativo (Criar Repos &amp; CodeSpaces Automáticos)</option>
                 </select>
               </label>
               <label class="field-full">Organização / Usuário GitHub da Empresa *
@@ -2170,8 +2242,9 @@ export async function renderEmpresaView(ctx) {
           </div>
         </div>
 
-        <div class="card">
-          <h4 class="profile-section-title">3. Tabela de Preços Anuais por Extensão de Domínio (Sua Margem de Lucro)</h4>
+        <div class="card" style="display:${showIntCard('precos') ? 'block' : 'none'}; border-left:4px solid #f59e0b;">
+          <span class="int-type-tag precos">Precificação &amp; Margem TLD</span>
+          <h4 class="profile-section-title">Tabela de Preços Anuais por Extensão de Domínio</h4>
           <p class="profile-section-sub">Defina o custo base no registrador e o preço anual cobrado do cliente no site e no Portal do Cliente.</p>
           <div class="table-wrap">
             <table class="table">
@@ -2199,12 +2272,13 @@ export async function renderEmpresaView(ctx) {
               </tbody>
             </table>
           </div>
-          <div class="profile-footer-actions" style="margin-top:16px;">
-            <button type="button" class="btn" id="save-integrations-btn" onclick="window.nexusSaveIntegracoesApi()">Salvar Todas as Integrações</button>
-          </div>
+        </div>
+
+        <div class="profile-footer-actions">
+          <button type="button" class="btn" id="save-integrations-btn" onclick="window.nexusSaveIntegracoesApi()">Salvar Integrações</button>
         </div>
       </form>
-    </div>
+    ` : ''}
   `;
 }
 

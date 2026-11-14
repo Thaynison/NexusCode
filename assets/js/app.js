@@ -32,6 +32,8 @@ let user = null;
 let editingId = null;
 let searchTerm = '';
 let statusFilter = 'todos';
+let kanbanViewMode = 'board'; // 'board' | 'list'
+let kanbanProjectFilter = 'todos';
 let holeriteTab = 'holerites'; // 'holerites' | 'informes'
 let holeriteUserFilter = 'todos';
 let usersTab = 'equipe'; // 'equipe' | 'clientes_portal'
@@ -2839,7 +2841,17 @@ window.nexusViewInforme = (id) => {
   holeriteDialog.showModal();
 };
 
-// ==================== QUADRO KANBAN ESTILO MICROSOFT PLANNER (MS365) & FUNIL ====================
+// ==================== QUADRO KANBAN & LISTA UNIFICADA (PLANNER) ====================
+window.nexusSetKanbanView = (mode) => {
+  kanbanViewMode = mode;
+  render(true);
+};
+
+window.nexusSetKanbanProject = (projId) => {
+  kanbanProjectFilter = projId;
+  render(true);
+};
+
 async function renderKanban(isPipeline = false, useCache = false) {
   await preloadRefs();
   if (isPipeline) {
@@ -2889,9 +2901,11 @@ async function renderKanban(isPipeline = false, useCache = false) {
   const userMap = Object.fromEntries((cache.usuarios || []).map((u) => [u.id, u.nome]));
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  const tarefas = cache.tarefas.filter((t) =>
-    matchSearch([t.titulo, t.descricao, projMap[t.projeto_id], userMap[t.responsavel_id], t.status, t.prioridade])
-  );
+  const tarefas = cache.tarefas.filter((t) => {
+    const okProj = kanbanProjectFilter === 'todos' || String(t.projeto_id) === String(kanbanProjectFilter);
+    const okSearch = matchSearch([t.titulo, t.descricao, projMap[t.projeto_id], userMap[t.responsavel_id], t.status, t.prioridade]);
+    return okProj && okSearch;
+  });
 
   const buckets = [
     { key: 'pendente', label: 'A Fazer', color: '#64748b' },
@@ -2900,15 +2914,65 @@ async function renderKanban(isPipeline = false, useCache = false) {
     { key: 'concluida', label: 'Concluída', color: '#16a34a' }
   ];
 
-  return `
+  const headerHtml = `
     <div class="toolbar">
       <div>
-        <h1>Quadro Planner</h1>
-        <span class="muted">Clique em qualquer cartão para editar textos, checklist, prazos, status e anexar documentos</span>
+        <h1>Quadro Kanban &amp; Tarefas</h1>
+        <span class="muted">Gerencie entregas por etapas visuais ou em lista detalhada com checklist, prazos e anexos</span>
       </div>
-      <button class="btn" onclick="window.nexusOpenNewPlannerTask('pendente')">${ICONS.plus}<span>Nova Tarefa</span></button>
-    </div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <select class="nc-input" style="height:36px; padding:4px 10px; font-size:12.5px; width:auto;" onchange="window.nexusSetKanbanProject(this.value)">
+          <option value="todos" ${kanbanProjectFilter === 'todos' ? 'selected' : ''}>Todos os Projetos (${cache.projetos.length})</option>
+          ${(cache.projetos || []).map((p) => `<option value="${p.id}" ${String(kanbanProjectFilter) === String(p.id) ? 'selected' : ''}>${esc(p.titulo)}</option>`).join('')}
+        </select>
 
+        <div class="view-switch-group">
+          <button type="button" class="view-switch-btn ${kanbanViewMode === 'board' ? 'active' : ''}" onclick="window.nexusSetKanbanView('board')">Quadro Kanban</button>
+          <button type="button" class="view-switch-btn ${kanbanViewMode === 'list' ? 'active' : ''}" onclick="window.nexusSetKanbanView('list')">Lista de Tarefas (${tarefas.length})</button>
+        </div>
+
+        <button class="btn" onclick="window.nexusOpenNewPlannerTask('pendente')">${ICONS.plus}<span>Nova Tarefa</span></button>
+      </div>
+    </div>
+  `;
+
+  if (kanbanViewMode === 'list') {
+    const rows = tarefas.map((t) => {
+      const checklist = safeParseJsonArray(t.checklist_json);
+      const anexos = safeParseJsonArray(t.anexos_json);
+      return `
+        <tr>
+          <td>
+            <b>${esc(t.titulo)}</b>
+            <div class="muted" style="font-size:12px;">
+              ${checklist.length ? `Checklist: ${checklist.filter((c) => c.concluido).length}/${checklist.length} • ` : ''}
+              ${anexos.length ? `${anexos.length} anexo(s)` : esc(t.descricao || '')}
+            </div>
+          </td>
+          <td>${esc(projMap[t.projeto_id] || 'Projeto #' + t.projeto_id)}</td>
+          <td>${esc(userMap[t.responsavel_id] || '-')}</td>
+          <td><span class="prio-badge prio-${esc(t.prioridade || 'media')}">${esc(t.prioridade || 'media')}</span></td>
+          <td><span class="badge ${esc(t.status)}">${esc(t.status)}</span></td>
+          <td>${formatDate(t.prazo)}</td>
+          <td style="white-space:nowrap;">
+            <button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px;" onclick="window.nexusOpenPlannerTask(${t.id})">Abrir Planner</button>
+            <button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/tarefas/${t.id}" data-label="${esc(t.titulo)}">Excluir</button>
+          </td>
+        </tr>`;
+    }).join('');
+
+    return `
+      ${headerHtml}
+      <div class="card table-wrap">
+        <table class="table">
+          <thead><tr><th>Tarefa</th><th>Projeto</th><th>Responsável</th><th>Prioridade</th><th>Status</th><th>Prazo</th><th>Ações</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="7" style="text-align:center; padding:32px;" class="muted">Nenhuma tarefa encontrada.</td></tr>'}</tbody>
+        </table>
+      </div>`;
+  }
+
+  return `
+    ${headerHtml}
     <div class="planner-board">
       ${buckets.map((col) => {
         const colTasks = tarefas.filter((t) => t.status === col.key);
@@ -4524,8 +4588,17 @@ async function render(useCache = false) {
 }
 
 window.nexusGo = (targetPage, openCreate = false) => {
-  page = targetPage;
-  statusFilter = 'todos';
+  if (targetPage === 'tasks') {
+    page = 'kanban';
+    kanbanViewMode = 'list';
+    statusFilter = 'todos';
+  } else if (targetPage === 'leads') {
+    page = 'customers';
+    statusFilter = 'lead';
+  } else {
+    page = targetPage;
+    statusFilter = 'todos';
+  }
   closeMobileDrawer();
   render().then(() => {
     if (openCreate) openRecordModal(null);

@@ -1,13 +1,13 @@
 /* ==========================================================================
-   NEXUS CODESPACES — Authentic GitHub Codespaces / VS Code Web Dark Theme
+   NEXUS CODESPACES — Authentic VS Code Web / GitHub Codespaces Dark Theme
    ========================================================================== */
 :root {
   --gh-bg-canvas: #0d1117;
   --gh-bg-subtle: #161b22;
   --gh-bg-inset: #010409;
-  --gh-bg-overlay: #1c2128;
+  --gh-bg-overlay: #1f242c;
   --gh-bg-hover: rgba(177, 186, 196, 0.12);
-  --gh-bg-active: rgba(56, 139, 253, 0.16);
+  --gh-bg-active: rgba(56, 139, 253, 0.18);
   --gh-border: #30363d;
   --gh-border-muted: #21262d;
   --gh-fg-default: #e6edf3;
@@ -42,28 +42,60 @@ body.ncs-body {
   user-select: none;
 }
 
-/* ==================== TITLE BAR ==================== */
+/* ==================== TOP TITLE BAR & VS CODE MENU BAR ==================== */
 .ncs-titlebar {
-  height: 38px;
+  height: 36px;
   background: var(--gh-bg-subtle);
   border-bottom: 1px solid var(--gh-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 10px;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
-  z-index: 30;
+  z-index: 40;
 }
 
 .ncs-title-left, .ncs-title-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
-.ncs-menu-wrap { position: relative; }
+.ncs-brand-icon {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ncs-menubar {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.ncs-menu-item-wrap { position: relative; }
+
+.ncs-menubar-btn {
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--gh-fg-default);
+  font-size: 12.5px;
+  font-weight: 400;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ncs-menubar-btn:hover, .ncs-menubar-btn.open {
+  background: var(--gh-bg-hover);
+  color: #ffffff;
+}
 
 .ncs-icon-btn {
   width: 28px;
@@ -80,90 +112,78 @@ body.ncs-body {
 }
 .ncs-icon-btn:hover:not(:disabled) { background: var(--gh-bg-hover); color: var(--gh-fg-default); }
 .ncs-icon-btn:disabled { opacity: 0.35; cursor: default; }
-.ncs-icon-btn.active { color: var(--gh-fg-default); background: rgba(255,255,255,0.06); }
+.ncs-icon-btn.active { color: var(--gh-fg-default); background: rgba(255,255,255,0.08); }
 
-.ncs-nav-arrows { display: flex; align-items: center; gap: 2px; }
+.ncs-nav-arrows {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: 4px;
+  padding-left: 6px;
+  border-left: 1px solid var(--gh-border);
+}
 
 .ncs-dropdown-menu {
   position: absolute;
-  top: 32px;
+  top: 28px;
   left: 0;
-  min-width: 260px;
+  min-width: 265px;
   background: var(--gh-bg-overlay);
-  border: 1px solid var(--gh-border);
-  border-radius: 8px;
+  border: 1px solid #454c56;
+  border-radius: 7px;
   padding: 5px;
-  box-shadow: 0 16px 36px rgba(1, 4, 9, 0.75);
-  z-index: 100;
+  box-shadow: 0 14px 34px rgba(1, 4, 9, 0.85);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
-.ncs-menu-section { display: flex; flex-direction: column; gap: 1px; }
-.ncs-menu-section button {
+.ncs-dropdown-menu button {
   background: transparent;
   border: 0;
   color: var(--gh-fg-default);
-  padding: 6px 10px;
-  border-radius: 5px;
+  padding: 6px 12px;
+  border-radius: 4px;
   font-size: 12.5px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 18px;
   cursor: pointer;
   text-align: left;
+  width: 100%;
 }
-.ncs-menu-section button:hover { background: var(--gh-accent-emphasis); color: #ffffff; }
-.ncs-menu-section kbd {
+.ncs-dropdown-menu button:hover {
+  background: #04395e;
+  color: #ffffff;
+}
+.ncs-dropdown-menu kbd {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
   color: var(--gh-fg-muted);
 }
-.ncs-menu-section button:hover kbd { color: #e6edf3; }
-.ncs-menu-sep { height: 1px; background: var(--gh-border); margin: 4px 0; }
-
-.ncs-brand-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 3px 9px;
-  border-radius: 6px;
-  background: rgba(56, 139, 253, 0.12);
-  border: 1px solid rgba(56, 139, 253, 0.3);
-}
-.ncs-brand-name {
-  font-weight: 700;
-  font-size: 12.5px;
-  color: #f0f6fc;
-  letter-spacing: -0.01em;
-}
-.ncs-title-sep { color: var(--gh-fg-subtle); font-weight: 500; }
-.ncs-repo-label {
-  font-weight: 600;
-  font-size: 12.5px;
-  color: var(--gh-fg-default);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 240px;
-}
+.ncs-dropdown-menu button:hover kbd { color: #e6edf3; }
+.ncs-menu-sep { height: 1px; background: var(--gh-border); margin: 4px 6px; }
 
 /* Command Center (VS Code Web style) */
 .ncs-command-center-wrap {
-  flex: 0 1 460px;
+  flex: 0 1 420px;
   display: flex;
   align-items: center;
   gap: 4px;
-  min-width: 180px;
+  min-width: 160px;
 }
 .ncs-command-center {
   flex: 1;
-  height: 26px;
+  height: 24px;
   background: var(--gh-bg-canvas);
   border: 1px solid var(--gh-border);
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 7px;
   color: var(--gh-fg-muted);
   font-size: 12px;
   cursor: pointer;
@@ -174,8 +194,8 @@ body.ncs-body {
 }
 .ncs-command-center:hover { border-color: #8b949e; color: var(--gh-fg-default); }
 .ncs-cmd-palette-btn {
-  height: 26px;
-  padding: 0 8px;
+  height: 24px;
+  padding: 0 7px;
   background: var(--gh-bg-canvas);
   border: 1px solid var(--gh-border);
   border-radius: 6px;
@@ -196,11 +216,11 @@ body.ncs-body {
 }
 
 .ncs-top-btn {
-  height: 26px;
+  height: 25px;
   border: 1px solid var(--gh-border);
   background: #21262d;
   color: var(--gh-fg-default);
-  padding: 0 10px;
+  padding: 0 9px;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
@@ -271,7 +291,7 @@ body.ncs-body {
   transition: color 0.12s;
 }
 .ncs-act-btn:hover { color: var(--gh-fg-default); }
-.ncs-act-btn.active { color: var(--gh-fg-default); border-left-color: var(--gh-orange); }
+.ncs-act-btn.active { color: var(--gh-fg-default); border-left-color: var(--gh-accent); }
 
 .ncs-act-badge {
   position: absolute;
@@ -292,7 +312,7 @@ body.ncs-body {
 
 /* Primary Sidebar */
 .ncs-sidebar {
-  width: 270px;
+  width: 265px;
   min-width: 180px;
   max-width: 520px;
   background: var(--gh-bg-subtle);
@@ -343,7 +363,7 @@ body.ncs-body {
 }
 .ncs-accordion.flex-grow { flex: 1; min-height: 0; }
 .ncs-acc-head {
-  height: 24px;
+  height: 23px;
   padding: 0 8px;
   display: flex;
   align-items: center;
@@ -366,10 +386,10 @@ body.ncs-body {
 }
 .ncs-acc-body { max-height: 150px; overflow-y: auto; }
 
-.ncs-tree-scroll { flex: 1; overflow-y: auto; padding: 2px 0 12px; }
+.ncs-tree-scroll { flex: 1; overflow-y: auto; padding: 2px 0 18px; outline: none; }
 
 .ncs-tree-row {
-  height: 24px;
+  height: 23px;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -379,9 +399,12 @@ body.ncs-body {
   color: var(--gh-fg-default);
   white-space: nowrap;
   overflow: hidden;
+  border: 1px solid transparent;
 }
 .ncs-tree-row:hover { background: var(--gh-bg-hover); }
-.ncs-tree-row.active { background: var(--gh-bg-active); color: #ffffff; }
+.ncs-tree-row.active { background: #04395e; color: #ffffff; }
+.ncs-tree-row.focused { border-color: #007fd4; }
+.ncs-tree-row.cut { opacity: 0.5; }
 .ncs-tree-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .ncs-tree-row-actions { display: none; align-items: center; gap: 2px; }
 .ncs-tree-row:hover .ncs-tree-row-actions { display: flex; }
@@ -474,7 +497,7 @@ body.ncs-body {
   transition: background 0.15s;
   flex-shrink: 0;
 }
-.ncs-resizer-v:hover, .ncs-resizer-v.dragging { background: var(--gh-accent-emphasis); }
+.ncs-resizer-v:hover, .ncs-resizer-v.dragging { background: #007fd4; }
 
 .ncs-resizer-h {
   height: 3px;
@@ -483,15 +506,35 @@ body.ncs-body {
   transition: background 0.15s;
   flex-shrink: 0;
 }
-.ncs-resizer-h:hover, .ncs-resizer-h.dragging { background: var(--gh-accent-emphasis); }
+.ncs-resizer-h:hover, .ncs-resizer-h.dragging { background: #007fd4; }
 
-/* ==================== EDITOR AREA ==================== */
+/* ==================== EDITOR GROUPS & SPLIT EDITORS ==================== */
 .ncs-editor-column {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
   background: var(--gh-bg-canvas);
+}
+
+.ncs-editors-row {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.ncs-editor-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ncs-split-group {
+  border-left: 1px solid var(--gh-border);
 }
 
 .ncs-tabs-bar-wrap {
@@ -537,7 +580,7 @@ body.ncs-body {
 .ncs-tab.active {
   background: var(--gh-bg-canvas);
   color: #ffffff;
-  box-shadow: inset 0 2px 0 var(--gh-orange);
+  box-shadow: inset 0 2px 0 #007fd4;
 }
 .ncs-tab-close {
   background: none;
@@ -552,7 +595,7 @@ body.ncs-body {
 .ncs-tab-close:hover { background: var(--gh-bg-hover); color: #fff; }
 
 .ncs-breadcrumbs {
-  height: 24px;
+  height: 23px;
   padding: 0 14px;
   background: var(--gh-bg-canvas);
   border-bottom: 1px solid var(--gh-border-muted);
@@ -566,18 +609,12 @@ body.ncs-body {
 .ncs-crumb-item { cursor: pointer; }
 .ncs-crumb-item:hover { color: var(--gh-fg-default); }
 
-.ncs-editor-split {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-  position: relative;
-}
-
 .ncs-code-wrap {
   flex: 1;
   position: relative;
   display: flex;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   user-select: text;
 }
@@ -673,14 +710,14 @@ body.ncs-body {
 
 /* Live Preview Pane */
 .ncs-preview-pane {
-  width: 44%;
+  width: 42%;
   border-left: 1px solid var(--gh-border);
   display: flex;
   flex-direction: column;
   background: #ffffff;
 }
 .ncs-preview-header {
-  height: 32px;
+  height: 35px;
   background: var(--gh-bg-subtle);
   border-bottom: 1px solid var(--gh-border);
   color: var(--gh-fg-default);
@@ -748,7 +785,7 @@ body.ncs-body {
   gap: 6px;
 }
 .ncs-btab:hover { color: var(--gh-fg-default); }
-.ncs-btab.active { color: var(--gh-fg-default); border-bottom-color: var(--gh-orange); }
+.ncs-btab.active { color: var(--gh-fg-default); border-bottom-color: #007fd4; }
 
 .ncs-tab-pill {
   background: var(--gh-border-muted);
@@ -826,7 +863,7 @@ body.ncs-body {
 .ncs-ports-table a { color: var(--gh-accent); text-decoration: none; }
 .ncs-ports-table a:hover { text-decoration: underline; }
 
-/* ==================== STATUS BAR (GitHub Codespaces Authentic) ==================== */
+/* ==================== STATUS BAR (Authentic GitHub Codespaces / VS Code) ==================== */
 .ncs-statusbar {
   height: 24px;
   background: var(--gh-bg-subtle);
@@ -840,7 +877,7 @@ body.ncs-body {
   flex-shrink: 0;
 }
 
-.ncs-status-left, .ncs-status-right { display: flex; align-items: center; gap: 10px; height: 100%; }
+.ncs-status-left, .ncs-status-right { display: flex; align-items: center; gap: 8px; height: 100%; }
 
 .ncs-remote-badge {
   height: 100%;
@@ -871,12 +908,80 @@ body.ncs-body {
 }
 .ncs-status-item:hover { background: var(--gh-bg-hover); color: var(--gh-fg-default); }
 
+/* ==================== VS CODE RIGHT-CLICK CONTEXT MENU ==================== */
+.ncs-context-menu {
+  position: fixed;
+  min-width: 255px;
+  max-width: 320px;
+  background: #252526;
+  border: 1px solid #454545;
+  border-radius: 6px;
+  padding: 5px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.78);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ncs-ctx-item {
+  background: transparent;
+  border: 0;
+  color: #cccccc;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+.ncs-ctx-item:hover:not(:disabled) {
+  background: #04395e;
+  color: #ffffff;
+}
+.ncs-ctx-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ncs-ctx-item.danger:hover:not(:disabled) {
+  background: #8e1519;
+  color: #ffffff;
+}
+.ncs-ctx-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ncs-ctx-icon {
+  width: 16px;
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.85;
+}
+.ncs-ctx-kbd {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #8b949e;
+}
+.ncs-ctx-item:hover:not(:disabled) .ncs-ctx-kbd {
+  color: #e6edf3;
+}
+.ncs-ctx-sep {
+  height: 1px;
+  background: #3c3c3c;
+  margin: 4px 6px;
+}
+
 /* ==================== MODALS & QUICK OPEN ==================== */
 .ncs-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(1, 4, 9, 0.6);
-  z-index: 120;
+  background: rgba(1, 4, 9, 0.62);
+  z-index: 300;
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -887,10 +992,10 @@ body.ncs-body {
   width: min(600px, 94vw);
   max-height: 420px;
   background: var(--gh-bg-overlay);
-  border: 1px solid var(--gh-border);
+  border: 1px solid #454c56;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 24px 48px rgba(1, 4, 9, 0.8);
+  box-shadow: 0 24px 48px rgba(1, 4, 9, 0.85);
   display: flex;
   flex-direction: column;
 }
@@ -917,16 +1022,16 @@ body.ncs-body {
   cursor: pointer;
   font-size: 12.5px;
 }
-.ncs-qo-item:hover, .ncs-qo-item.selected { background: var(--gh-accent-emphasis); color: #ffffff; }
+.ncs-qo-item:hover, .ncs-qo-item.selected { background: #04395e; color: #ffffff; }
 .ncs-qo-item.selected .ncs-muted-xs { color: #dbeafe; }
 
 .ncs-dialog-card {
   width: min(440px, 92vw);
   background: var(--gh-bg-overlay);
-  border: 1px solid var(--gh-border);
+  border: 1px solid #454c56;
   border-radius: 10px;
   padding: 18px 20px;
-  box-shadow: 0 24px 48px rgba(1, 4, 9, 0.85);
+  box-shadow: 0 24px 48px rgba(1, 4, 9, 0.88);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -936,7 +1041,8 @@ body.ncs-body {
 .ncs-dialog-desc { font-size: 12.5px; color: var(--gh-fg-muted); line-height: 1.45; }
 .ncs-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 
-@media (max-width: 820px) {
+@media (max-width: 960px) {
+  .ncs-menubar { display: none; }
   .ncs-sidebar { width: 210px; }
   .ncs-command-center-wrap { display: none; }
   .ncs-welcome-grid { grid-template-columns: 1fr; }
