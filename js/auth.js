@@ -6,6 +6,9 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const authForm = $('#auth-form');
 const authStatus = $('#auth-status');
 
+// Pré-aquece a Serverless Function na Vercel (gru1) enquanto o usuário digita
+fetch('/api/health').catch(() => {});
+
 if (getToken()) {
   apiRequest('/auth/me')
     .then((u) => {
@@ -26,15 +29,16 @@ if (authForm) {
     const titles = {
       login: ['Acesso à Plataforma', 'Insira suas credenciais para continuar', 'Acessar Plataforma'],
       register: ['Cadastro de Cliente', 'Crie sua conta para acompanhar projetos e solicitações', 'Concluir Cadastro'],
-      forgot: ['Recuperação de Senha', 'Informe seu e-mail cadastrado para receber as instruções de acesso', 'Enviar Instruções']
+      forgot: ['Recuperação de Senha', 'Informe seu e-mail cadastrado para receber as instruções de acesso', 'Enviar Instruções'],
+      reset: ['Definir Nova Senha', 'Informe sua nova senha de acesso abaixo', 'Salvar Nova Senha']
     };
 
     $('#auth-title').textContent = titles[mode][0];
     $('#auth-subtitle').textContent = titles[mode][1];
     $('#auth-submit-btn span').textContent = titles[mode][2];
 
-    $('#auth-extra').innerHTML = mode === 'register'
-      ? `<div class="nc-field">
+    if (mode === 'register') {
+      $('#auth-extra').innerHTML = `<div class="nc-field">
           <label for="auth-name">Nome completo</label>
           <div class="nc-input-wrap">
             <svg class="nc-input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
@@ -42,10 +46,18 @@ if (authForm) {
           </div>
         </div>
         <label style="display:flex; align-items:flex-start; gap:8px; font-size:12px; color:#475569; margin-top:10px; cursor:pointer; line-height:1.45;">
-          <input type="checkbox" name="lgpdConsent" required style="margin-top:2px; accent-color:#2563eb;">
+          <input type="checkbox" name="lgpdConsent" required style="margin-top:2px; accent-color:#0096B4;">
           <span>Li e concordo com o tratamento dos meus dados pessoais conforme a <b>LGPD (Lei nº 13.709/2018)</b>.</span>
-        </label>`
-      : '';
+        </label>`;
+    } else {
+      $('#auth-extra').innerHTML = '';
+    }
+
+    const emailField = $('#auth-username')?.closest('.nc-field');
+    if (emailField) {
+      emailField.style.display = mode === 'reset' ? 'none' : 'flex';
+      authForm.username.required = mode !== 'reset';
+    }
 
     $('#password-wrap').style.display = mode === 'forgot' ? 'none' : 'flex';
     authForm.password.required = mode !== 'forgot';
@@ -54,6 +66,12 @@ if (authForm) {
   }
 
   $$('[data-auth-tab]').forEach((b) => (b.onclick = () => switchAuthMode(b.dataset.authTab)));
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const resetToken = urlParams.get('reset_token');
+  if (resetToken) {
+    switchAuthMode('reset');
+  }
 
   $('#toggle-password')?.addEventListener('click', () => {
     const pwd = $('#auth-password');
@@ -75,7 +93,7 @@ if (authForm) {
     const prevText = labelSpan.textContent;
 
     btn.disabled = true;
-    labelSpan.textContent = 'Verificando credenciais...';
+    labelSpan.textContent = 'Autenticando...';
     authStatus.className = 'nc-auth-status';
     authStatus.textContent = '';
 
@@ -89,6 +107,17 @@ if (authForm) {
         });
         authStatus.className = 'nc-auth-status success';
         authStatus.textContent = res.message;
+        return;
+      }
+
+      if (mode === 'reset') {
+        const res = await apiRequest('/auth/reset-password', {
+          method: 'POST',
+          body: JSON.stringify({ token: resetToken, nova_senha: raw.password })
+        });
+        authStatus.className = 'nc-auth-status success';
+        authStatus.textContent = res.message;
+        setTimeout(() => { window.location.href = 'login.html'; }, 1600);
         return;
       }
 

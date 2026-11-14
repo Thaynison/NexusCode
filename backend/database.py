@@ -48,16 +48,22 @@ def _build_neon_database_url() -> str:
 DATABASE_URL = _build_neon_database_url()
 IS_VERCEL = bool(os.getenv("VERCEL"))
 
-# Pool enxuto compatível com o PgBouncer do Neon: reaproveita a conexão TLS aberta
-# dentro da instância ativa, evitando handshakes SSL repetidos a cada chamada.
+# Conexão persistente otimizada com TCP keepalive: evita round-trips extras de SELECT 1 (pool_pre_ping)
+# e reaproveita o handshake TLS dentro da instância Vercel em gru1 (São Paulo).
 engine = create_engine(
     DATABASE_URL,
-    pool_size=2 if IS_VERCEL else 5,
-    max_overflow=3 if IS_VERCEL else 10,
-    pool_timeout=15,
-    pool_recycle=60,
-    pool_pre_ping=True,
-    connect_args={"connect_timeout": 10},
+    pool_size=3 if IS_VERCEL else 6,
+    max_overflow=4 if IS_VERCEL else 10,
+    pool_timeout=10,
+    pool_recycle=45,
+    pool_pre_ping=False,
+    connect_args={
+        "connect_timeout": 8,
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 3,
+    },
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

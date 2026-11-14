@@ -329,7 +329,6 @@ function applyRolePermissions() {
     const permKey = pageToPerm[p];
     if (permKey && colabPerms[permKey] === false) {
       btn.style.display = 'none';
-      if (page === p) window.nexusGo('dashboard');
     } else {
       btn.style.display = 'flex';
     }
@@ -1488,7 +1487,7 @@ async function renderHolerite(useCache = false) {
         <td><span class="badge ${esc(h.status === 'pago' ? 'pago' : 'pendente')}">${esc(h.status)}</span></td>
         <td style="white-space:nowrap;">
           <button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px;" onclick="window.nexusViewHolerite(${h.id})">${ICONS.fileText}<span>Demonstrativo</span></button>
-          ${h.anexo_data ? `<a href="${h.anexo_data}" download="${esc(h.anexo_nome || 'holerite.pdf')}" class="btn secondary" style="padding:6px 10px; font-size:12px; text-decoration:none;">PDF</a>` : ''}
+          ${(h.anexo_data || h.anexo_nome) ? `<button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px;" onclick="window.nexusDownloadHoleriteAnexo(${h.id}, 'holerite')">PDF</button>` : ''}
           ${isAdmin && h.status !== 'pago' ? `<button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--ok);" onclick="window.nexusPayHolerite(${h.id})">Pagar</button>` : ''}
           ${isAdmin ? `<button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/holerites/${h.id}" data-label="Holerite ${esc(h.competencia)} - ${esc(emp.nome)}">Excluir</button>` : ''}
         </td>
@@ -1508,7 +1507,7 @@ async function renderHolerite(useCache = false) {
         <td>${formatMoney(inf.decimo_terceiro)}</td>
         <td style="white-space:nowrap;">
           <button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px;" onclick="window.nexusViewInforme(${inf.id})">${ICONS.fileText}<span>Visualizar Informe</span></button>
-          ${inf.anexo_data ? `<a href="${inf.anexo_data}" download="${esc(inf.anexo_nome || 'informe_rendimentos.pdf')}" class="btn secondary" style="padding:6px 10px; font-size:12px; text-decoration:none;">Baixar PDF</a>` : ''}
+          ${(inf.anexo_data || inf.anexo_nome) ? `<button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px;" onclick="window.nexusDownloadHoleriteAnexo(${inf.id}, 'informe')">Baixar PDF</button>` : ''}
           ${isAdmin ? `<button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/informes-rendimentos/${inf.id}" data-label="Informe ${esc(inf.ano_calendario)} - ${esc(emp.nome)}">Excluir</button>` : ''}
         </td>
       </tr>
@@ -2149,6 +2148,21 @@ window.nexusOpenNewInformeModal = async () => {
   };
 
   holeriteDialog.showModal();
+};
+
+window.nexusDownloadHoleriteAnexo = async (id, tipo = 'holerite') => {
+  try {
+    const endpoint = tipo === 'informe' ? `/informes-rendimentos/${id}/anexo` : `/holerites/${id}/anexo`;
+    const res = await apiRequest(endpoint);
+    const a = document.createElement('a');
+    a.href = res.anexo_data;
+    a.download = res.anexo_nome || `${tipo}_${id}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch (err) {
+    showNoticeModal({ title: 'Aviso', message: err.message, variant: 'warning' });
+  }
 };
 
 window.nexusViewHolerite = (id) => {

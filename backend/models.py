@@ -6,13 +6,20 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from database import Base
 
+
 class Usuario(Base):
     __tablename__ = "usuarios"
+
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String(120), nullable=False)
     email = Column(String(150), unique=True, index=True, nullable=False)
     senha_hash = Column(String(255), nullable=False)
-    perfil = Column(Enum("admin", "colaborador", "cliente", name="perfil_usuario"), default="colaborador", native_enum=False, nullable=False)
+    perfil = Column(
+        Enum("admin", "colaborador", "cliente", name="perfil_usuario"),
+        default="colaborador",
+        native_enum=False,
+        nullable=False,
+    )
     ativo = Column(Boolean, default=True, nullable=False)
     cpf = Column(String(20), nullable=True)
     data_nascimento = Column(Date, nullable=True)
@@ -44,45 +51,84 @@ class Usuario(Base):
     termos_aceitos_em = Column(DateTime, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+    projetos_responsavel = relationship("Projeto", back_populates="responsavel")
+    tarefas_responsavel = relationship("Tarefa", back_populates="responsavel")
+    holerites = relationship("Holerite", back_populates="usuario", cascade="all, delete-orphan")
+    informes_rendimentos = relationship("InformeRendimento", back_populates="usuario", cascade="all, delete-orphan")
+    registros_ponto = relationship("RegistroPonto", back_populates="usuario", cascade="all, delete-orphan")
+
+
 class Cliente(Base):
     __tablename__ = "clientes"
+
     id = Column(Integer, primary_key=True, index=True)
     usuario_portal_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     nome_empresa = Column(String(150), nullable=False)
     contato_nome = Column(String(120), nullable=False)
-    email = Column(String(150), nullable=False)
+    email = Column(String(150), index=True, nullable=False)
     telefone = Column(String(30), nullable=True)
     documento = Column(String(30), nullable=True)
-    status_funil = Column(Enum("lead", "proposta", "negociacao", "ativo", "inativo", name="status_funil_cliente"), default="lead", native_enum=False, nullable=False)
+    status_funil = Column(
+        Enum("lead", "proposta", "negociacao", "ativo", "inativo", name="status_funil_cliente"),
+        default="lead",
+        native_enum=False,
+        nullable=False,
+    )
     origem = Column(String(80), nullable=True)
     observacoes = Column(Text, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+    projetos = relationship("Projeto", back_populates="cliente", cascade="all, delete-orphan")
+    interacoes = relationship("Interacao", back_populates="cliente", cascade="all, delete-orphan")
+    faturas = relationship("Fatura", back_populates="cliente", cascade="all, delete-orphan")
+    solicitacoes = relationship("SolicitacaoOrcamento", back_populates="cliente")
+
+
 class SolicitacaoOrcamento(Base):
     __tablename__ = "solicitacoes_orcamento"
+
     id = Column(Integer, primary_key=True, index=True)
     cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="SET NULL"), nullable=True)
     nome = Column(String(120), nullable=False)
     empresa = Column(String(150), nullable=True)
-    email = Column(String(150), nullable=False)
+    email = Column(String(150), index=True, nullable=False)
     telefone = Column(String(30), nullable=True)
     tipo_projeto = Column(String(80), nullable=True)
     mensagem = Column(Text, nullable=False)
-    status = Column(Enum("novo", "em_atendimento", "respondido", "convertido", "arquivado", name="status_solicitacao"), default="novo", native_enum=False, nullable=False)
+    status = Column(
+        Enum("novo", "em_atendimento", "respondido", "convertido", "arquivado", name="status_solicitacao"),
+        default="novo",
+        native_enum=False,
+        nullable=False,
+    )
     resposta = Column(Text, nullable=True)
     respondido_por = Column(String(120), nullable=True)
     respondido_em = Column(DateTime, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+    cliente = relationship("Cliente", back_populates="solicitacoes")
+
+
 class Projeto(Base):
     __tablename__ = "projetos"
+
     id = Column(Integer, primary_key=True, index=True)
-    cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False)
+    cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
     responsavel_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     titulo = Column(String(180), nullable=False)
     descricao = Column(Text, nullable=True)
-    status = Column(Enum("planejamento", "em_andamento", "homologacao", "concluido", "cancelado", name="status_projeto"), default="planejamento", native_enum=False, nullable=False)
-    prioridade = Column(Enum("baixa", "media", "alta", "urgente", name="prioridade_projeto"), default="media", native_enum=False, nullable=False)
+    status = Column(
+        Enum("planejamento", "em_andamento", "homologacao", "concluido", "cancelado", name="status_projeto"),
+        default="planejamento",
+        native_enum=False,
+        nullable=False,
+    )
+    prioridade = Column(
+        Enum("baixa", "media", "alta", "urgente", name="prioridade_projeto"),
+        default="media",
+        native_enum=False,
+        nullable=False,
+    )
     progresso = Column(Integer, default=0, nullable=False)
     valor_total = Column(Numeric(12, 2), default=0.00, nullable=False)
     horas_estimadas = Column(Numeric(8, 2), default=0.00, server_default="0.00", nullable=True)
@@ -96,14 +142,26 @@ class Projeto(Base):
     data_entrega = Column(Date, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+    cliente = relationship("Cliente", back_populates="projetos")
+    responsavel = relationship("Usuario", back_populates="projetos_responsavel")
+    tarefas = relationship("Tarefa", back_populates="projeto", cascade="all, delete-orphan")
+    faturas = relationship("Fatura", back_populates="projeto", cascade="all, delete-orphan")
+
+
 class Tarefa(Base):
     __tablename__ = "tarefas"
+
     id = Column(Integer, primary_key=True, index=True)
-    projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="CASCADE"), nullable=False)
+    projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="CASCADE"), nullable=False, index=True)
     responsavel_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     titulo = Column(String(180), nullable=False)
     descricao = Column(Text, nullable=True)
-    status = Column(Enum("pendente", "fazendo", "revisao", "concluida", name="status_tarefa"), default="pendente", native_enum=False, nullable=False)
+    status = Column(
+        Enum("pendente", "fazendo", "revisao", "concluida", name="status_tarefa"),
+        default="pendente",
+        native_enum=False,
+        nullable=False,
+    )
     prioridade = Column(String(20), default="media", server_default="media", nullable=False)
     data_inicio = Column(Date, nullable=True)
     prazo = Column(Date, nullable=True)
@@ -112,24 +170,43 @@ class Tarefa(Base):
     comentarios_json = Column(Text, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+    projeto = relationship("Projeto", back_populates="tarefas")
+    responsavel = relationship("Usuario", back_populates="tarefas_responsavel")
+
+
 class Interacao(Base):
     __tablename__ = "interacoes"
+
     id = Column(Integer, primary_key=True, index=True)
-    cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False)
+    cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
-    tipo = Column(Enum("reuniao", "email", "whatsapp", "ligacao", "proposta", name="tipo_interacao"), default="whatsapp", native_enum=False, nullable=False)
+    tipo = Column(
+        Enum("reuniao", "email", "whatsapp", "ligacao", "proposta", name="tipo_interacao"),
+        default="whatsapp",
+        native_enum=False,
+        nullable=False,
+    )
     resumo = Column(Text, nullable=False)
     proxima_acao = Column(String(255), nullable=True)
     data_interacao = Column(DateTime, default=datetime.utcnow)
 
+    cliente = relationship("Cliente", back_populates="interacoes")
+
+
 class Fatura(Base):
     __tablename__ = "faturas"
+
     id = Column(Integer, primary_key=True, index=True)
-    projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="CASCADE"), nullable=False)
-    cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False)
+    projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="CASCADE"), nullable=True)
+    cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
     descricao = Column(String(200), nullable=False)
     valor = Column(Numeric(12, 2), nullable=False)
-    status = Column(Enum("pendente", "pago", "atrasado", "cancelado", name="status_fatura"), default="pendente", native_enum=False, nullable=False)
+    status = Column(
+        Enum("pendente", "pago", "atrasado", "cancelado", name="status_fatura"),
+        default="pendente",
+        native_enum=False,
+        nullable=False,
+    )
     forma_pagamento = Column(String(40), default="PIX", server_default="PIX", nullable=True)
     comprovante_nome = Column(String(255), nullable=True)
     comprovante_data = Column(Text, nullable=True)
@@ -137,8 +214,13 @@ class Fatura(Base):
     vencimento = Column(Date, nullable=False)
     pago_em = Column(DateTime, nullable=True)
 
+    projeto = relationship("Projeto", back_populates="faturas")
+    cliente = relationship("Cliente", back_populates="faturas")
+
+
 class Holerite(Base):
     __tablename__ = "holerites"
+
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
     competencia = Column(String(20), nullable=False)
@@ -158,8 +240,12 @@ class Holerite(Base):
     publicado_por = Column(String(120), nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+    usuario = relationship("Usuario", back_populates="holerites")
+
+
 class InformeRendimento(Base):
     __tablename__ = "informes_rendimentos"
+
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
     ano_calendario = Column(String(10), nullable=False)
@@ -175,8 +261,12 @@ class InformeRendimento(Base):
     publicado_por = Column(String(120), nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+    usuario = relationship("Usuario", back_populates="informes_rendimentos")
+
+
 class ModuloRegistro(Base):
     __tablename__ = "modulos_registros"
+
     id = Column(Integer, primary_key=True, index=True)
     modulo = Column(String(60), index=True, nullable=False)
     titulo = Column(String(180), nullable=False)
@@ -187,16 +277,20 @@ class ModuloRegistro(Base):
     descricao = Column(Text, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+
 class LogAuditoria(Base):
     __tablename__ = "logs_auditoria"
+
     id = Column(Integer, primary_key=True, index=True)
     usuario_nome = Column(String(120), nullable=False)
     acao = Column(String(80), nullable=False)
     detalhes = Column(String(255), nullable=False)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+
 class RegistroPonto(Base):
     __tablename__ = "registros_ponto"
+
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
     data_ponto = Column(Date, nullable=False, index=True)
@@ -217,8 +311,12 @@ class RegistroPonto(Base):
     observacao = Column(Text, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+    usuario = relationship("Usuario", back_populates="registros_ponto")
+
+
 class ConfiguracaoEmpresa(Base):
     __tablename__ = "configuracoes_empresa"
+
     id = Column(Integer, primary_key=True, index=True)
     razao_social = Column(String(180), default="Nexus Code Brasil Tecnologia Ltda", nullable=False)
     nome_fantasia = Column(String(150), default="Nexus Code Brasil", nullable=False)
@@ -240,8 +338,10 @@ class ConfiguracaoEmpresa(Base):
     permissoes_json = Column(Text, nullable=True)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+
 class PropostaComercial(Base):
     __tablename__ = "propostas_comerciais"
+
     id = Column(Integer, primary_key=True, index=True)
     codigo = Column(String(30), unique=True, index=True, nullable=False)
     cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -262,23 +362,27 @@ class PropostaComercial(Base):
     projeto_gerado_id = Column(Integer, ForeignKey("projetos.id", ondelete="SET NULL"), nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+
 class Despesa(Base):
     __tablename__ = "despesas"
+
     id = Column(Integer, primary_key=True, index=True)
     descricao = Column(String(200), nullable=False)
     categoria = Column(String(50), default="infraestrutura", nullable=False)
     fornecedor = Column(String(150), nullable=True)
     projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="SET NULL"), nullable=True)
     valor = Column(Numeric(12, 2), nullable=False)
-    vencimento = Column(Date, nullable=False)
+    vencimento = Column(Date, nullable=False, index=True)
     status = Column(String(25), default="pendente", nullable=False)
     recorrente = Column(Boolean, default=False, nullable=False)
     pago_em = Column(DateTime, nullable=True)
     observacoes = Column(Text, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+
 class ContratoRecorrente(Base):
     __tablename__ = "contratos_recorrentes"
+
     id = Column(Integer, primary_key=True, index=True)
     cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
     projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="SET NULL"), nullable=True)
@@ -292,8 +396,10 @@ class ContratoRecorrente(Base):
     ultima_geracao = Column(String(15), nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+
 class ApontamentoHora(Base):
     __tablename__ = "apontamentos_horas"
+
     id = Column(Integer, primary_key=True, index=True)
     projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="CASCADE"), nullable=False, index=True)
     tarefa_id = Column(Integer, ForeignKey("tarefas.id", ondelete="SET NULL"), nullable=True)
@@ -305,8 +411,10 @@ class ApontamentoHora(Base):
     custo_hora_snapshot = Column(Numeric(10, 2), default=0.00, nullable=False)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+
 class ChamadoSuporte(Base):
     __tablename__ = "chamados_suporte"
+
     id = Column(Integer, primary_key=True, index=True)
     protocolo = Column(String(30), unique=True, index=True, nullable=False)
     cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -323,8 +431,10 @@ class ChamadoSuporte(Base):
     criado_em = Column(DateTime, default=datetime.utcnow)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+
 class AtivoInfra(Base):
     __tablename__ = "ativos_infra"
+
     id = Column(Integer, primary_key=True, index=True)
     cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="SET NULL"), nullable=True)
     projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="SET NULL"), nullable=True)
@@ -340,8 +450,10 @@ class AtivoInfra(Base):
     observacoes = Column(Text, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+
 class Notificacao(Base):
     __tablename__ = "notificacoes"
+
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=True, index=True)
     perfil_destino = Column(String(30), nullable=True)
@@ -351,43 +463,48 @@ class Notificacao(Base):
     lida = Column(Boolean, default=False, nullable=False)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
-# NOVOS MÓDULOS (RH Avançado + Loja Virtual)
+
 class BancoHoras(Base):
     __tablename__ = "banco_horas"
+
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
-    competencia = Column(String(15), nullable=False) # MM/AAAA
-    saldo_minutos = Column(Integer, default=0, nullable=False) # Positivo ou Negativo
+    competencia = Column(String(15), nullable=False)
+    saldo_minutos = Column(Integer, default=0, nullable=False)
     observacao = Column(Text, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+
 class ReembolsoDespesa(Base):
     __tablename__ = "reembolsos_despesas"
+
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
     projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="SET NULL"), nullable=True)
     descricao = Column(String(200), nullable=False)
     valor = Column(Numeric(12, 2), nullable=False)
     data_despesa = Column(Date, nullable=False)
-    status = Column(String(25), default="pendente", nullable=False) # pendente, aprovado, recusado, pago
+    status = Column(String(25), default="pendente", nullable=False)
     comprovante_data = Column(Text, nullable=True)
     observacoes_gestor = Column(Text, nullable=True)
     despesa_gerada_id = Column(Integer, ForeignKey("despesas.id", ondelete="SET NULL"), nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 
+
 class PedidoLoja(Base):
     __tablename__ = "pedidos_loja"
+
     id = Column(Integer, primary_key=True, index=True)
     codigo = Column(String(30), unique=True, index=True, nullable=False)
     cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="SET NULL"), nullable=True)
     nome_comprador = Column(String(150), nullable=False)
-    email_comprador = Column(String(150), nullable=False)
+    email_comprador = Column(String(150), index=True, nullable=False)
     telefone_comprador = Column(String(30), nullable=True)
-    itens_json = Column(Text, nullable=False) # Lista dos produtos, quantidades, cor e tamanho
+    itens_json = Column(Text, nullable=False)
     subtotal = Column(Numeric(12, 2), nullable=False)
     desconto = Column(Numeric(12, 2), default=0.00, nullable=False)
     frete = Column(Numeric(12, 2), default=0.00, nullable=False)
     valor_total = Column(Numeric(12, 2), nullable=False)
-    status = Column(String(25), default="novo", nullable=False) # novo, aguardando_pagamento, pago, enviado, cancelado
+    status = Column(String(25), default="aguardando_pagamento", nullable=False)
     fatura_gerada_id = Column(Integer, ForeignKey("faturas.id", ondelete="SET NULL"), nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
