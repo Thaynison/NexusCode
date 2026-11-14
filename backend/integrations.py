@@ -321,21 +321,24 @@ def mp_criar_order_pix(
     if not access_token or not access_token.strip():
         raise ValueError("Access Token do Mercado Pago não configurado em Empresa & Permissões > Integrações.")
 
-    parts = (pagador_nome or "Cliente Nexus").strip().split(" ", 1)
-    first_name = parts[0]
-    last_name = parts[1] if len(parts) > 1 else "Cliente"
+    clean_ref = re.sub(r"[^a-zA-Z0-9_-]", "-", str(external_reference or "ORD")).strip("-")[:64] or "ORD"
+    clean_desc = re.sub(r"[\r\n\t]+", " ", str(descricao or "Pagamento Nexus Code")).strip()[:150]
+    clean_name = re.sub(r"[^A-Za-zÀ-ÖØ-öø-ÿ\s]", "", str(pagador_nome or "Cliente Nexus")).strip()
+    parts = (clean_name or "Cliente Nexus").split(" ", 1)
+    first_name = parts[0][:50] or "Cliente"
+    last_name = (parts[1] if len(parts) > 1 else "Nexus")[:50] or "Nexus"
     amount_str = f"{round(float(valor), 2):.2f}"
 
     body: Dict[str, Any] = {
         "type": "online",
         "processing_mode": "automatic",
         "total_amount": amount_str,
-        "external_reference": external_reference,
-        "description": descricao[:250],
+        "external_reference": clean_ref,
+        "description": clean_desc,
         "payer": {
-            "email": pagador_email or "financeiro@nexuscodebrasil.com.br",
-            "first_name": first_name[:60],
-            "last_name": last_name[:60],
+            "email": (pagador_email or "financeiro@nexuscodebrasil.com.br").strip(),
+            "first_name": first_name,
+            "last_name": last_name,
         },
         "transactions": {
             "payments": [
@@ -350,7 +353,7 @@ def mp_criar_order_pix(
         },
     }
 
-    idem = f"nc-ord-{external_reference}-{uuid.uuid4().hex[:10]}"
+    idem = f"nc-ord-{clean_ref}-{uuid.uuid4().hex[:10]}"
     status, data = _http_json_request(
         "https://api.mercadopago.com/v1/orders",
         method="POST",
@@ -360,7 +363,13 @@ def mp_criar_order_pix(
     )
     if status not in (200, 201):
         err_list = data.get("errors") if isinstance(data.get("errors"), list) else []
-        detail = err_list[0].get("message") if err_list and isinstance(err_list[0], dict) else (data.get("message") or data.get("error") or "Falha ao criar Order PIX.")
+        if err_list and isinstance(err_list[0], dict):
+            e0 = err_list[0]
+            extra = ", ".join(str(x) for x in (e0.get("details") or [])) if isinstance(e0.get("details"), list) else str(e0.get("details") or e0.get("property") or "")
+            msg0 = e0.get("message") or "Erro de validação"
+            detail = f"{msg0} ({extra})" if extra else msg0
+        else:
+            detail = data.get("message") or data.get("error") or "Falha ao criar Order PIX."
         raise RuntimeError(f"Mercado Pago Orders ({status}): {detail}")
 
     order_id = str(data.get("id") or "")
@@ -442,9 +451,8 @@ def mp_criar_cobranca_pix_unificada(
             if res.get("qr_code") or res.get("order_id"):
                 return res
         except RuntimeError as e:
-            # Se a conta ainda não tiver /v1/orders habilitado, faz fallback seguro para /v1/payments
-            if "(404)" not in str(e) and "(405)" not in str(e):
-                raise
+            # Faz fallback seguro para /v1/payments caso /v1/orders não esteja habilitado ou restrito no Sandbox
+            print(f"[MP Orders Fallback -> Payments] {e}")
 
     pay_res = mp_criar_pagamento_pix(
         access_token=access_token,

@@ -4609,7 +4609,7 @@ def _processar_checkout_dominio(
 
     clean_base = base_url.rstrip("/")
     webhook_url = f"{clean_base}/api/webhooks/mercadopago?org_id={org.id}"
-    ext_ref = f"DOMINIO:{pedido.id}"
+    ext_ref = f"DOMINIO-{pedido.id}"
 
     try:
         if dados.metodo_pagamento == "pix":
@@ -4780,7 +4780,7 @@ def gerar_cobranca_mercadopago_fatura(
     pagador_nome = cli.nome_empresa if cli else usuario.nome
     base_url = str(req.base_url).rstrip("/")
     webhook_url = f"{base_url}/api/webhooks/mercadopago?org_id={usuario.organizacao_id}"
-    ext_ref = f"FATURA:{fat.id}"
+    ext_ref = f"FATURA-{fat.id}"
 
     try:
         if dados.metodo == "pix":
@@ -4887,8 +4887,9 @@ async def webhook_mercadopago(req: Request, org_id: int = 1, db: Session = Depen
         return {"received": True, "status": info.get("status")}
 
     ext_ref = str(info.get("external_reference") or "")
-    if ext_ref.startswith("DOMINIO:"):
-        dom_id = int(ext_ref.split(":", 1)[1])
+    if ext_ref.startswith(("DOMINIO-", "DOMINIO:")):
+        sep = "-" if "DOMINIO-" in ext_ref else ":"
+        dom_id = int(ext_ref.split(sep, 1)[1])
         pedido = db.query(PedidoDominio).filter(PedidoDominio.id == dom_id).first()
         if pedido:
             if pedido.fatura_id:
@@ -4898,8 +4899,9 @@ async def webhook_mercadopago(req: Request, org_id: int = 1, db: Session = Depen
                     fat.pago_em = datetime.utcnow()
             _executar_ativacao_dominio_pago(db, pedido, cfg)
             db.commit()
-    elif ext_ref.startswith("FATURA:"):
-        fat_id = int(ext_ref.split(":", 1)[1])
+    elif ext_ref.startswith(("FATURA-", "FATURA:")):
+        sep = "-" if "FATURA-" in ext_ref else ":"
+        fat_id = int(ext_ref.split(sep, 1)[1])
         fat = db.query(Fatura).filter(Fatura.id == fat_id).first()
         if fat and fat.status != "pago":
             fat.status = "pago"

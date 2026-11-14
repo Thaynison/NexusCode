@@ -793,6 +793,14 @@ window.portalPayInvoiceMP = async (faturaId, metodo = 'pix') => {
     }, 4500);
   } catch (err) {
     bodyEl.innerHTML = `
+      <div style="display:flex; gap:8px; justify-content:center; margin-bottom:18px;">
+        <button type="button" class="btn ${metodo === 'pix' ? '' : 'secondary'}" style="padding:7px 14px; font-size:12.5px;" onclick="window.portalPayInvoiceMP(${faturaId}, 'pix')">
+          PIX Instantâneo (QR Code)
+        </button>
+        <button type="button" class="btn ${metodo === 'checkout_pro' ? '' : 'secondary'}" style="padding:7px 14px; font-size:12.5px;" onclick="window.portalPayInvoiceMP(${faturaId}, 'checkout_pro')">
+          Cartão de Crédito / Débito
+        </button>
+      </div>
       <div style="color:var(--danger); font-weight:700; margin-bottom:8px;">Não foi possível iniciar o pagamento</div>
       <div class="muted" style="font-size:13px; margin-bottom:16px;">${esc(err.message)}</div>
       <button type="button" class="btn secondary" onclick="document.getElementById('portal-dialog').close()">Fechar</button>
