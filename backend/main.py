@@ -14,6 +14,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db, SessionLocal
+
+from email.message import EmailMessage
+import smtplib
+
 from models import (
     Usuario, Cliente, SolicitacaoOrcamento, Projeto,
     Tarefa, Interacao, Fatura, Holerite, InformeRendimento, ModuloRegistro, LogAuditoria
@@ -38,6 +42,32 @@ from auth import (
 
 load_dotenv()
 
+
+
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASS = os.getenv("SMTP_PASS", "")
+
+def enviar_email(destinatario: str, assunto: str, mensagem_html: str):
+    if not SMTP_USER or not SMTP_PASS:
+        print(f"[Aviso] E-mail não enviado para {destinatario}. Configure SMTP_USER e SMTP_PASS.")
+        return False
+    try:
+        msg = EmailMessage()
+        msg['Subject'] = assunto
+        msg['From'] = f"Nexus Code Brasil <{SMTP_USER}>"
+        msg['To'] = destinatario
+        msg.set_content(mensagem_html, subtype='html')
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASS)
+            server.send_message(msg)
+        return True
+    except Exception as e:
+        print(f"[Erro SMTP] {str(e)}")
+        return False
 
 def registrar_log(db: Session, usuario_nome: str, acao: str, detalhes: str):
     db.add(LogAuditoria(usuario_nome=usuario_nome, acao=acao, detalhes=detalhes[:250]))
@@ -379,6 +409,22 @@ def responder_solicitacao(
             tipo="proposta",
             resumo=f"Resposta enviada por {equipe.nome}: {sol.resposta}",
         ))
+    
+    # Enviar e-mail de resposta ao cliente
+    corpo_email = f"""
+    <div style="font-family: Arial, sans-serif; color: #0A1D37;">
+        <h2 style="color: #00B4D8;">Olá, {sol.nome}.</h2>
+        <p>A equipe da <b>Nexus Code Brasil</b> respondeu à sua solicitação de projeto ({sol.tipo_projeto}):</p>
+        <div style="padding: 15px; border-left: 4px solid #00B4D8; background-color: #f8fafc; margin-bottom: 20px;">
+            {sol.resposta.replace(chr(10), '<br>')}
+        </div>
+        <p>Acesse o <a href="https://nexuscodebrasil.com.br/login.html" style="color: #0A1D37; font-weight: bold;">Portal do Cliente</a> para acompanhar o status e interagir com nossa equipe.</p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+        <p style="font-size: 12px; color: #64748b;">Este é um e-mail automático da plataforma Nexus Code.</p>
+    </div>
+    """
+    enviar_email(sol.email, f"Retorno: {sol.tipo_projeto} - Nexus Code", corpo_email)
+
 
     registrar_log(db, equipe.nome, "RESPONDER_ORCAMENTO", f"Respondeu solicitação #{sol.id} ({sol.nome})")
     db.commit()
