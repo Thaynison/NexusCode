@@ -1100,6 +1100,7 @@ class PlanoSaasOut(BaseModel):
 class SaasOnboardingCreate(BaseModel):
     nome_empresa: str = Field(..., min_length=2, max_length=150)
     slug: str = Field(..., min_length=2, max_length=60)
+    dominio_customizado: Optional[str] = None
     plano: str = "pro"
     admin_nome: str = Field(..., min_length=2, max_length=120)
     admin_email: EmailStr
@@ -1111,6 +1112,7 @@ class SaasOnboardingCreate(BaseModel):
 
 
 class BrandingUpdate(BaseModel):
+    dominio_customizado: Optional[str] = None
     nome_plataforma: Optional[str] = None
     subtitulo_plataforma: Optional[str] = None
     logo_url: Optional[str] = None

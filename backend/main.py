@@ -144,6 +144,35 @@ def _slugify_tenant(texto: str) -> str:
     return slug[:50] or "empresa"
 
 
+def _validar_dominio_customizado(raw_dom: Optional[str], plano_codigo: str, is_master: bool = False) -> Optional[str]:
+    if not raw_dom:
+        return None
+    dom = raw_dom.strip().lower()
+    dom = re.sub(r"^https?://", "", dom).split("/")[0].split(":")[0].strip().rstrip(".")
+    if not dom:
+        return None
+
+    if not is_master and (plano_codigo or "").strip().lower() != "enterprise":
+        raise HTTPException(
+            status_code=403,
+            detail="O apontamento de domínio próprio (CNAME) é um recurso exclusivo do plano Enterprise Full. Os planos Starter e Pro operam em subdomínio gerenciado (.nexuscodebrasil.com.br).",
+        )
+
+    if dom.endswith(".nexuscodebrasil.com.br") or dom in ("nexuscodebrasil.com.br", "www.nexuscodebrasil.com.br", "localhost", "127.0.0.1") or dom.endswith(".vercel.app"):
+        raise HTTPException(
+            status_code=400,
+            detail="Informe um domínio externo próprio da sua empresa (ex.: sistema.suaempresa.com.br).",
+        )
+
+    if not re.match(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$", dom):
+        raise HTTPException(
+            status_code=400,
+            detail="Formato de domínio inválido. Utilize um endereço válido (ex.: portal.suaempresa.com.br).",
+        )
+
+    return dom
+
+
 def _parse_json_dict(raw: Optional[str], fallback: dict) -> dict:
     if not raw:
         return dict(fallback)
@@ -194,7 +223,10 @@ def _resolver_org_por_request(req: Request, db: Session) -> Organizacao:
             .filter(
                 or_(
                     func.lower(Organizacao.slug) == tenant_hint,
-                    func.lower(Organizacao.dominio_customizado) == tenant_hint,
+                    (
+                        (func.lower(Organizacao.dominio_customizado) == tenant_hint)
+                        & ((Organizacao.is_master == True) | (func.lower(Organizacao.plano) == "enterprise"))
+                    ),
                 )
             )
             .first()
@@ -204,7 +236,14 @@ def _resolver_org_por_request(req: Request, db: Session) -> Organizacao:
 
     host_raw = (req.headers.get("X-Forwarded-Host") or req.headers.get("Host") or "").split(":")[0].strip().lower()
     if host_raw:
-        org_dom = db.query(Organizacao).filter(func.lower(Organizacao.dominio_customizado) == host_raw).first()
+        org_dom = (
+            db.query(Organizacao)
+            .filter(
+                func.lower(Organizacao.dominio_customizado) == host_raw,
+                (Organizacao.is_master == True) | (func.lower(Organizacao.plano) == "enterprise"),
+            )
+            .first()
+        )
         if org_dom:
             return org_dom
 
@@ -513,7 +552,7 @@ def ensure_db_initialized(force_sync: bool = False):
                 PlanoSaas(
                     codigo="starter",
                     nome="Starter CRM",
-                    subtitulo="Ideal para pequenas equipes e agências iniciarem a operação comercial",
+                    subtitulo="Estrutura comercial e atendimento centralizado para equipes em crescimento",
                     preco_mensal=Decimal("197.00"),
                     limite_usuarios=5,
                     limite_clientes=250,
@@ -522,9 +561,9 @@ def ensure_db_initialized(force_sync: bool = False):
                     recursos_json=json.dumps([
                         "Até 5 usuários internos",
                         "CRM, Leads e Funil Kanban",
-                        "Propostas Comerciais & Faturas",
+                        "Propostas Comerciais & Faturamento",
                         "Portal do Cliente White-Label",
-                        "Subdomínio personalizado incluso",
+                        "Subdomínio gerenciado (.nexuscodebrasil.com.br)",
                     ], ensure_ascii=False),
                     ativo=True,
                     ordem=1,
@@ -532,7 +571,7 @@ def ensure_db_initialized(force_sync: bool = False):
                 PlanoSaas(
                     codigo="pro",
                     nome="Pro Gestão & Financeiro",
-                    subtitulo="Operação completa com DRE gerencial, Timesheet, MRR e Service Desk",
+                    subtitulo="Gestão integrada com DRE gerencial, Timesheet, contratos recorrentes e Service Desk",
                     preco_mensal=Decimal("397.00"),
                     limite_usuarios=15,
                     limite_clientes=1000,
@@ -544,7 +583,7 @@ def ensure_db_initialized(force_sync: bool = False):
                         "DRE Gerencial & Fluxo de Caixa",
                         "Contas a Pagar & Contratos MRR",
                         "Central de Chamados & Ativos",
-                        "Marca, Cores e Logo 100% próprios",
+                        "Identidade visual e subdomínio gerenciado",
                     ], ensure_ascii=False),
                     ativo=True,
                     ordem=2,
@@ -552,7 +591,7 @@ def ensure_db_initialized(force_sync: bool = False):
                 PlanoSaas(
                     codigo="enterprise",
                     nome="Enterprise Full ERP + RH",
-                    subtitulo="Suite corporativa completa com Ponto Eletrônico e Folha Automática",
+                    subtitulo="Suíte corporativa completa com Ponto Eletrônico, Folha Automática e domínio próprio",
                     preco_mensal=Decimal("697.00"),
                     limite_usuarios=50,
                     limite_clientes=5000,
@@ -563,12 +602,32 @@ def ensure_db_initialized(force_sync: bool = False):
                         "Todos os módulos do plano Pro",
                         "Gestão de Ponto Eletrônico",
                         "Holerite & Folha Automática (INSS/IRRF)",
-                        "Domínio próprio (CNAME) + Suporte VIP",
+                        "Domínio próprio corporativo (CNAME) + Suporte Prioritário",
                     ], ensure_ascii=False),
                     ativo=True,
                     ordem=3,
                 ),
             ])
+            db.commit()
+        else:
+            # Atualiza textos legados nos planos padrão caso ainda existam
+            for pl_item in db.query(PlanoSaas).all():
+                changed = False
+                if pl_item.subtitulo and "Suite corporativa" in pl_item.subtitulo:
+                    pl_item.subtitulo = pl_item.subtitulo.replace("Suite corporativa", "Suíte corporativa")
+                    changed = True
+                if pl_item.recursos_json:
+                    new_rec = (
+                        pl_item.recursos_json
+                        .replace("Subdomínio personalizado incluso", "Subdomínio gerenciado (.nexuscodebrasil.com.br)")
+                        .replace("Marca, Cores e Logo 100% próprios", "Identidade visual e subdomínio gerenciado")
+                        .replace("Domínio próprio (CNAME) + Suporte VIP", "Domínio próprio corporativo (CNAME) + Suporte Prioritário")
+                    )
+                    if new_rec != pl_item.recursos_json:
+                        pl_item.recursos_json = new_rec
+                        changed = True
+                if changed:
+                    db.add(pl_item)
             db.commit()
 
         if not db.query(ConfiguracaoEmpresa.id).filter(ConfiguracaoEmpresa.organizacao_id == master_org.id).first():
@@ -837,17 +896,18 @@ def _provisionar_nova_organizacao(
     if db.query(Organizacao.id).filter(func.lower(Organizacao.slug) == clean_slug).first():
         raise HTTPException(status_code=400, detail=f"O subdomínio '{clean_slug}.nexuscodebrasil.com.br' já está em uso.")
 
-    dom_clean = (dominio_customizado or "").strip().lower() or None
+    plano_obj = db.query(PlanoSaas).filter(PlanoSaas.codigo == plano_codigo).first()
+    if not plano_obj:
+        plano_obj = db.query(PlanoSaas).filter(PlanoSaas.ativo == True).order_by(PlanoSaas.ordem.asc()).first()
+    efetivo_plano = plano_obj.codigo if plano_obj else plano_codigo
+
+    dom_clean = _validar_dominio_customizado(dominio_customizado, efetivo_plano, is_master=False)
     if dom_clean:
         if db.query(Organizacao.id).filter(func.lower(Organizacao.dominio_customizado) == dom_clean).first():
             raise HTTPException(status_code=400, detail=f"O domínio '{dom_clean}' já está vinculado a outro portal.")
 
     if db.query(Usuario.id).filter(func.lower(Usuario.email) == admin_email.strip().lower()).first():
         raise HTTPException(status_code=400, detail="O e-mail do administrador já está cadastrado na plataforma.")
-
-    plano_obj = db.query(PlanoSaas).filter(PlanoSaas.codigo == plano_codigo).first()
-    if not plano_obj:
-        plano_obj = db.query(PlanoSaas).filter(PlanoSaas.ativo == True).order_by(PlanoSaas.ordem.asc()).first()
 
     final_valor = valor_mensal if valor_mensal is not None else (plano_obj.preco_mensal if plano_obj else Decimal("297.00"))
     final_lim_users = limite_usuarios if limite_usuarios is not None else (plano_obj.limite_usuarios if plano_obj else 10)
@@ -1009,6 +1069,7 @@ def onboarding_automatizado_saas(
         admin_senha=dados.admin_senha,
         status_assinatura="trial",
         branding_json=json.dumps(brand_init, ensure_ascii=False),
+        dominio_customizado=dados.dominio_customizado,
         telefone=dados.telefone,
         cnpj=dados.cnpj,
         gerar_contrato_master=True,
@@ -1129,8 +1190,16 @@ def atualizar_portal_comprador(
                 raise HTTPException(status_code=400, detail="Este subdomínio já está em uso ou é reservado.")
             payload["slug"] = new_slug
 
-    if "dominio_customizado" in payload:
-        dom = (payload["dominio_customizado"] or "").strip().lower() or None
+    efetivo_plano_upd = (payload.get("plano") or org.plano or "").strip().lower()
+    if not org.is_master and efetivo_plano_upd != "enterprise":
+        if payload.get("dominio_customizado"):
+            raise HTTPException(
+                status_code=403,
+                detail="O apontamento de domínio próprio (CNAME) é exclusivo do plano Enterprise Full.",
+            )
+        payload["dominio_customizado"] = None
+    elif "dominio_customizado" in payload:
+        dom = _validar_dominio_customizado(payload["dominio_customizado"], efetivo_plano_upd, is_master=bool(org.is_master))
         if dom and db.query(Organizacao.id).filter(func.lower(Organizacao.dominio_customizado) == dom, Organizacao.id != org.id).first():
             raise HTTPException(status_code=400, detail="Este domínio customizado já está vinculado a outro portal.")
         payload["dominio_customizado"] = dom
@@ -3148,15 +3217,23 @@ def salvar_branding_empresa(
     if not org:
         raise HTTPException(status_code=404, detail="Organização não encontrada.")
 
+    payload_brand = dados.model_dump(exclude_unset=True)
+    if "dominio_customizado" in payload_brand:
+        raw_dom = payload_brand.pop("dominio_customizado")
+        dom_validado = _validar_dominio_customizado(raw_dom, org.plano, is_master=bool(org.is_master))
+        if dom_validado and db.query(Organizacao.id).filter(func.lower(Organizacao.dominio_customizado) == dom_validado, Organizacao.id != org.id).first():
+            raise HTTPException(status_code=400, detail="Este domínio corporativo já está vinculado a outro ambiente na plataforma.")
+        org.dominio_customizado = dom_validado
+
     cur_brand = _parse_json_dict(org.branding_json, DEFAULT_BRANDING_MASTER)
-    for k, v in dados.model_dump(exclude_unset=True).items():
+    for k, v in payload_brand.items():
         if v is not None:
             cur_brand[k] = v
 
     org.branding_json = json.dumps(cur_brand, ensure_ascii=False)
-    registrar_log(db, admin.nome, "WHITE_LABEL_BRANDING", "Atualizou identidade visual White-Label (cores, logo e nome do portal).", org_id=org.id)
+    registrar_log(db, admin.nome, "WHITE_LABEL_BRANDING", "Atualizou identidade visual White-Label e configurações de domínio do portal.", org_id=org.id)
     db.commit()
-    return {"ok": True, "branding": cur_brand}
+    return {"ok": True, "branding": cur_brand, "dominio_customizado": org.dominio_customizado}
 
 
 # ==================== CENTRAL DE NOTIFICAÇÕES ====================

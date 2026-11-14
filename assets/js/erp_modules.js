@@ -1485,6 +1485,7 @@ export async function renderEmpresaView(ctx) {
   const org = cache.organizacao || {};
   const brand = org.branding || {};
   const isAdmin = user?.perfil === 'admin';
+  const canCustomDomain = Boolean(org.is_master || (org.plano || '').toLowerCase() === 'enterprise');
 
   let perms = {
     colaborador: {
@@ -1526,14 +1527,14 @@ export async function renderEmpresaView(ctx) {
       const f = e.target.files?.[0];
       if (!f) return;
       if (f.size > 1.5 * 1024 * 1024) {
-        showToast('A logo deve ter no máximo 1,5 MB.', 'error');
+        showToast('O arquivo do logotipo deve ter no máximo 1,5 MB.', 'error');
         return;
       }
       const dataUrl = await readFileAsDataUrl(f);
       document.getElementById('wl-logo-url').value = dataUrl;
       const prev = document.getElementById('wl-logo-preview');
-      if (prev) prev.innerHTML = `<img src="${dataUrl}" alt="Logo" style="max-height:36px; max-width:160px; object-fit:contain;">`;
-      showToast('Logo carregada! Clique em "Salvar Identidade White-Label" para aplicar.', 'info');
+      if (prev) prev.innerHTML = `<img src="${dataUrl}" alt="Logotipo" style="max-height:36px; max-width:160px; object-fit:contain;">`;
+      showToast('Logotipo carregado. Clique em "Salvar Identidade & Domínio" para aplicar.', 'info');
     });
 
     const brandForm = document.getElementById('whitelabel-branding-form');
@@ -1541,13 +1542,13 @@ export async function renderEmpresaView(ctx) {
       brandForm.onsubmit = async (e) => {
         e.preventDefault();
         if (!isAdmin) {
-          showNoticeModal({ title: 'Acesso Restrito', message: 'Apenas administradores podem personalizar a identidade visual.', variant: 'warning' });
+          showNoticeModal({ title: 'Acesso Restrito', message: 'Apenas administradores podem alterar a identidade visual e o domínio da organização.', variant: 'warning' });
           return;
         }
         const btn = document.getElementById('save-wl-btn');
         const raw = Object.fromEntries(new FormData(brandForm));
         btn.disabled = true;
-        btn.textContent = 'Aplicando Marca...';
+        btn.textContent = 'Aplicando Configurações...';
         try {
           const payload = {
             nome_plataforma: raw.nome_plataforma.trim(),
@@ -1557,7 +1558,8 @@ export async function renderEmpresaView(ctx) {
             cor_secundaria: raw.cor_secundaria,
             cor_sidebar: raw.cor_sidebar,
             tema_padrao: raw.tema_padrao,
-            ocultar_powered_by: Boolean(brandForm.querySelector('[name="ocultar_powered_by"]')?.checked)
+            ocultar_powered_by: Boolean(brandForm.querySelector('[name="ocultar_powered_by"]')?.checked),
+            ...(canCustomDomain ? { dominio_customizado: (raw.dominio_customizado || '').trim() } : {})
           };
           const res = await apiRequest('/empresa/branding', {
             method: 'PUT',
@@ -1565,16 +1567,19 @@ export async function renderEmpresaView(ctx) {
           });
           if (cache.organizacao) {
             cache.organizacao.branding = res.branding;
+            if ('dominio_customizado' in res) {
+              cache.organizacao.dominio_customizado = res.dominio_customizado;
+            }
             applyWhiteLabelBranding(cache.organizacao);
           }
           invalidateCache();
-          showToast('Identidade visual White-Label aplicada com sucesso!', 'success');
+          showToast('Identidade visual e configurações de domínio atualizadas!', 'success');
           render();
         } catch (err) {
-          showNoticeModal({ title: 'Erro ao aplicar identidade visual', message: err.message, variant: 'error' });
+          showNoticeModal({ title: 'Erro ao salvar configurações', message: err.message, variant: 'error' });
         } finally {
           btn.disabled = false;
-          btn.textContent = 'Salvar Identidade White-Label';
+          btn.textContent = 'Salvar Identidade & Domínio';
         }
       };
     }
@@ -1584,7 +1589,7 @@ export async function renderEmpresaView(ctx) {
     form.onsubmit = async (e) => {
       e.preventDefault();
       if (!isAdmin) {
-        showNoticeModal({ title: 'Acesso Restrito', message: 'Apenas administradores podem salvar configurações da empresa.', variant: 'warning' });
+        showNoticeModal({ title: 'Acesso Restrito', message: 'Apenas administradores podem salvar configurações institucionais.', variant: 'warning' });
         return;
       }
       const btn = document.getElementById('save-empresa-btn');
@@ -1621,7 +1626,7 @@ export async function renderEmpresaView(ctx) {
           })
         });
         invalidateCache();
-        showToast('Configurações da empresa e permissões atualizadas!', 'success');
+        showToast('Configurações institucionais e permissões atualizadas!', 'success');
         render();
       } catch (err) {
         showNoticeModal({ title: 'Erro ao salvar configurações', message: err.message, variant: 'error' });
@@ -1636,38 +1641,38 @@ export async function renderEmpresaView(ctx) {
     <div class="toolbar">
       <div>
         <h1>Empresa, White-Label &amp; Permissões</h1>
-        <span class="muted">Personalize sua marca (logo, cores, subdomínio), dados fiscais, chave PIX e permissões da equipe</span>
+        <span class="muted">Gerencie a identidade visual corporativa, domínio de acesso, parâmetros fiscais, dados bancários e permissões</span>
       </div>
       ${org.slug ? `
         <div style="display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); padding:8px 14px; border-radius:10px; font-size:12.5px;">
-          <span class="muted">Subdomínio Ativo:</span>
-          <b style="color:var(--primary);">${esc(org.slug)}.nexuscodebrasil.com.br</b>
+          <span class="muted">Plano Ativo:</span>
+          <span class="badge ativo" style="text-transform:uppercase;">${esc(org.plano || 'Enterprise')}</span>
         </div>
       ` : ''}
     </div>
 
-    <!-- Card White-Label (Logo, Cores & Nome do Portal) -->
+    <!-- Card White-Label (Logotipo, Cores, Nome & Domínio Corporativo) -->
     <form id="whitelabel-branding-form" class="card" style="margin-bottom:20px; border-left:4px solid var(--primary);">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
         <div>
-          <h4 class="profile-section-title" style="font-size:16px;">Identidade Visual White-Label (Sua Marca no Sistema)</h4>
-          <p class="profile-section-sub" style="margin:0;">Altere logotipo, cores do menu/botões e nome exibido na tela de login, painel administrativo e Portal do Cliente.</p>
+          <h4 class="profile-section-title" style="font-size:16px;">Identidade Visual White-Label &amp; Domínio de Acesso</h4>
+          <p class="profile-section-sub" style="margin:0;">Personalize o logotipo, a paleta cromática e o endereço de acesso da tela de login, painel administrativo e Portal do Cliente.</p>
         </div>
         <div id="wl-logo-preview" style="background:${esc(brand.cor_sidebar || '#0A1D37')}; color:#fff; padding:8px 14px; border-radius:10px; display:flex; align-items:center; gap:10px;">
           ${brand.logo_url
-            ? `<img src="${esc(brand.logo_url)}" alt="Logo" style="max-height:32px; max-width:140px; object-fit:contain;">`
+            ? `<img src="${esc(brand.logo_url)}" alt="Logotipo" style="max-height:32px; max-width:140px; object-fit:contain;">`
             : `<span style="font-weight:800; letter-spacing:0.04em;">${esc(brand.nome_plataforma || org.nome || 'PORTAL')}</span>`}
         </div>
       </div>
 
-      <div class="formgrid-3" style="margin-bottom:14px;">
+      <div class="formgrid" style="margin-bottom:14px;">
         <label class="field-full">Nome da Plataforma / Marca *
-          <input type="text" name="nome_plataforma" value="${esc(brand.nome_plataforma || org.nome || '')}" required class="nc-input" placeholder="Ex.: Minha Empresa ERP">
+          <input type="text" name="nome_plataforma" value="${esc(brand.nome_plataforma || org.nome || '')}" required class="nc-input" placeholder="Ex.: Minha Organização ERP">
         </label>
-        <label class="field-full">Subtítulo / Slogan
+        <label class="field-full">Subtítulo Institucional
           <input type="text" name="subtitulo_plataforma" value="${esc(brand.subtitulo_plataforma || '')}" class="nc-input" placeholder="Ex.: GESTÃO CORPORATIVA">
         </label>
-        <label class="field-full">Tema Padrão ao Entrar
+        <label class="field-full">Tema Padrão da Interface
           <select name="tema_padrao" class="nc-input">
             <option value="light" ${(brand.tema_padrao || 'light') === 'light' ? 'selected' : ''}>Claro Executivo (Light)</option>
             <option value="dark" ${brand.tema_padrao === 'dark' ? 'selected' : ''}>Escuro Enterprise (Dark)</option>
@@ -1675,8 +1680,8 @@ export async function renderEmpresaView(ctx) {
         </label>
       </div>
 
-      <div class="formgrid-3" style="margin-bottom:14px;">
-        <label class="field-full">Cor Primária (Botões &amp; Destaques)
+      <div class="formgrid" style="margin-bottom:14px;">
+        <label class="field-full">Cor Primária (Ações &amp; Destaques)
           <div style="display:flex; gap:8px; align-items:center;">
             <input type="color" name="cor_primaria" value="${esc(brand.cor_primaria || '#0096B4')}" style="width:46px; height:38px; padding:2px; border:1px solid var(--border); border-radius:8px; cursor:pointer;">
             <span class="muted" style="font-size:12px;">${esc(brand.cor_primaria || '#0096B4')}</span>
@@ -1697,20 +1702,43 @@ export async function renderEmpresaView(ctx) {
       </div>
 
       <div class="formgrid" style="margin-bottom:14px;">
-        <label class="field-full">URL da Logotipo (ou faça upload ao lado)
-          <input type="text" name="logo_url" id="wl-logo-url" value="${esc(brand.logo_url || '')}" class="nc-input" placeholder="https://... ou vazio para monograma automático">
+        <label class="field-full">URL do Logotipo (ou selecione um arquivo ao lado)
+          <input type="text" name="logo_url" id="wl-logo-url" value="${esc(brand.logo_url || '')}" class="nc-input" placeholder="https://... ou vazio para monograma institucional">
         </label>
-        <label class="field-full">Enviar Arquivo de Logo (PNG, JPG ou SVG, máx. 1,5 MB)
+        <label class="field-full">Enviar Arquivo de Logotipo (PNG, JPG ou SVG, máx. 1,5 MB)
           <input type="file" id="wl-logo-file" accept="image/*,.svg" class="nc-input">
         </label>
+      </div>
+
+      <!-- Configuração de Endereço & Domínio Próprio (Exclusivo Enterprise Full) -->
+      <div style="padding:14px 16px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); margin-bottom:14px;">
+        <div class="formgrid">
+          <label class="field-full">Subdomínio Gerenciado (Infraestrutura Nexus Code)
+            <input type="text" value="${esc(org.slug || 'portal')}.nexuscodebrasil.com.br" readonly class="nc-input" style="font-weight:700; color:var(--primary);">
+            <span class="muted" style="font-size:11.5px;">Endereço padrão ativo com certificado SSL gerenciado.</span>
+          </label>
+          ${canCustomDomain ? `
+            <label class="field-full">Domínio Corporativo Próprio — CNAME (Plano Enterprise Full)
+              <input type="text" name="dominio_customizado" value="${esc(org.dominio_customizado || '')}" class="nc-input" placeholder="Ex.: portal.suaempresa.com.br">
+              <span class="muted" style="font-size:11.5px;">Para ativar, crie um registro <b>CNAME</b> no DNS do seu domínio apontando para <code>cname.vercel-dns.com</code>.</span>
+            </label>
+          ` : `
+            <div class="field-full" style="display:flex; flex-direction:column; justify-content:center; gap:4px;">
+              <span style="font-size:12.5px; font-weight:700;">Domínio Corporativo Próprio (CNAME)</span>
+              <span class="muted" style="font-size:12px; line-height:1.45;">
+                No plano <b>${esc((org.plano || 'Starter').toUpperCase())}</b>, o portal opera exclusivamente sob o subdomínio gerenciado <code>.nexuscodebrasil.com.br</code>. O apontamento de domínio próprio está disponível no plano <b>Enterprise Full</b>.
+              </span>
+            </div>
+          `}
+        </div>
       </div>
 
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
         <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; cursor:pointer;">
           <input type="checkbox" name="ocultar_powered_by" ${brand.ocultar_powered_by ? 'checked' : ''} style="width:16px; height:16px; accent-color:var(--primary);">
-          <span>Modo White-Label Puro (ocultar referência "Tecnologia Nexus Code" no rodapé do login)</span>
+          <span>Modo White-Label Integral (ocultar referência tecnológica no rodapé de autenticação)</span>
         </label>
-        <button type="submit" class="btn" id="save-wl-btn">Salvar Identidade White-Label</button>
+        <button type="submit" class="btn" id="save-wl-btn">Salvar Identidade &amp; Domínio</button>
       </div>
     </form>
 
@@ -1718,7 +1746,7 @@ export async function renderEmpresaView(ctx) {
       <div class="card profile-col-card">
         <div>
           <h4 class="profile-section-title">1. Dados Institucionais &amp; Fiscais</h4>
-          <p class="profile-section-sub">Informações exibidas nas propostas comerciais, holerites, recibos e portal do cliente.</p>
+          <p class="profile-section-sub">Informações exibidas nas propostas comerciais, holerites, recibos e Portal do Cliente.</p>
           <div class="profile-grid">
             <label class="field-full">Razão Social *
               <input type="text" name="razao_social" value="${esc(cfg?.razao_social || org.nome || 'Nexus Code Brasil Tecnologia Ltda')}" required class="nc-input">
@@ -1752,7 +1780,7 @@ export async function renderEmpresaView(ctx) {
 
         <div class="profile-section">
           <h4 class="profile-section-title">2. Dados Bancários &amp; Chave PIX (Portal do Cliente)</h4>
-          <p class="profile-section-sub">Estes dados aparecem automaticamente para o cliente na tela de pagamento de faturas.</p>
+          <p class="profile-section-sub">Parâmetros exibidos automaticamente ao cliente na liquidação de faturas.</p>
           <div class="profile-grid">
             <label class="field-full">Chave PIX Oficial *
               <input type="text" name="chave_pix" value="${esc(cfg?.chave_pix || '')}" class="nc-input">
@@ -1782,7 +1810,7 @@ export async function renderEmpresaView(ctx) {
       <div class="card profile-col-card">
         <div>
           <h4 class="profile-section-title">3. Matriz de Permissões Granulares por Perfil</h4>
-          <p class="profile-section-sub">Administradores possuem acesso irrestrito aos módulos contratados. Defina abaixo os módulos visíveis para o perfil <b>Colaborador</b>.</p>
+          <p class="profile-section-sub">Administradores possuem acesso irrestrito aos módulos contratados. Defina os módulos visíveis para o perfil <b>Colaborador</b>.</p>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
             ${modulosLista.map(([key, label]) => `
               <label style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface2); font-size:12.5px; font-weight:600; cursor:pointer;">
@@ -1844,12 +1872,12 @@ export async function renderSaasMasterView(ctx) {
     try {
       const res = await apiRequest(`/saas/organizacoes/${orgId}/impersonate`, { method: 'POST' });
       setSession(res.access_token, res.usuario, res.tenant_slug);
-      showToast(`Conectado ao portal "${orgName}" como Administrador!`, 'success');
+      showToast(`Conectado ao ambiente "${orgName}" como Administrador.`, 'success');
       setTimeout(() => {
         window.location.href = `./index.html?tenant=${encodeURIComponent(res.tenant_slug)}`;
       }, 400);
     } catch (err) {
-      showNoticeModal({ title: 'Falha ao acessar portal', message: err.message, variant: 'error' });
+      showNoticeModal({ title: 'Falha ao acessar ambiente', message: err.message, variant: 'error' });
     }
   };
 
@@ -1859,7 +1887,7 @@ export async function renderSaasMasterView(ctx) {
         method: 'PATCH',
         body: JSON.stringify({ status_assinatura: nextStatus })
       });
-      showToast(`Status do portal atualizado para "${nextStatus.toUpperCase()}"!`, 'success');
+      showToast(`Status da assinatura atualizado para "${nextStatus.toUpperCase()}".`, 'success');
       render();
     } catch (err) {
       showNoticeModal({ title: 'Erro ao atualizar status', message: err.message, variant: 'error' });
@@ -1868,6 +1896,9 @@ export async function renderSaasMasterView(ctx) {
 
   window.nexusOpenTenantModal = (orgObj = null) => {
     const isEdit = Boolean(orgObj && orgObj.id);
+    const initialPlano = (orgObj?.plano || 'pro').toLowerCase();
+    const isEntInitial = initialPlano === 'enterprise' || Boolean(orgObj?.is_master);
+
     let mods = {};
     allSaasModules.forEach(([k]) => { mods[k] = true; });
     if (orgObj?.modulos_json) {
@@ -1893,8 +1924,8 @@ export async function renderSaasMasterView(ctx) {
           <div class="modal-header-main">
             <div class="modal-header-icon">${ICONS.sparkles}</div>
             <div>
-              <h2>${isEdit ? `Gerenciar Portal — ${esc(orgObj.nome)}` : 'Criar Novo Portal Empresarial (Venda Assistida)'}</h2>
-              <p class="modal-subtitle">Defina o subdomínio exclusivo do comprador, módulos contratados e identidade visual White-Label</p>
+              <h2>${isEdit ? `Gerenciar Ambiente — ${esc(orgObj.nome)}` : 'Provisionar Novo Ambiente Corporativo'}</h2>
+              <p class="modal-subtitle">Configure identificador de subdomínio, plano contratado, módulos habilitados e identidade White-Label</p>
             </div>
           </div>
           <button type="button" class="modal-close-btn" onclick="document.getElementById('holerite-dialog').close()">&times;</button>
@@ -1902,34 +1933,39 @@ export async function renderSaasMasterView(ctx) {
 
         <div class="modal-body">
           <div class="modal-section-card">
-            <div class="modal-section-title"><span class="modal-section-step">1</span> Empresa Compradora &amp; Subdomínio de Acesso</div>
-            <div class="formgrid">
-              <label>Nome da Empresa Compradora *
+            <div class="modal-section-title"><span class="modal-section-step">1</span> Organização Contratante &amp; Endereçamento</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <label>Razão / Nome da Organização *
                 <input type="text" name="nome" id="st-nome" required value="${esc(orgObj?.nome || '')}" placeholder="Ex.: Alpha Soluções Ltda">
               </label>
-              <label>Subdomínio Exclusivo *
+              <label>Subdomínio Gerenciado *
                 <div style="display:flex; align-items:center; gap:4px;">
                   <input type="text" name="slug" id="st-slug" required value="${esc(orgObj?.slug || '')}" placeholder="alpha" style="font-weight:700;">
                   <span class="muted" style="font-size:12px; white-space:nowrap;">.nexuscodebrasil.com.br</span>
                 </div>
               </label>
-              <label>Domínio Próprio / CNAME (Opcional)
-                <input type="text" name="dominio_customizado" value="${esc(orgObj?.dominio_customizado || '')}" placeholder="Ex.: sistema.alphasolucoes.com.br">
-              </label>
-              <label>Plano SaaS *
+              <label>Plano Contratado *
                 <select name="plano" id="st-plano">
-                  ${planos.map((pl) => `<option value="${esc(pl.codigo)}" data-price="${pl.preco_mensal}" data-users="${pl.limite_usuarios}" data-clients="${pl.limite_clientes}" data-mods='${esc(pl.modulos_json || "{}")}' ${(orgObj?.plano || 'pro') === pl.codigo ? 'selected' : ''}>${esc(pl.nome)} (${formatMoney(pl.preco_mensal)}/mês)</option>`).join('')}
+                  ${planos.map((pl) => `<option value="${esc(pl.codigo)}" data-price="${pl.preco_mensal}" data-users="${pl.limite_usuarios}" data-clients="${pl.limite_clientes}" data-mods='${esc(pl.modulos_json || "{}")}' ${initialPlano === pl.codigo ? 'selected' : ''}>${esc(pl.nome)} (${formatMoney(pl.preco_mensal)}/mês)</option>`).join('')}
                 </select>
+              </label>
+              <label>Domínio Corporativo Próprio — CNAME (Exclusivo Enterprise Full)
+                <input type="text" name="dominio_customizado" id="st-dominio-custom" ${isEntInitial ? '' : 'disabled'} value="${esc(isEntInitial ? (orgObj?.dominio_customizado || '') : '')}" placeholder="${isEntInitial ? 'Ex.: portal.empresa.com.br' : 'Exclusivo do plano Enterprise Full'}">
+                <span id="st-dominio-hint" class="muted" style="font-size:11px;">
+                  ${isEntInitial
+                    ? 'Habilitado: cliente pode apontar domínio próprio via CNAME para cname.vercel-dns.com.'
+                    : 'Planos Starter e Pro operam exclusivamente sob subdomínio .nexuscodebrasil.com.br.'}
+                </span>
               </label>
               <label>Status da Assinatura *
                 <select name="status_assinatura">
-                  <option value="ativo" ${(orgObj?.status_assinatura || 'ativo') === 'ativo' ? 'selected' : ''}>Ativo (Liberado)</option>
-                  <option value="trial" ${orgObj?.status_assinatura === 'trial' ? 'selected' : ''}>Trial (Período de Testes)</option>
-                  <option value="inadimplente" ${orgObj?.status_assinatura === 'inadimplente' ? 'selected' : ''}>Inadimplente (Aviso de Cobrança)</option>
+                  <option value="ativo" ${(orgObj?.status_assinatura || 'ativo') === 'ativo' ? 'selected' : ''}>Ativo (Operação Liberada)</option>
+                  <option value="trial" ${orgObj?.status_assinatura === 'trial' ? 'selected' : ''}>Avaliação (Trial 14 dias)</option>
+                  <option value="inadimplente" ${orgObj?.status_assinatura === 'inadimplente' ? 'selected' : ''}>Inadimplente (Aviso Financeiro)</option>
                   <option value="suspenso" ${orgObj?.status_assinatura === 'suspenso' ? 'selected' : ''}>Suspenso (Acesso Bloqueado)</option>
                 </select>
               </label>
-              <label>Valor Mensal Combinado (R$) *
+              <label>Mensalidade Contratada (R$) *
                 <input type="number" step="0.01" min="0" name="valor_mensal" id="st-valor" value="${orgObj ? Number(orgObj.valor_mensal).toFixed(2) : '397.00'}" required>
               </label>
               <label>Limite de Usuários Internos *
@@ -1943,13 +1979,13 @@ export async function renderSaasMasterView(ctx) {
 
           ${!isEdit ? `
             <div class="modal-section-card">
-              <div class="modal-section-title"><span class="modal-section-step">2</span> Administrador Inicial do Comprador &amp; Faturamento Master</div>
+              <div class="modal-section-title"><span class="modal-section-step">2</span> Administrador Inicial &amp; Integração Financeira</div>
               <div class="formgrid">
-                <label>Nome do Administrador Comprador *
-                  <input type="text" name="admin_nome" required placeholder="Nome do responsável pela empresa">
+                <label>Nome do Administrador *
+                  <input type="text" name="admin_nome" required placeholder="Responsável administrativo">
                 </label>
-                <label>E-mail de Login do Administrador *
-                  <input type="email" name="admin_email" required placeholder="admin@empresa.com.br">
+                <label>E-mail Corporativo de Acesso *
+                  <input type="email" name="admin_email" required placeholder="admin@organizacao.com.br">
                 </label>
                 <label>Senha Provisória *
                   <input type="text" name="admin_senha" required minlength="6" value="Mudar@2026">
@@ -1960,13 +1996,13 @@ export async function renderSaasMasterView(ctx) {
               </div>
               <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; cursor:pointer; margin-top:4px;">
                 <input type="checkbox" name="gerar_contrato_master" checked style="width:16px; height:16px; accent-color:var(--primary);">
-                <span>Venda Assistida: Registrar automaticamente como Cliente, Contrato Recorrente MRR e Fatura inicial no meu Financeiro Nexus Code</span>
+                <span>Implantação Assistida: Cadastrar automaticamente como Cliente, Contrato Recorrente MRR e Fatura inicial no Financeiro Master</span>
               </label>
             </div>
           ` : ''}
 
           <div class="modal-section-card">
-            <div class="modal-section-title"><span class="modal-section-step">${isEdit ? '2' : '3'}</span> Controle Granular de Módulos Liberados neste Portal</div>
+            <div class="modal-section-title"><span class="modal-section-step">${isEdit ? '2' : '3'}</span> Controle Granular de Módulos Habilitados</div>
             <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;">
               ${allSaasModules.map(([k, label]) => `
                 <label style="display:flex; align-items:center; gap:7px; padding:7px 9px; border:1px solid var(--border); border-radius:8px; background:var(--surface); font-size:12px; font-weight:600; cursor:pointer;">
@@ -1978,10 +2014,10 @@ export async function renderSaasMasterView(ctx) {
           </div>
 
           <div class="modal-section-card">
-            <div class="modal-section-title"><span class="modal-section-step">${isEdit ? '3' : '4'}</span> Personalização White-Label (Logo &amp; Cores do Comprador)</div>
-            <div class="formgrid-3">
-              <label>Nome no Topo do Portal
-                <input type="text" name="wl_nome" id="st-wl-nome" value="${esc(brand.nome_plataforma || '')}" placeholder="Nome da Marca">
+            <div class="modal-section-title"><span class="modal-section-step">${isEdit ? '3' : '4'}</span> Identidade Visual White-Label (Logotipo &amp; Paleta)</div>
+            <div class="formgrid">
+              <label>Nome Exibido no Portal
+                <input type="text" name="wl_nome" id="st-wl-nome" value="${esc(brand.nome_plataforma || '')}" placeholder="Nome da Organização">
               </label>
               <label>Cor Primária
                 <input type="color" name="wl_cor_primaria" value="${esc(brand.cor_primaria || '#0096B4')}" style="height:40px; padding:2px;">
@@ -1991,10 +2027,10 @@ export async function renderSaasMasterView(ctx) {
               </label>
             </div>
             <div class="formgrid">
-              <label>URL da Logo do Comprador (Opcional)
+              <label>URL do Logotipo (Opcional)
                 <input type="text" name="wl_logo_url" id="st-wl-logo-url" value="${esc(brand.logo_url || '')}" placeholder="https://...">
               </label>
-              <label>Ou Enviar Arquivo de Logo
+              <label>Ou Enviar Arquivo de Logotipo
                 <input type="file" id="st-wl-logo-file" accept="image/*,.svg">
               </label>
             </div>
@@ -2003,7 +2039,7 @@ export async function renderSaasMasterView(ctx) {
 
         <div class="modal-footer">
           <button type="button" class="btn secondary" onclick="document.getElementById('holerite-dialog').close()">Cancelar</button>
-          <button type="submit" class="btn" id="st-save-btn">${isEdit ? 'Salvar Alterações do Portal' : 'Provisionar Portal do Comprador'}</button>
+          <button type="submit" class="btn" id="st-save-btn">${isEdit ? 'Salvar Alterações' : 'Provisionar Ambiente'}</button>
         </div>
       </form>
     `;
@@ -2020,9 +2056,27 @@ export async function renderSaasMasterView(ctx) {
     }
 
     const planoSel = document.getElementById('st-plano');
+    const domInp = document.getElementById('st-dominio-custom');
+    const domHint = document.getElementById('st-dominio-hint');
     planoSel?.addEventListener('change', () => {
       const opt = planoSel.selectedOptions[0];
       if (!opt) return;
+      const isEnt = opt.value.toLowerCase() === 'enterprise' || Boolean(orgObj?.is_master);
+      if (domInp) {
+        domInp.disabled = !isEnt;
+        if (!isEnt) {
+          domInp.value = '';
+          domInp.placeholder = 'Exclusivo do plano Enterprise Full';
+        } else {
+          domInp.placeholder = 'Ex.: portal.empresa.com.br';
+        }
+      }
+      if (domHint) {
+        domHint.textContent = isEnt
+          ? 'Habilitado: cliente pode apontar domínio próprio via CNAME para cname.vercel-dns.com.'
+          : 'Planos Starter e Pro operam exclusivamente sob subdomínio .nexuscodebrasil.com.br.';
+      }
+
       document.getElementById('st-valor').value = Number(opt.dataset.price || 0).toFixed(2);
       document.getElementById('st-lim-users').value = opt.dataset.users || 10;
       document.getElementById('st-lim-clients').value = opt.dataset.clients || 200;
@@ -2043,7 +2097,7 @@ export async function renderSaasMasterView(ctx) {
         return;
       }
       document.getElementById('st-wl-logo-url').value = await readFileAsDataUrl(f);
-      showToast('Logo carregada!', 'info');
+      showToast('Logotipo carregado.', 'info');
     });
 
     document.getElementById('saas-tenant-form').onsubmit = async (e) => {
@@ -2051,6 +2105,7 @@ export async function renderSaasMasterView(ctx) {
       const btn = document.getElementById('st-save-btn');
       const formEl = e.target;
       const raw = Object.fromEntries(new FormData(formEl));
+      const isEntSelected = (raw.plano || '').toLowerCase() === 'enterprise' || Boolean(orgObj?.is_master);
 
       const selectedMods = {};
       allSaasModules.forEach(([k]) => {
@@ -2066,8 +2121,12 @@ export async function renderSaasMasterView(ctx) {
         cor_sidebar: raw.wl_cor_sidebar || '#0A1D37'
       };
 
+      const customDomainVal = isEntSelected && raw.dominio_customizado
+        ? raw.dominio_customizado.trim()
+        : null;
+
       btn.disabled = true;
-      btn.textContent = isEdit ? 'Salvando...' : 'Provisionando Portal...';
+      btn.textContent = isEdit ? 'Salvando...' : 'Provisionando Ambiente...';
       try {
         if (isEdit) {
           await apiRequest(`/saas/organizacoes/${orgObj.id}`, {
@@ -2075,7 +2134,7 @@ export async function renderSaasMasterView(ctx) {
             body: JSON.stringify({
               nome: raw.nome.trim(),
               slug: raw.slug.trim(),
-              dominio_customizado: raw.dominio_customizado ? raw.dominio_customizado.trim() : null,
+              dominio_customizado: customDomainVal,
               plano: raw.plano,
               status_assinatura: raw.status_assinatura,
               valor_mensal: Number(raw.valor_mensal || 0),
@@ -2085,14 +2144,14 @@ export async function renderSaasMasterView(ctx) {
               branding_json: JSON.stringify(brandingObj)
             })
           });
-          showToast('Portal comprador atualizado com sucesso!', 'success');
+          showToast('Ambiente corporativo atualizado com sucesso!', 'success');
         } else {
           await apiRequest('/saas/organizacoes', {
             method: 'POST',
             body: JSON.stringify({
               nome: raw.nome.trim(),
               slug: raw.slug.trim(),
-              dominio_customizado: raw.dominio_customizado ? raw.dominio_customizado.trim() : null,
+              dominio_customizado: customDomainVal,
               plano: raw.plano,
               status_assinatura: raw.status_assinatura,
               valor_mensal: Number(raw.valor_mensal || 0),
@@ -2108,12 +2167,12 @@ export async function renderSaasMasterView(ctx) {
             })
           });
           invalidateCache();
-          showToast('Novo Portal White-Label criado e ativado!', 'success');
+          showToast('Novo ambiente corporativo provisionado!', 'success');
         }
         holeriteDialog.close();
         render();
       } catch (err) {
-        showNoticeModal({ title: 'Erro ao salvar portal', message: err.message, variant: 'error' });
+        showNoticeModal({ title: 'Erro ao salvar ambiente', message: err.message, variant: 'error' });
       } finally {
         btn.disabled = false;
       }
@@ -2129,7 +2188,8 @@ export async function renderSaasMasterView(ctx) {
     if (plObj?.modulos_json) {
       try { mods = { ...mods, ...JSON.parse(plObj.modulos_json) }; } catch (_) {}
     }
-    const recursosTxt = safeJsonArray(plObj?.recursos_json).join('\n');
+    const recursosTxt = safeJsonArray(plObj?.recursos_json).join('
+');
 
     holeriteContainer.innerHTML = `
       <form id="saas-plano-form">
@@ -2137,8 +2197,8 @@ export async function renderSaasMasterView(ctx) {
           <div class="modal-header-main">
             <div class="modal-header-icon">${ICONS.dollar}</div>
             <div>
-              <h2>${isEdit ? `Editar Plano — ${esc(plObj.nome)}` : 'Novo Plano SaaS'}</h2>
-              <p class="modal-subtitle">Os planos ativos aparecem automaticamente no site principal para contratação automatizada</p>
+              <h2>${isEdit ? `Editar Plano — ${esc(plObj.nome)}` : 'Novo Plano Corporativo'}</h2>
+              <p class="modal-subtitle">Os planos ativos são sincronizados automaticamente com a vitrine institucional</p>
             </div>
           </div>
           <button type="button" class="modal-close-btn" onclick="document.getElementById('holerite-dialog').close()">&times;</button>
@@ -2148,40 +2208,40 @@ export async function renderSaasMasterView(ctx) {
           <div class="modal-section-card">
             <div class="formgrid">
               <label>Código Interno (Slug) *
-                <input type="text" name="codigo" ${isEdit ? 'readonly' : 'required'} value="${esc(plObj?.codigo || '')}" placeholder="ex.: business">
+                <input type="text" name="codigo" ${isEdit ? 'readonly' : 'required'} value="${esc(plObj?.codigo || '')}" placeholder="ex.: enterprise">
               </label>
               <label>Nome Comercial do Plano *
-                <input type="text" name="nome" required value="${esc(plObj?.nome || '')}" placeholder="Ex.: Business Full">
+                <input type="text" name="nome" required value="${esc(plObj?.nome || '')}" placeholder="Ex.: Enterprise Full ERP + RH">
               </label>
-              <label>Preço Mensal (R$) *
-                <input type="number" step="0.01" min="0" name="preco_mensal" required value="${plObj ? Number(plObj.preco_mensal).toFixed(2) : '297.00'}">
+              <label>Mensalidade (R$) *
+                <input type="number" step="0.01" min="0" name="preco_mensal" required value="${plObj ? Number(plObj.preco_mensal).toFixed(2) : '397.00'}">
               </label>
               <label>Ordem de Exibição
                 <input type="number" min="1" name="ordem" value="${plObj?.ordem ?? (planos.length + 1)}">
               </label>
               <label>Limite de Usuários *
-                <input type="number" min="1" name="limite_usuarios" required value="${plObj?.limite_usuarios ?? 10}">
+                <input type="number" min="1" name="limite_usuarios" required value="${plObj?.limite_usuarios ?? 15}">
               </label>
               <label>Limite de Clientes *
-                <input type="number" min="1" name="limite_clientes" required value="${plObj?.limite_clientes ?? 500}">
+                <input type="number" min="1" name="limite_clientes" required value="${plObj?.limite_clientes ?? 1000}">
               </label>
-              <label>Destaque ("Mais Vendido")
+              <label>Destaque Comercial
                 <select name="destaque">
-                  <option value="false" ${!plObj?.destaque ? 'selected' : ''}>Normal</option>
-                  <option value="true" ${plObj?.destaque ? 'selected' : ''}>Destaque na Vitrine</option>
+                  <option value="false" ${!plObj?.destaque ? 'selected' : ''}>Padrão</option>
+                  <option value="true" ${plObj?.destaque ? 'selected' : ''}>Destaque ("Mais Vendido")</option>
                 </select>
               </label>
-              <label>Status do Plano
+              <label>Visibilidade
                 <select name="ativo">
-                  <option value="true" ${plObj?.ativo !== false ? 'selected' : ''}>Ativo (Visível no site)</option>
+                  <option value="true" ${plObj?.ativo !== false ? 'selected' : ''}>Ativo na Vitrine</option>
                   <option value="false" ${plObj?.ativo === false ? 'selected' : ''}>Oculto</option>
                 </select>
               </label>
             </div>
-            <label class="field-full">Subtítulo Comercial
-              <input type="text" name="subtitulo" value="${esc(plObj?.subtitulo || '')}" placeholder="Descrição curta do público ideal">
+            <label class="field-full">Descrição Executiva
+              <input type="text" name="subtitulo" value="${esc(plObj?.subtitulo || '')}" placeholder="Posicionamento comercial do plano">
             </label>
-            <label class="field-full">Benefícios Listados no Card do Site (1 por linha)
+            <label class="field-full">Recursos &amp; Diferenciais Listados (1 por linha)
               <textarea name="recursos_txt" rows="3">${esc(recursosTxt)}</textarea>
             </label>
           </div>
@@ -2201,7 +2261,7 @@ export async function renderSaasMasterView(ctx) {
 
         <div class="modal-footer">
           <button type="button" class="btn secondary" onclick="document.getElementById('holerite-dialog').close()">Cancelar</button>
-          <button type="submit" class="btn" id="pl-save-btn">Salvar Plano SaaS</button>
+          <button type="submit" class="btn" id="pl-save-btn">Salvar Plano</button>
         </div>
       </form>
     `;
@@ -2237,7 +2297,7 @@ export async function renderSaasMasterView(ctx) {
           body: JSON.stringify(payload)
         });
         holeriteDialog.close();
-        showToast('Plano SaaS salvo com sucesso!', 'success');
+        showToast('Plano salvo com sucesso!', 'success');
         render();
       } catch (err) {
         showNoticeModal({ title: 'Erro ao salvar plano', message: err.message, variant: 'error' });
@@ -2253,11 +2313,11 @@ export async function renderSaasMasterView(ctx) {
     <div class="toolbar">
       <div>
         <h1>Portais &amp; Clientes SaaS (White-Label Multi-Tenant)</h1>
-        <span class="muted">Crie ambientes exclusivos para empresas compradoras, defina subdomínios, controle módulos e gerencie planos</span>
+        <span class="muted">Provisione ambientes corporativos isolados, gerencie subdomínios, domínios Enterprise (CNAME) e planos</span>
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button type="button" class="btn secondary" onclick="window.nexusOpenPlanoSaasModal(null)">${ICONS.plus}<span>Novo Plano SaaS</span></button>
-        <button type="button" class="btn" onclick="window.nexusOpenTenantModal(null)">${ICONS.plus}<span>Criar Portal para Comprador</span></button>
+        <button type="button" class="btn secondary" onclick="window.nexusOpenPlanoSaasModal(null)">${ICONS.plus}<span>Novo Plano</span></button>
+        <button type="button" class="btn" onclick="window.nexusOpenTenantModal(null)">${ICONS.plus}<span>Novo Ambiente Corporativo</span></button>
       </div>
     </div>
 
@@ -2265,31 +2325,31 @@ export async function renderSaasMasterView(ctx) {
       <div class="card metric">
         <span class="title">MRR SaaS Mensal</span>
         <strong style="color:var(--ok);">${formatMoney(kpi.mrr_saas || 0)}</strong>
-        <span class="pill-info">Receita recorrente dos portais ativos</span>
+        <span class="pill-info">Receita recorrente dos contratos ativos</span>
       </div>
       <div class="card metric">
-        <span class="title">Portais Compradores</span>
+        <span class="title">Ambientes Provisionados</span>
         <strong>${kpi.total_portais || 0}</strong>
-        <span class="pill-info">${kpi.portais_ativos || 0} ativo(s) • ${kpi.portais_trial || 0} em trial</span>
+        <span class="pill-info">${kpi.portais_ativos || 0} ativo(s) • ${kpi.portais_trial || 0} em avaliação</span>
       </div>
       <div class="card metric">
-        <span class="title">Em Teste (Trial 14d)</span>
+        <span class="title">Em Período de Avaliação</span>
         <strong style="color:var(--primary);">${kpi.portais_trial || 0}</strong>
-        <span class="pill-info">Venda automatizada pelo site</span>
+        <span class="pill-info">Onboarding comercial (14 dias)</span>
       </div>
       <div class="card metric">
         <span class="title">Inadimplentes / Suspensos</span>
         <strong style="color:${(kpi.portais_inadimplentes || 0) > 0 ? 'var(--danger)' : 'var(--text)'};">${kpi.portais_inadimplentes || 0}</strong>
-        <span class="pill-info">Controle automático de acesso</span>
+        <span class="pill-info">Bloqueio preventivo automático</span>
       </div>
     </div>
 
     <div class="filter-bar">
       <button type="button" class="filter-pill ${saasMasterTab === 'portais' ? 'active' : ''}" onclick="window.nexusSetSaasTab('portais')">
-        Portais Compradores (${orgs.length})
+        Ambientes Contratantes (${orgs.length})
       </button>
       <button type="button" class="filter-pill ${saasMasterTab === 'planos' ? 'active' : ''}" onclick="window.nexusSetSaasTab('planos')">
-        Planos SaaS Comercializados (${planos.length})
+        Planos Comercializados (${planos.length})
       </button>
     </div>
 
@@ -2298,10 +2358,10 @@ export async function renderSaasMasterView(ctx) {
         <table class="table">
           <thead>
             <tr>
-              <th>Empresa / Portal</th>
-              <th>Subdomínio &amp; Acesso</th>
+              <th>Organização</th>
+              <th>Endereçamento &amp; Domínio</th>
               <th>Plano &amp; Mensalidade</th>
-              <th>Uso (Usuários / Clientes)</th>
+              <th>Capacidade (Usuários / Clientes)</th>
               <th>Status</th>
               <th>Ações</th>
             </tr>
@@ -2312,6 +2372,7 @@ export async function renderSaasMasterView(ctx) {
               const activeModsCount = o.modulos_json
                 ? Object.values(JSON.parse(o.modulos_json)).filter(Boolean).length
                 : allSaasModules.length;
+              const isEnt = (o.plano || '').toLowerCase() === 'enterprise' || o.is_master;
               return `
                 <tr>
                   <td>
@@ -2320,8 +2381,10 @@ export async function renderSaasMasterView(ctx) {
                   </td>
                   <td>
                     <div style="font-weight:700; color:var(--primary); font-size:12.5px;">${esc(o.slug)}.nexuscodebrasil.com.br</div>
-                    ${o.dominio_customizado ? `<div style="font-size:11.5px; color:var(--ok);">CNAME: ${esc(o.dominio_customizado)}</div>` : ''}
-                    <a href="${previewUrl}" target="_blank" rel="noopener" style="font-size:11px; color:var(--text-light);">Abrir tela de login White-Label ↗</a>
+                    ${isEnt && o.dominio_customizado
+                      ? `<div style="font-size:11.5px; color:var(--ok); font-weight:700;">Domínio Próprio (CNAME): ${esc(o.dominio_customizado)}</div>`
+                      : `<div class="muted" style="font-size:11px;">${isEnt ? 'Domínio próprio disponível (não configurado)' : 'Subdomínio gerenciado'}</div>`}
+                    <a href="${previewUrl}" target="_blank" rel="noopener" style="font-size:11px; color:var(--text-light);">Abrir autenticação White-Label ↗</a>
                   </td>
                   <td>
                     <span class="badge">${esc(o.plano).toUpperCase()}</span>
@@ -2349,7 +2412,7 @@ export async function renderSaasMasterView(ctx) {
                   </td>
                 </tr>
               `;
-            }).join('') || '<tr><td colspan="6" class="muted" style="text-align:center; padding:32px;">Nenhum portal cadastrado.</td></tr>'}
+            }).join('') || '<tr><td colspan="6" class="muted" style="text-align:center; padding:32px;">Nenhum ambiente cadastrado.</td></tr>'}
           </tbody>
         </table>
       </div>
@@ -2361,7 +2424,7 @@ export async function renderSaasMasterView(ctx) {
             <div class="card" style="display:flex; flex-direction:column; justify-content:space-between; border:${pl.destaque ? '2px solid var(--primary)' : '1px solid var(--border)'};">
               <div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                  <span class="badge ${pl.ativo ? 'ativo' : 'inativo'}">${pl.ativo ? 'Ativo no Site' : 'Oculto'}</span>
+                  <span class="badge ${pl.ativo ? 'ativo' : 'inativo'}">${pl.ativo ? 'Ativo na Vitrine' : 'Oculto'}</span>
                   ${pl.destaque ? '<span class="badge em_andamento">Mais Vendido</span>' : ''}
                 </div>
                 <h3 style="margin:0 0 4px;">${esc(pl.nome)}</h3>
@@ -2371,7 +2434,7 @@ export async function renderSaasMasterView(ctx) {
                   ${recs.map((r) => `<li>${esc(r)}</li>`).join('')}
                 </ul>
               </div>
-              <div style="display:flex; gap:8px; pt-2;">
+              <div style="display:flex; gap:8px;">
                 <button type="button" class="btn secondary" style="flex:1; justify-content:center;" onclick='window.nexusOpenPlanoSaasModal(${JSON.stringify(pl).replace(/'/g, "&apos;")})'>Editar Plano</button>
                 <button type="button" class="btn secondary" style="color:var(--danger);" data-del="/saas/planos/${pl.id}" data-label="${esc(pl.nome)}">Excluir</button>
               </div>
