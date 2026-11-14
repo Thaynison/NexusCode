@@ -726,7 +726,7 @@ window.portalPayInvoiceMP = async (faturaId, metodo = 'pix') => {
           <div class="modal-section-card" style="text-align:center; margin:12px 0;">
             <div style="font-size:13px; font-weight:700; margin-bottom:6px;">Order PIX registrada no Mercado Pago</div>
             <div class="muted" style="font-size:12px; margin-bottom:10px;">
-              ${fat.mp_checkout_url ? 'Clique abaixo para abrir o comprovante/QR Code no ambiente Mercado Pago.' : 'Em modo Sandbox Orders, utilize a aba "Cartão de Crédito / Débito" ao lado para simular uma aprovação imediata.'}
+              ${fat.mp_checkout_url ? 'Clique abaixo para abrir o QR Code / comprovante oficial no Mercado Pago.' : 'Caso o aplicativo bancário não leia o código acima, utilize a aba "Cartão de Crédito / Débito" ao lado.'}
             </div>
             ${fat.mp_checkout_url ? `<a href="${esc(fat.mp_checkout_url)}" target="_blank" rel="noopener" class="btn" style="text-decoration:none; background:#00B4D8; color:#0A1D37; font-weight:800;">Abrir Pagamento Mercado Pago ↗</a>` : ''}
           </div>
@@ -1385,7 +1385,28 @@ if (!getToken()) {
       user = u;
       $('#portal-user').textContent = u.nome;
       $('#portal-initials').textContent = initials(u.nome);
-      render('overview');
+      const qp = new URLSearchParams(window.location.search);
+      const mpStatus = qp.get('mp_status');
+      const mpRef = qp.get('ref') || '';
+      if (mpStatus) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        render('invoices').then(async () => {
+          if (mpStatus === 'approved') {
+            const fatIdMatch = mpRef.match(/^FATURA[-:](\d+)$/i);
+            if (fatIdMatch) {
+              await apiRequest(`/faturas/${fatIdMatch[1]}/mercadopago/status`).catch(() => {});
+              await render('invoices');
+            }
+            showToast('Pagamento confirmado com sucesso via Mercado Pago!', 'success');
+          } else if (mpStatus === 'pending') {
+            showToast('Pagamento em processamento. A fatura será baixada assim que compensar.', 'info');
+          } else if (mpStatus === 'failure') {
+            showToast('O pagamento não foi concluído. Você pode tentar novamente quando desejar.', 'error');
+          }
+        });
+      } else {
+        render('overview');
+      }
     })
     .catch(() => { clearSession(); window.location.href = '../login.html'; });
 }

@@ -404,7 +404,7 @@ class ConfiguracaoEmpresa(Base):
     permissoes_json = Column(Text, nullable=True)
     mp_ativo = Column(Boolean, default=False, server_default="false", nullable=False)
     mp_api_tipo = Column(String(20), default="orders", server_default="orders", nullable=False)
-    mp_ambiente = Column(String(20), default="sandbox", server_default="sandbox", nullable=False)
+    mp_ambiente = Column(String(20), default="producao", server_default="producao", nullable=False)
     mp_public_key = Column(String(255), nullable=True)
     mp_access_token = Column(String(255), nullable=True)
     mp_webhook_secret = Column(String(255), nullable=True)

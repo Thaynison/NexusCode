@@ -267,10 +267,9 @@ def mp_criar_checkout_pro(
     if not access_token or not access_token.strip():
         raise ValueError("Access Token do Mercado Pago não configurado em Empresa & Permissões > Integrações.")
 
-    is_sandbox = access_token.strip().startswith("TEST-") or (ambiente or "").strip().lower() == "sandbox"
-    payer_mail = (pagador_email or "cliente@nexuscodebrasil.com.br").strip()
-    if is_sandbox and not payer_mail.lower().endswith("@testuser.com"):
-        payer_mail = "test_user_nexus_comprador@testuser.com"
+    is_legacy_test = access_token.strip().startswith("TEST-")
+    is_sandbox = is_legacy_test or (ambiente or "").strip().lower() == "sandbox"
+    payer_mail = (pagador_email or "").strip()
 
     clean_base = back_url_base.rstrip("/")
     body: Dict[str, Any] = {
@@ -282,7 +281,6 @@ def mp_criar_checkout_pro(
                 "unit_price": round(float(valor), 2),
             }
         ],
-        "payer": {"email": payer_mail},
         "external_reference": external_reference,
         "back_urls": {
             "success": f"{clean_base}?mp_status=approved&ref={urllib.parse.quote(external_reference)}",
@@ -291,6 +289,8 @@ def mp_criar_checkout_pro(
         },
         "auto_return": "approved",
     }
+    if payer_mail and not is_sandbox:
+        body["payer"] = {"email": payer_mail}
     if notification_url and notification_url.startswith("https://"):
         body["notification_url"] = notification_url
 
@@ -307,7 +307,8 @@ def mp_criar_checkout_pro(
 
     live_url = data.get("init_point") or ""
     sbx_url = data.get("sandbox_init_point") or live_url
-    chosen_url = sbx_url if is_sandbox else (live_url or sbx_url)
+    # Credenciais APP_USR (Produção ou Teste) utilizam sempre init_point; sandbox_init_point aplica-se apenas a tokens legados TEST-
+    chosen_url = sbx_url if is_legacy_test else (live_url or sbx_url)
 
     return {
         "preference_id": str(data.get("id")),
@@ -520,9 +521,15 @@ def mp_validar_assinatura_webhook(
     if not ts_val or not v1_val:
         return False
 
-    manifest = f"id:{data_id or ''};request-id:{x_request_id or ''};ts:{ts_val};"
-    digest = hmac.new(secret.strip().encode("utf-8"), manifest.encode("utf-8"), hashlib.sha256).hexdigest()
-    return hmac.compare_digest(digest, v1_val)
+    raw_id = str(data_id or "")
+    candidates = {raw_id, raw_id.lower()}
+    secret_bytes = secret.strip().encode("utf-8")
+    for cid in candidates:
+        manifest = f"id:{cid};request-id:{x_request_id or ''};ts:{ts_val};"
+        digest = hmac.new(secret_bytes, manifest.encode("utf-8"), hashlib.sha256).hexdigest()
+        if hmac.compare_digest(digest, v1_val):
+            return True
+    return False
 
 
 def mp_enviar_pix_colaborador(

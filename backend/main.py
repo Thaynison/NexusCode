@@ -835,7 +835,7 @@ def raiz(db: int = 0):
     return {
         "status": "online" if db_status != "error" else "degraded",
         "sistema": "Nexus Code Enterprise SaaS ERP & CRM API",
-        "versao": "2.3.7",
+        "versao": "2.4.0-prod",
         "regiao": os.getenv("VERCEL_REGION", "local"),
         "database_url_configurada": bool(os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")),
         "db_status": db_status,
@@ -4642,7 +4642,7 @@ def _processar_checkout_dominio(
                 pagador_email=dados.titular_email,
                 back_url_base=back_page,
                 notification_url=webhook_url,
-                ambiente=getattr(cfg, "mp_ambiente", "sandbox"),
+                ambiente=getattr(cfg, "mp_ambiente", "producao"),
             )
             pedido.mp_checkout_url = mp_res["init_point"]
             fatura.mp_preference_id = mp_res["preference_id"]
@@ -4710,7 +4710,7 @@ def verificar_status_pedido_dominio(codigo: str, db: Session = Depends(get_db)):
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido de domínio não encontrado.")
 
-    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == pedido.organizacao_id).first()
+    cfg = _aplicar_env_fallback_integracoes(db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == pedido.organizacao_id).first())
     if pedido.status == "aguardando_pagamento" and cfg and cfg.mp_access_token:
         info = {"status": "pending"}
         if pedido.mp_order_id:
@@ -4745,7 +4745,7 @@ def verificar_dns_pedido_dominio(pedido_id: int, db: Session = Depends(get_db), 
     pedido = db.query(PedidoDominio).filter(PedidoDominio.id == pedido_id, PedidoDominio.organizacao_id == usuario.organizacao_id).first()
     if not pedido:
         raise HTTPException(status_code=404, detail="Domínio não encontrado.")
-    cfg = db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == usuario.organizacao_id).first()
+    cfg = _aplicar_env_fallback_integracoes(db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == usuario.organizacao_id).first())
     res = verificar_status_dns_vercel(
         vercel_token=cfg.vercel_token if cfg else os.getenv("VERCEL_TOKEN"),
         project_id=cfg.vercel_project_id if cfg else os.getenv("VERCEL_PROJECT_ID"),
@@ -4810,7 +4810,7 @@ def gerar_cobranca_mercadopago_fatura(
                 pagador_email=pagador_email,
                 back_url_base=f"{base_url}/app/portal.html",
                 notification_url=webhook_url,
-                ambiente=getattr(cfg, "mp_ambiente", "sandbox"),
+                ambiente=getattr(cfg, "mp_ambiente", "producao"),
             )
             fat.forma_pagamento = "Mercado Pago Checkout"
             fat.mp_preference_id = mp_res["preference_id"]
@@ -4859,7 +4859,7 @@ def verificar_status_pagamento_fatura_mp(
 async def webhook_mercadopago(req: Request, org_id: int = 1, db: Session = Depends(get_db)):
     body = await req.json() if req.headers.get("content-type", "").startswith("application/json") else {}
     data_id = str((body.get("data") or {}).get("id") or req.query_params.get("data.id") or req.query_params.get("id") or "")
-    topic = str(body.get("type") or req.query_params.get("topic") or "").lower()
+    topic = str(body.get("type") or req.query_params.get("type") or req.query_params.get("topic") or "").lower()
 
     if not data_id:
         return {"received": True}
