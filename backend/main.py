@@ -835,7 +835,7 @@ def raiz(db: int = 0):
     return {
         "status": "online" if db_status != "error" else "degraded",
         "sistema": "Nexus Code Enterprise SaaS ERP & CRM API",
-        "versao": "2.3.4",
+        "versao": "2.3.7",
         "regiao": os.getenv("VERCEL_REGION", "local"),
         "database_url_configurada": bool(os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")),
         "db_status": db_status,
@@ -4642,6 +4642,7 @@ def _processar_checkout_dominio(
                 pagador_email=dados.titular_email,
                 back_url_base=back_page,
                 notification_url=webhook_url,
+                ambiente=getattr(cfg, "mp_ambiente", "sandbox"),
             )
             pedido.mp_checkout_url = mp_res["init_point"]
             fatura.mp_preference_id = mp_res["preference_id"]
@@ -4809,6 +4810,7 @@ def gerar_cobranca_mercadopago_fatura(
                 pagador_email=pagador_email,
                 back_url_base=f"{base_url}/app/portal.html",
                 notification_url=webhook_url,
+                ambiente=getattr(cfg, "mp_ambiente", "sandbox"),
             )
             fat.forma_pagamento = "Mercado Pago Checkout"
             fat.mp_preference_id = mp_res["preference_id"]

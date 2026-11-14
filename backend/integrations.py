@@ -261,10 +261,16 @@ def mp_criar_checkout_pro(
     pagador_email: str,
     back_url_base: str,
     notification_url: Optional[str] = None,
+    ambiente: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Cria preferência Checkout Pro (Cartão de Crédito, Débito, PIX e Boleto)."""
     if not access_token or not access_token.strip():
         raise ValueError("Access Token do Mercado Pago não configurado em Empresa & Permissões > Integrações.")
+
+    is_sandbox = access_token.strip().startswith("TEST-") or (ambiente or "").strip().lower() == "sandbox"
+    payer_mail = (pagador_email or "cliente@nexuscodebrasil.com.br").strip()
+    if is_sandbox and not payer_mail.lower().endswith("@testuser.com"):
+        payer_mail = "test_user_nexus_comprador@testuser.com"
 
     clean_base = back_url_base.rstrip("/")
     body: Dict[str, Any] = {
@@ -276,7 +282,7 @@ def mp_criar_checkout_pro(
                 "unit_price": round(float(valor), 2),
             }
         ],
-        "payer": {"email": pagador_email or "cliente@nexuscodebrasil.com.br"},
+        "payer": {"email": payer_mail},
         "external_reference": external_reference,
         "back_urls": {
             "success": f"{clean_base}?mp_status=approved&ref={urllib.parse.quote(external_reference)}",
@@ -299,10 +305,14 @@ def mp_criar_checkout_pro(
         msg = data.get("message") or data.get("error") or "Falha ao criar Checkout Pro no Mercado Pago."
         raise RuntimeError(f"Mercado Pago Checkout ({status}): {msg}")
 
+    live_url = data.get("init_point") or ""
+    sbx_url = data.get("sandbox_init_point") or live_url
+    chosen_url = sbx_url if is_sandbox else (live_url or sbx_url)
+
     return {
         "preference_id": str(data.get("id")),
-        "init_point": data.get("init_point") or data.get("sandbox_init_point") or "",
-        "sandbox_init_point": data.get("sandbox_init_point") or "",
+        "init_point": chosen_url,
+        "sandbox_init_point": sbx_url,
     }
 
 
