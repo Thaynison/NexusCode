@@ -34,6 +34,7 @@ let searchTerm = '';
 let statusFilter = 'todos';
 let holeriteTab = 'holerites'; // 'holerites' | 'informes'
 let holeriteUserFilter = 'todos';
+let usersTab = 'equipe'; // 'equipe' | 'clientes_portal'
 let pontoCompetencia = `${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`;
 let pontoUserFilter = 'todos';
 let pontoClockTimer = null;
@@ -1051,16 +1052,41 @@ async function renderClients(onlyLeads = false, useCache = false) {
     </div>`;
 }
 
+window.nexusSetUsersTab = (tab) => {
+  usersTab = tab;
+  render(true);
+};
+
+window.nexusOpenNewClientUserModal = () => {
+  openRecordModal(null, 'cliente');
+};
+
 async function renderUsers(useCache = false) {
+  await preloadRefs();
   if (!useCache || !cache.usuarios.length) {
     cache.usuarios = await apiRequest('/usuarios');
   }
-  const allItems = cache.usuarios;
-  const items = allItems.filter((u) =>
+  const allItems = cache.usuarios || [];
+  const staffItems = allItems.filter((u) => u.perfil !== 'cliente');
+  const clientUsers = allItems.filter((u) => u.perfil === 'cliente');
+
+  const clientByPortalId = {};
+  const clientByEmail = {};
+  (cache.clientes || []).forEach((c) => {
+    if (c.usuario_portal_id) clientByPortalId[c.usuario_portal_id] = c;
+    if (c.email) clientByEmail[c.email.toLowerCase()] = c;
+  });
+
+  const filteredStaff = staffItems.filter((u) =>
     matchSearch([u.nome, u.email, u.perfil, u.cargo, u.cbo_codigo, u.cbo_descricao, u.tipo_contrato, u.cpf, u.cidade])
   );
 
-  const rows = items.map((u) => {
+  const filteredClientUsers = clientUsers.filter((u) => {
+    const linkedCli = clientByPortalId[u.id] || clientByEmail[(u.email || '').toLowerCase()];
+    return matchSearch([u.nome, u.email, u.telefone, u.cidade, linkedCli?.nome_empresa, linkedCli?.status_funil]);
+  });
+
+  const staffRows = filteredStaff.map((u) => {
     const contratoTxt = CONTRATO_LABELS[u.tipo_contrato] || 'CLT Fixo';
     const periodoExtra = u.tipo_contrato === 'clt_determinado' && u.data_fim_contrato
       ? ` até ${formatDate(u.data_fim_contrato)}`
@@ -1085,7 +1111,7 @@ async function renderUsers(useCache = false) {
           <div class="muted" style="font-size:11.5px; margin-top:3px;">Jornada: ${Number(u.carga_horaria_diaria || 8)}h/dia (${esc(u.horario_entrada || '08:00')}–${esc(u.horario_saida || '17:00')})</div>
         </td>
         <td style="font-weight:700; color:var(--text);">${formatMoney(u.salario_base)}</td>
-        <td><span class="badge">${esc(u.perfil)}</span></td>
+        <td><span class="badge ${u.perfil === 'admin' ? 'em_andamento' : ''}">${u.perfil === 'admin' ? 'Administrador' : 'Colaborador'}</span></td>
         <td><span class="badge ${u.ativo ? 'ativo' : 'inativo'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
         <td style="white-space:nowrap;">
           <button class="btn secondary" style="padding:6px 10px; font-size:12px;" data-edit='${JSON.stringify(u).replace(/'/g, "&apos;")}'>Editar</button>
@@ -1094,30 +1120,92 @@ async function renderUsers(useCache = false) {
       </tr>`;
   }).join('');
 
+  const clientRows = filteredClientUsers.map((u) => {
+    const linkedCli = clientByPortalId[u.id] || clientByEmail[(u.email || '').toLowerCase()];
+    return `
+      <tr>
+        <td>
+          <div class="row-entity">
+            <div class="row-avatar">${renderAvatarContent(u)}</div>
+            <div>
+              <b>${esc(u.nome)}</b>
+              <div class="muted" style="font-size:12px;">${esc(u.email)}</div>
+            </div>
+          </div>
+        </td>
+        <td>
+          ${linkedCli
+            ? `<b>${esc(linkedCli.nome_empresa)}</b><div class="muted" style="font-size:11.5px;">Estágio CRM: ${esc(linkedCli.status_funil)}</div>`
+            : '<span class="muted" style="font-size:12px;">Conta Portal do Cliente</span>'}
+        </td>
+        <td>${esc(u.telefone || linkedCli?.telefone || '-')}</td>
+        <td><span class="badge" style="background:rgba(0,180,216,0.14); color:#0284c7;">Portal do Cliente</span></td>
+        <td>${formatDate(u.criado_em)}</td>
+        <td><span class="badge ${u.ativo ? 'ativo' : 'inativo'}">${u.ativo ? 'Acesso Ativo' : 'Bloqueado'}</span></td>
+        <td style="white-space:nowrap;">
+          <button type="button" class="btn secondary" style="padding:6px 10px; font-size:12px;" onclick="window.nexusGo('customers')">Ver CRM</button>
+          <button class="btn secondary" style="padding:6px 10px; font-size:12px;" data-edit='${JSON.stringify(u).replace(/'/g, "&apos;")}'>Editar Acesso</button>
+          <button class="btn secondary" style="padding:6px 10px; font-size:12px; color:var(--danger);" data-del="/usuarios/${u.id}" data-label="${esc(u.nome)}">Excluir</button>
+        </td>
+      </tr>`;
+  }).join('');
+
   return `
     <div class="toolbar">
       <div>
-        <h1>Usuários, CBO &amp; Contratos</h1>
-        <span class="muted">Cadastro de colaboradores com função CBO, regime contratual, jornada e remuneração</span>
+        <h1>Usuários, Equipe &amp; Acessos ao Portal</h1>
+        <span class="muted">Separação entre colaboradores internos (RH / CBO / Contratos) e contas externas do Portal do Cliente</span>
       </div>
-      <button class="btn" data-new>${ICONS.plus}<span>Novo Colaborador / Usuário</span></button>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button type="button" class="btn secondary" onclick="window.nexusOpenNewClientUserModal()">${ICONS.plus}<span>Novo Acesso Cliente (Portal)</span></button>
+        <button class="btn" data-new>${ICONS.plus}<span>Novo Colaborador (RH)</span></button>
+      </div>
     </div>
-    <div class="card table-wrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Colaborador</th>
-            <th>Função / CBO</th>
-            <th>Contrato &amp; Jornada</th>
-            <th>Salário Base</th>
-            <th>Perfil</th>
-            <th>Status</th>
-            <th>Ações</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
+
+    <div class="filter-bar">
+      <button type="button" class="filter-pill ${usersTab === 'equipe' ? 'active' : ''}" onclick="window.nexusSetUsersTab('equipe')">
+        Equipe &amp; Colaboradores (RH / CBO) <span class="filter-count">${filteredStaff.length}</span>
+      </button>
+      <button type="button" class="filter-pill ${usersTab === 'clientes_portal' ? 'active' : ''}" onclick="window.nexusSetUsersTab('clientes_portal')">
+        Clientes com Acesso ao Portal <span class="filter-count">${filteredClientUsers.length}</span>
+      </button>
+    </div>
+
+    ${usersTab === 'equipe' ? `
+      <div class="card table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Colaborador</th>
+              <th>Função / CBO</th>
+              <th>Contrato &amp; Jornada</th>
+              <th>Salário Base</th>
+              <th>Perfil</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>${staffRows || '<tr><td colspan="7" class="muted" style="text-align:center; padding:32px;">Nenhum colaborador interno encontrado.</td></tr>'}</tbody>
+        </table>
+      </div>
+    ` : `
+      <div class="card table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Cliente (Login Portal)</th>
+              <th>Empresa / Conta CRM</th>
+              <th>Telefone</th>
+              <th>Ambiente Permitido</th>
+              <th>Cadastrado em</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>${clientRows || '<tr><td colspan="7" class="muted" style="text-align:center; padding:32px;">Nenhum cliente externo com acesso ao portal cadastrado.</td></tr>'}</tbody>
+        </table>
+      </div>
+    `}`;
 }
 
 async function renderTasks(useCache = false) {
@@ -3628,7 +3716,7 @@ window.nexusReplyQuote = async (id) => {
 };
 
 // ==================== MODAL EXECUTIVO DE CADASTRO / EDIÇÃO ====================
-async function openRecordModal(editObj = null) {
+async function openRecordModal(editObj = null, defaultPerfil = 'colaborador') {
   modalMode = 'entity';
   editingId = editObj ? editObj.id : null;
   await preloadRefs();
@@ -3636,7 +3724,8 @@ async function openRecordModal(editObj = null) {
   $('#record-save-btn').textContent = 'Salvar Registro';
 
   const clientOptions = cache.clientes.map((c) => `<option value="${c.id}" ${editObj?.cliente_id === c.id ? 'selected' : ''}>${esc(c.nome_empresa)}</option>`).join('');
-  const userOptions = `<option value="">-- Sem responsável --</option>` + cache.usuarios.map((u) => `<option value="${u.id}" ${editObj?.responsavel_id === u.id ? 'selected' : ''}>${esc(u.nome)}</option>`).join('');
+  const staffOnly = (cache.usuarios || []).filter((u) => u.perfil !== 'cliente');
+  const userOptions = `<option value="">-- Sem responsável --</option>` + staffOnly.map((u) => `<option value="${u.id}" ${editObj?.responsavel_id === u.id ? 'selected' : ''}>${esc(u.nome)}</option>`).join('');
   const projectOptions = cache.projetos.map((p) => `<option value="${p.id}" ${editObj?.projeto_id === p.id ? 'selected' : ''}>${esc(p.titulo)}</option>`).join('');
 
   if (page === 'projects') {
@@ -3695,6 +3784,15 @@ async function openRecordModal(editObj = null) {
           </label>
         </div>
       </div>` : ''}`;
+    setTimeout(() => {
+      const tInp = recordForm.querySelector('[name="titulo"]');
+      const rInp = document.getElementById('proj-gh-repo-nome');
+      if (tInp && rInp && !editObj) {
+        tInp.addEventListener('input', () => {
+          rInp.value = tInp.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9._-]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+        });
+      }
+    }, 20);
   } else if (['customers', 'leads', 'pipeline'].includes(page)) {
     setRecordModalHeader(
       editObj ? 'Editar Cliente / Lead' : 'Novo Cliente / Lead',
@@ -3723,9 +3821,15 @@ async function openRecordModal(editObj = null) {
         <label class="field-full">Observações<textarea name="observacoes" rows="3">${esc(editObj?.observacoes || '')}</textarea></label>
       </div>`;
   } else if (page === 'users') {
+    const activePerfil = editObj?.perfil || defaultPerfil || 'colaborador';
+    const isClientAccount = activePerfil === 'cliente';
     setRecordModalHeader(
-      editObj ? `Editar Colaborador — ${editObj.nome}` : 'Cadastrar Novo Colaborador / Usuário',
-      'Configure acesso, função oficial CBO, regime contratual, jornada e benefícios para folha automática',
+      editObj
+        ? (isClientAccount ? `Editar Acesso Portal — ${editObj.nome}` : `Editar Colaborador — ${editObj.nome}`)
+        : (isClientAccount ? 'Cadastrar Acesso ao Portal do Cliente' : 'Cadastrar Novo Colaborador (RH / CBO)'),
+      isClientAccount
+        ? 'Credenciais exclusivas para o Portal do Cliente (sem vínculos trabalhistas ou acesso interno)'
+        : 'Configure acesso interno, função oficial CBO, regime contratual, jornada e benefícios para folha automática',
       ICONS.users
     );
     const tipoContr = editObj?.tipo_contrato || 'clt_fixo';
@@ -3734,19 +3838,28 @@ async function openRecordModal(editObj = null) {
         <div class="modal-section-title"><span class="modal-section-step">1</span> Identificação &amp; Credenciais de Acesso</div>
         <div class="formgrid">
           <label>Nome Completo *<input name="nome" required value="${esc(editObj?.nome || '')}" placeholder="Ex.: Mariana Silva"></label>
-          <label>E-mail Corporativo *<input name="email" type="email" required value="${esc(editObj?.email || '')}" placeholder="nome@nexuscodebrasil.com.br"></label>
+          <label>E-mail de Acesso *<input name="email" type="email" required value="${esc(editObj?.email || '')}" placeholder="nome@empresa.com.br"></label>
           <label>Senha ${editObj ? '(deixe vazio para manter)' : '*'}<input name="senha" type="password" ${editObj ? '' : 'required'} minlength="6" autocomplete="new-password"></label>
-          <label>Perfil de Acesso *<select name="perfil">
-            ${['colaborador', 'admin', 'cliente'].map((r) => `<option value="${r}" ${(editObj?.perfil || 'colaborador') === r ? 'selected' : ''}>${r === 'admin' ? 'Administrador (Gestão & RH)' : r === 'colaborador' ? 'Colaborador (Ponto & Tarefas)' : 'Cliente (Portal)'}</option>`).join('')}
+          <label>Tipo de Conta / Perfil *<select name="perfil" id="usr-perfil-select">
+            ${['colaborador', 'admin', 'cliente'].map((r) => `<option value="${r}" ${activePerfil === r ? 'selected' : ''}>${r === 'admin' ? 'Administrador Interno (Gestão & RH)' : r === 'colaborador' ? 'Colaborador Interno (Ponto & Tarefas)' : 'Cliente Externo (Somente Portal do Cliente)'}</option>`).join('')}
           </select></label>
-          <label>CPF<input name="cpf" value="${esc(editObj?.cpf || '')}" placeholder="000.000.000-00"></label>
+          <label>CPF / Documento<input name="cpf" value="${esc(editObj?.cpf || '')}" placeholder="000.000.000-00"></label>
+          <label>Telefone / WhatsApp<input name="telefone" value="${esc(editObj?.telefone || '')}" placeholder="(27) 99999-9999"></label>
           <label>Status da Conta<select name="ativo">
             <option value="true" ${editObj?.ativo !== false ? 'selected' : ''}>Ativo</option>
-            <option value="false" ${editObj?.ativo === false ? 'selected' : ''}>Inativo</option>
+            <option value="false" ${editObj?.ativo === false ? 'selected' : ''}>Inativo / Bloqueado</option>
           </select></label>
         </div>
       </div>
 
+      <div id="usr-client-notice" class="modal-section-card" style="display:${isClientAccount ? 'flex' : 'none'}; border-left: 4px solid #00B4D8;">
+        <div class="modal-section-title">Conta Externa — Portal do Cliente</div>
+        <p style="margin:0; font-size:13px; color:var(--text-light); line-height:1.5;">
+          Usuários com perfil <b>Cliente Externo</b> acessam exclusivamente o <b>Portal do Cliente</b> (projetos contratados, propostas, faturas e chamados), não possuem vínculo empregatício (CBO / CLT / Ponto / Holerite) e são bloqueados automaticamente do painel administrativo interno.
+        </p>
+      </div>
+
+      <div id="usr-hr-sections" style="display:${isClientAccount ? 'none' : 'flex'}; flex-direction:column; gap:20px;">
       <div class="modal-section-card">
         <div class="modal-section-title"><span class="modal-section-step">2</span> Função &amp; Classificação Brasileira de Ocupações (CBO)</div>
         <div class="cbo-search-wrap">
@@ -3822,10 +3935,20 @@ async function openRecordModal(editObj = null) {
             <input name="pix_chave" value="${esc(editObj?.pix_chave || '')}" placeholder="Informe a chave PIX para transferência">
           </label>
         </div>
+      </div>
       </div>`;
 
-    // Bind CBO live autocomplete & contract period toggle
+    // Bind CBO live autocomplete, contract period toggle & role switch (Cliente vs Colaborador)
     setTimeout(() => {
+      const perfilSel = document.getElementById('usr-perfil-select');
+      const hrSections = document.getElementById('usr-hr-sections');
+      const clientNotice = document.getElementById('usr-client-notice');
+      perfilSel?.addEventListener('change', () => {
+        const isCli = perfilSel.value === 'cliente';
+        if (hrSections) hrSections.style.display = isCli ? 'none' : 'flex';
+        if (clientNotice) clientNotice.style.display = isCli ? 'flex' : 'none';
+      });
+
       const cboSearch = document.getElementById('usr-cbo-search');
       const cboList = document.getElementById('usr-cbo-results');
       const tipoSel = document.getElementById('usr-tipo-contrato');
@@ -3974,6 +4097,7 @@ recordForm.onsubmit = async (e) => {
         })
       });
     } else if (page === 'users') {
+      const isCli = raw.perfil === 'cliente';
       await apiRequest(editingId ? `/usuarios/${editingId}` : '/usuarios', {
         method: editingId ? 'PATCH' : 'POST',
         body: JSON.stringify({
@@ -3981,25 +4105,27 @@ recordForm.onsubmit = async (e) => {
           email: raw.email,
           perfil: raw.perfil,
           cpf: raw.cpf || null,
-          cbo_codigo: raw.cbo_codigo || null,
-          cbo_descricao: raw.cbo_descricao || null,
-          cargo: raw.cargo || raw.cbo_descricao || null,
-          tipo_contrato: raw.tipo_contrato || 'clt_fixo',
-          data_contratacao: raw.data_contratacao || null,
-          data_fim_contrato: raw.tipo_contrato === 'clt_determinado' ? (raw.data_fim_contrato || null) : null,
-          salario_base: Number(raw.salario_base || 0),
-          carga_horaria_diaria: Number(raw.carga_horaria_diaria || 8),
-          horario_entrada: raw.horario_entrada || '08:00',
-          horario_saida: raw.horario_saida || '17:00',
-          dependentes_irrf: Number(raw.dependentes_irrf || 0),
-          vale_transporte: raw.vale_transporte === 'true',
-          valor_vt_mensal: Number(raw.valor_vt_mensal || 0),
-          pix_tipo: raw.pix_tipo || 'cpf',
-          pix_chave: raw.pix_chave ? raw.pix_chave.trim() : null,
+          telefone: raw.telefone || null,
+          cbo_codigo: isCli ? null : (raw.cbo_codigo || null),
+          cbo_descricao: isCli ? null : (raw.cbo_descricao || null),
+          cargo: isCli ? null : (raw.cargo || raw.cbo_descricao || null),
+          tipo_contrato: isCli ? null : (raw.tipo_contrato || 'clt_fixo'),
+          data_contratacao: isCli ? null : (raw.data_contratacao || null),
+          data_fim_contrato: (!isCli && raw.tipo_contrato === 'clt_determinado') ? (raw.data_fim_contrato || null) : null,
+          salario_base: isCli ? 0 : Number(raw.salario_base || 0),
+          carga_horaria_diaria: isCli ? null : Number(raw.carga_horaria_diaria || 8),
+          horario_entrada: isCli ? null : (raw.horario_entrada || '08:00'),
+          horario_saida: isCli ? null : (raw.horario_saida || '17:00'),
+          dependentes_irrf: isCli ? 0 : Number(raw.dependentes_irrf || 0),
+          vale_transporte: isCli ? false : (raw.vale_transporte === 'true'),
+          valor_vt_mensal: isCli ? 0 : Number(raw.valor_vt_mensal || 0),
+          pix_tipo: isCli ? null : (raw.pix_tipo || 'cpf'),
+          pix_chave: (!isCli && raw.pix_chave) ? raw.pix_chave.trim() : null,
           ativo: raw.ativo === 'true',
           ...(raw.senha ? { senha: raw.senha } : {})
         })
       });
+      usersTab = isCli ? 'clientes_portal' : 'equipe';
     } else if (page === 'invoices') {
       await apiRequest('/faturas', {
         method: 'POST',

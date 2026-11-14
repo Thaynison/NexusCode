@@ -8,6 +8,12 @@
   <link rel="icon" type="image/svg+xml" href="../assets/brand/favicon.svg">
   <link rel="alternate icon" type="image/png" href="../img/nexus.png">
   <link rel="stylesheet" href="../assets/css/app.css">
+  <script>
+    try {
+      const u = JSON.parse(localStorage.getItem('nexus_user') || 'null');
+      if (u && u.perfil === 'cliente') { window.location.replace('./portal.html'); }
+    } catch (_) {}
+  </script>
 </head>
 <body class="crm-app">
   <div class="sidebar-backdrop" id="sidebar-backdrop"></div>

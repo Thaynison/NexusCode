@@ -425,11 +425,21 @@ $('#vsc-term-input')?.addEventListener('keydown', async (e) => {
   }
 });
 
-if (!projetoId) {
-  termPrint('Erro: projeto_id não informado na URL.', '#f87171');
-} else {
-  termPrint('Inicializando container Nexus Code Studio (Codespaces Cloud)...', '#00B4D8');
-  loadRepositoryTree()
-    .then(() => termPrint(`Repositório ${state.fullName} montado com sucesso na branch '${state.branch}'.`, '#34d399'))
-    .catch((err) => termPrint(`[Erro ao conectar GitHub] ${err.message}`, '#f87171'));
-}
+apiRequest('/auth/me')
+  .then((me) => {
+    if (me?.perfil === 'cliente') {
+      window.location.replace('./portal.html');
+      return;
+    }
+    if (!projetoId) {
+      termPrint('Erro: projeto_id não informado na URL.', '#f87171');
+    } else {
+      termPrint('Inicializando container Nexus Code Studio (Codespaces Cloud)...', '#00B4D8');
+      loadRepositoryTree()
+        .then(() => termPrint(`Repositório ${state.fullName} montado com sucesso na branch '${state.branch}'.`, '#34d399'))
+        .catch((err) => termPrint(`[Erro ao conectar GitHub] ${err.message}`, '#f87171'));
+    }
+  })
+  .catch(() => {
+    window.location.href = '../login.html';
+  });

@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, Literal, List
-from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator, model_validator
 
 
 class LoginRequest(BaseModel):
@@ -39,40 +39,20 @@ class UsuarioBase(BaseModel):
     data_nascimento: Optional[date] = None
     data_contratacao: Optional[date] = None
     data_fim_contrato: Optional[date] = None
-    tipo_contrato: Optional[str] = "clt_fixo"
+    tipo_contrato: Optional[str] = None
     cbo_codigo: Optional[str] = None
     cbo_descricao: Optional[str] = None
-    carga_horaria_diaria: Optional[Decimal] = Decimal("8.00")
-    horario_entrada: Optional[str] = "08:00"
-    horario_saida: Optional[str] = "17:00"
+    carga_horaria_diaria: Optional[Decimal] = None
+    horario_entrada: Optional[str] = None
+    horario_saida: Optional[str] = None
     dependentes_irrf: Optional[int] = 0
     vale_transporte: Optional[bool] = False
     valor_vt_mensal: Optional[Decimal] = Decimal("0.00")
     salario_base: Optional[Decimal] = Decimal("0.00")
-    pix_tipo: Optional[str] = "cpf"
+    pix_tipo: Optional[str] = None
     pix_chave: Optional[str] = None
     telefone: Optional[str] = None
     cargo: Optional[str] = None
-
-    @field_validator("tipo_contrato", mode="before")
-    @classmethod
-    def _default_tipo_contrato(cls, v):
-        return v or "clt_fixo"
-
-    @field_validator("carga_horaria_diaria", mode="before")
-    @classmethod
-    def _default_carga(cls, v):
-        return Decimal("8.00") if v is None else v
-
-    @field_validator("horario_entrada", mode="before")
-    @classmethod
-    def _default_h_ent(cls, v):
-        return v or "08:00"
-
-    @field_validator("horario_saida", mode="before")
-    @classmethod
-    def _default_h_sai(cls, v):
-        return v or "17:00"
 
     @field_validator("dependentes_irrf", mode="before")
     @classmethod
@@ -88,6 +68,29 @@ class UsuarioBase(BaseModel):
     @classmethod
     def _default_dec_usr(cls, v):
         return Decimal("0.00") if v is None else v
+
+    @model_validator(mode="after")
+    def _normalize_by_perfil(self):
+        if self.perfil == "cliente":
+            self.tipo_contrato = None
+            self.cbo_codigo = None
+            self.cbo_descricao = None
+            self.carga_horaria_diaria = None
+            self.horario_entrada = None
+            self.horario_saida = None
+            self.dependentes_irrf = 0
+            self.vale_transporte = False
+            self.valor_vt_mensal = Decimal("0.00")
+            self.salario_base = Decimal("0.00")
+            self.pix_tipo = None
+            self.pix_chave = None
+        else:
+            self.tipo_contrato = self.tipo_contrato or "clt_fixo"
+            self.carga_horaria_diaria = Decimal("8.00") if self.carga_horaria_diaria is None else self.carga_horaria_diaria
+            self.horario_entrada = self.horario_entrada or "08:00"
+            self.horario_saida = self.horario_saida or "17:00"
+            self.pix_tipo = self.pix_tipo or "cpf"
+        return self
 
     area_atuacao: Optional[str] = None
     formacao: Optional[str] = None
@@ -164,12 +167,12 @@ class UsuarioListOut(BaseModel):
     data_nascimento: Optional[date] = None
     data_contratacao: Optional[date] = None
     data_fim_contrato: Optional[date] = None
-    tipo_contrato: Optional[str] = "clt_fixo"
+    tipo_contrato: Optional[str] = None
     cbo_codigo: Optional[str] = None
     cbo_descricao: Optional[str] = None
-    carga_horaria_diaria: Optional[Decimal] = Decimal("8.00")
-    horario_entrada: Optional[str] = "08:00"
-    horario_saida: Optional[str] = "17:00"
+    carga_horaria_diaria: Optional[Decimal] = None
+    horario_entrada: Optional[str] = None
+    horario_saida: Optional[str] = None
     dependentes_irrf: Optional[int] = 0
     vale_transporte: Optional[bool] = False
     valor_vt_mensal: Optional[Decimal] = Decimal("0.00")

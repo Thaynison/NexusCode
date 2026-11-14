@@ -8,6 +8,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../assets/css/vscode_ide.css">
+  <script>
+    try {
+      const u = JSON.parse(localStorage.getItem('nexus_user') || 'null');
+      if (u && u.perfil === 'cliente') { window.location.replace('./portal.html'); }
+    } catch (_) {}
+  </script>
 </head>
 <body class="vsc-body">
   <header class="vsc-titlebar">

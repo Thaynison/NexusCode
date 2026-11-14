@@ -756,6 +756,14 @@ def _run_full_schema_sync():
                 )
     if "faturas" in existing_tables:
         ddl_statements.append("ALTER TABLE faturas ALTER COLUMN projeto_id DROP NOT NULL")
+    if "usuarios" in existing_tables:
+        ddl_statements.append(
+            "UPDATE usuarios SET tipo_contrato = NULL, carga_horaria_diaria = NULL, "
+            "horario_entrada = NULL, horario_saida = NULL, cbo_codigo = NULL, cbo_descricao = NULL, "
+            "salario_base = 0, vale_transporte = FALSE, valor_vt_mensal = 0, dependentes_irrf = 0, "
+            "pix_tipo = NULL, pix_chave = NULL "
+            "WHERE perfil = 'cliente' AND (tipo_contrato IS NOT NULL OR carga_horaria_diaria IS NOT NULL)"
+        )
 
     for stmt in ddl_statements:
         try:
@@ -1110,7 +1118,7 @@ def raiz(db: int = 0):
     return {
         "status": "online" if db_status != "error" else "degraded",
         "sistema": "Nexus Code Enterprise SaaS ERP & CRM API",
-        "versao": "2.4.4-prod",
+        "versao": "2.4.5-prod",
         "regiao": os.getenv("VERCEL_REGION", "local"),
         "database_url_configurada": bool(os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")),
         "db_status": db_status,
@@ -1704,6 +1712,11 @@ def registrar_conta(dados: RegisterRequest, req: Request, db: Session = Depends(
         senha_hash=gerar_hash_senha(dados.senha),
         perfil="cliente",
         ativo=True,
+        tipo_contrato=None,
+        carga_horaria_diaria=None,
+        horario_entrada=None,
+        horario_saida=None,
+        salario_base=0,
     )
     db.add(novo)
     db.flush()
@@ -3644,7 +3657,8 @@ def criar_usuario(
 
     if db.query(Usuario.id).filter(func.lower(Usuario.email) == dados.email.strip().lower()).first():
         raise HTTPException(status_code=400, detail="E-mail já cadastrado.")
-    cargo_final = dados.cargo or dados.cbo_descricao
+    is_client_role = dados.perfil == "cliente"
+    cargo_final = None if is_client_role else (dados.cargo or dados.cbo_descricao)
     novo = Usuario(
         organizacao_id=org.id,
         nome=dados.nome,
@@ -3654,23 +3668,28 @@ def criar_usuario(
         ativo=dados.ativo,
         cpf=dados.cpf,
         cargo=cargo_final,
-        cbo_codigo=dados.cbo_codigo,
-        cbo_descricao=dados.cbo_descricao,
-        tipo_contrato=dados.tipo_contrato or "clt_fixo",
+        cbo_codigo=None if is_client_role else dados.cbo_codigo,
+        cbo_descricao=None if is_client_role else dados.cbo_descricao,
+        tipo_contrato=None if is_client_role else (dados.tipo_contrato or "clt_fixo"),
         data_nascimento=dados.data_nascimento,
-        data_contratacao=dados.data_contratacao,
-        data_fim_contrato=dados.data_fim_contrato,
-        carga_horaria_diaria=dados.carga_horaria_diaria if dados.carga_horaria_diaria is not None else 8.00,
-        horario_entrada=dados.horario_entrada or "08:00",
-        horario_saida=dados.horario_saida or "17:00",
-        dependentes_irrf=dados.dependentes_irrf or 0,
-        vale_transporte=bool(dados.vale_transporte),
-        valor_vt_mensal=dados.valor_vt_mensal or 0,
-        salario_base=dados.salario_base or 0,
+        data_contratacao=None if is_client_role else dados.data_contratacao,
+        data_fim_contrato=None if is_client_role else dados.data_fim_contrato,
+        carga_horaria_diaria=None if is_client_role else (dados.carga_horaria_diaria if dados.carga_horaria_diaria is not None else 8.00),
+        horario_entrada=None if is_client_role else (dados.horario_entrada or "08:00"),
+        horario_saida=None if is_client_role else (dados.horario_saida or "17:00"),
+        dependentes_irrf=0 if is_client_role else (dados.dependentes_irrf or 0),
+        vale_transporte=False if is_client_role else bool(dados.vale_transporte),
+        valor_vt_mensal=0 if is_client_role else (dados.valor_vt_mensal or 0),
+        salario_base=0 if is_client_role else (dados.salario_base or 0),
+        pix_tipo=None if is_client_role else (dados.pix_tipo or "cpf"),
+        pix_chave=None if is_client_role else dados.pix_chave,
         telefone=dados.telefone,
     )
     db.add(novo)
-    registrar_log(db, admin.nome, "CRIAR_USUARIO", f"Criou usuário {novo.email} ({novo.perfil})", org_id=org.id)
+    db.flush()
+    if is_client_role:
+        _garantir_cliente_para_portal(db, novo)
+    registrar_log(db, admin.nome, "CRIAR_USUARIO", f"Criou {'acesso cliente' if is_client_role else 'colaborador'} {novo.email} ({novo.perfil})", org_id=org.id)
     db.commit()
     db.refresh(novo)
     return novo
@@ -3695,7 +3714,34 @@ def atualizar_usuario(
     for campo, valor in payload.items():
         setattr(usuario, campo, valor)
 
-    registrar_log(db, admin.nome, "EDITAR_USUARIO", f"Atualizou usuário #{usuario_id}", org_id=admin.organizacao_id)
+    if usuario.perfil == "cliente":
+        usuario.tipo_contrato = None
+        usuario.cbo_codigo = None
+        usuario.cbo_descricao = None
+        usuario.cargo = None
+        usuario.carga_horaria_diaria = None
+        usuario.horario_entrada = None
+        usuario.horario_saida = None
+        usuario.dependentes_irrf = 0
+        usuario.vale_transporte = False
+        usuario.valor_vt_mensal = 0
+        usuario.salario_base = 0
+        usuario.pix_tipo = None
+        usuario.pix_chave = None
+        usuario.data_contratacao = None
+        usuario.data_fim_contrato = None
+        _garantir_cliente_para_portal(db, usuario)
+    else:
+        if not usuario.tipo_contrato:
+            usuario.tipo_contrato = "clt_fixo"
+        if usuario.carga_horaria_diaria is None:
+            usuario.carga_horaria_diaria = Decimal("8.00")
+        if not usuario.horario_entrada:
+            usuario.horario_entrada = "08:00"
+        if not usuario.horario_saida:
+            usuario.horario_saida = "17:00"
+
+    registrar_log(db, admin.nome, "EDITAR_USUARIO", f"Atualizou usuário #{usuario_id} ({usuario.perfil})", org_id=admin.organizacao_id)
     db.commit()
     db.refresh(usuario)
     return usuario
@@ -3925,6 +3971,13 @@ def listar_tarefas_projeto(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_atual),
 ):
+    proj = db.query(Projeto).filter(Projeto.id == projeto_id, Projeto.organizacao_id == usuario.organizacao_id).first()
+    if not proj:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado.")
+    if usuario.perfil == "cliente":
+        cli_usr = _obter_cliente_do_usuario(db, usuario)
+        if not cli_usr or proj.cliente_id != cli_usr.id:
+            raise HTTPException(status_code=403, detail="Acesso negado às tarefas deste projeto.")
     return db.query(Tarefa).filter(Tarefa.projeto_id == projeto_id, Tarefa.organizacao_id == usuario.organizacao_id).all()
 
 
@@ -4067,11 +4120,17 @@ def baixar_comprovante_fatura(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_usuario_atual),
 ):
-    fat = db.query(Fatura.id, Fatura.comprovante_nome, Fatura.comprovante_data).filter(
+    fat = db.query(Fatura.id, Fatura.cliente_id, Fatura.comprovante_nome, Fatura.comprovante_data).filter(
         Fatura.id == fatura_id,
         Fatura.organizacao_id == usuario.organizacao_id,
     ).first()
-    if not fat or not fat.comprovante_data:
+    if not fat:
+        raise HTTPException(status_code=404, detail="Fatura não encontrada.")
+    if usuario.perfil == "cliente":
+        cli_usr = _obter_cliente_do_usuario(db, usuario)
+        if not cli_usr or fat.cliente_id != cli_usr.id:
+            raise HTTPException(status_code=403, detail="Acesso negado a este comprovante.")
+    if not fat.comprovante_data:
         raise HTTPException(status_code=404, detail="Comprovante não encontrado.")
     return {"id": fat.id, "comprovante_nome": fat.comprovante_nome, "comprovante_data": fat.comprovante_data}
 
@@ -4145,7 +4204,7 @@ def remover_fatura(
 def listar_holerites(
     usuario_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(get_usuario_atual),
+    usuario: Usuario = Depends(exigir_equipe),
 ):
     query = db.query(Holerite).options(defer(Holerite.anexo_data)).filter(Holerite.organizacao_id == usuario.organizacao_id)
     if usuario.perfil != "admin":
@@ -4159,7 +4218,7 @@ def listar_holerites(
 def baixar_anexo_holerite(
     holerite_id: int,
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(get_usuario_atual),
+    usuario: Usuario = Depends(exigir_equipe),
 ):
     h = db.query(Holerite.id, Holerite.usuario_id, Holerite.anexo_nome, Holerite.anexo_data).filter(
         Holerite.id == holerite_id,
@@ -4245,7 +4304,7 @@ def remover_holerite(
 def listar_informes_rendimentos(
     usuario_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(get_usuario_atual),
+    usuario: Usuario = Depends(exigir_equipe),
 ):
     query = db.query(InformeRendimento).options(defer(InformeRendimento.anexo_data)).filter(InformeRendimento.organizacao_id == usuario.organizacao_id)
     if usuario.perfil != "admin":
@@ -4259,7 +4318,7 @@ def listar_informes_rendimentos(
 def baixar_anexo_informe(
     informe_id: int,
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(get_usuario_atual),
+    usuario: Usuario = Depends(exigir_equipe),
 ):
     inf = db.query(InformeRendimento.id, InformeRendimento.usuario_id, InformeRendimento.anexo_nome, InformeRendimento.anexo_data).filter(
         InformeRendimento.id == informe_id,
@@ -4684,7 +4743,7 @@ def gerar_holerite_automatico_endpoint(
 def listar_modulo(
     modulo: str,
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(get_usuario_atual),
+    usuario: Usuario = Depends(exigir_equipe),
 ):
     return (
         db.query(ModuloRegistro)
@@ -4699,7 +4758,7 @@ def criar_registro_modulo(
     modulo: str,
     dados: ModuloRegistroCreate,
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(get_usuario_atual),
+    usuario: Usuario = Depends(exigir_equipe),
 ):
     item = ModuloRegistro(organizacao_id=usuario.organizacao_id, modulo=modulo, **dados.model_dump())
     db.add(item)
@@ -5123,6 +5182,10 @@ def verificar_dns_pedido_dominio(pedido_id: int, db: Session = Depends(get_db), 
     pedido = db.query(PedidoDominio).filter(PedidoDominio.id == pedido_id, PedidoDominio.organizacao_id == usuario.organizacao_id).first()
     if not pedido:
         raise HTTPException(status_code=404, detail="Domínio não encontrado.")
+    if usuario.perfil == "cliente":
+        cli_usr = _obter_cliente_do_usuario(db, usuario)
+        if pedido.usuario_id != usuario.id and (not cli_usr or pedido.cliente_id != cli_usr.id):
+            raise HTTPException(status_code=403, detail="Acesso negado a este domínio.")
     cfg = _aplicar_env_fallback_integracoes(db.query(ConfiguracaoEmpresa).filter(ConfiguracaoEmpresa.organizacao_id == usuario.organizacao_id).first())
     res = verificar_status_dns_vercel(
         vercel_token=cfg.vercel_token if cfg else os.getenv("VERCEL_TOKEN"),
@@ -5147,6 +5210,10 @@ def gerar_cobranca_mercadopago_fatura(
     fat = db.query(Fatura).filter(Fatura.id == fatura_id, Fatura.organizacao_id == usuario.organizacao_id).first()
     if not fat:
         raise HTTPException(status_code=404, detail="Fatura não encontrada.")
+    if usuario.perfil == "cliente":
+        cli_usr = _obter_cliente_do_usuario(db, usuario)
+        if not cli_usr or fat.cliente_id != cli_usr.id:
+            raise HTTPException(status_code=403, detail="Acesso negado a esta fatura.")
     if fat.status == "pago":
         return fat
 
@@ -5211,6 +5278,10 @@ def verificar_status_pagamento_fatura_mp(
     fat = db.query(Fatura).filter(Fatura.id == fatura_id, Fatura.organizacao_id == usuario.organizacao_id).first()
     if not fat:
         raise HTTPException(status_code=404, detail="Fatura não encontrada.")
+    if usuario.perfil == "cliente":
+        cli_usr = _obter_cliente_do_usuario(db, usuario)
+        if not cli_usr or fat.cliente_id != cli_usr.id:
+            raise HTTPException(status_code=403, detail="Acesso negado a esta fatura.")
     if fat.status == "pago":
         return fat
 
