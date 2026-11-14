@@ -317,6 +317,13 @@ export async function renderPropostasView(ctx) {
   window.nexusOpenNewPropostaModal = () => {
     const clients = cache.clientes || [];
     const defaultVal = new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10);
+    const params = cache.parametros_orcamento || {
+      imposto_servico_percent: Number(cache.empresa_config?.imposto_servico_percent ?? 6.0),
+      multa_atraso_percent: Number(cache.empresa_config?.multa_atraso_percent ?? 2.0),
+      juros_mensal_percent: Number(cache.empresa_config?.juros_mensal_percent ?? 1.0),
+      multa_rescisao_percent: Number(cache.empresa_config?.multa_rescisao_percent ?? 10.0)
+    };
+    const catalogo = (cache.catalogo_servicos || []).filter((s) => s.ativo !== false);
 
     holeriteContainer.innerHTML = `
       <form id="new-proposta-form">
@@ -331,8 +338,8 @@ export async function renderPropostasView(ctx) {
           <button type="button" class="modal-close-btn" onclick="document.getElementById('holerite-dialog').close()">&times;</button>
         </div>
         <div class="modal-body">
-          <div class="modal-section-card">
-            <div class="modal-section-title"><span class="modal-section-step">1</span> Cliente &amp; Escopo Comercial</div>
+          <div class="modal-section-card" style="border-left: 4px solid #00B4D8;">
+            <div class="modal-section-title"><span class="modal-section-step">1</span> Cliente &amp; Dimensionamento Financeiro</div>
             <div class="formgrid">
               <label>Cliente / Lead *
                 <select name="cliente_id" required>
@@ -340,23 +347,50 @@ export async function renderPropostasView(ctx) {
                   ${clients.map((c) => `<option value="${c.id}">${esc(c.nome_empresa)} (${esc(c.contato_nome)})</option>`).join('')}
                 </select>
               </label>
+              <label>Serviço do Catálogo Nexus Code
+                <select name="servico_codigo" id="np-servico-sel">
+                  <option value="">-- Personalizado (Preenchimento Manual) --</option>
+                  ${catalogo.map((s) => `<option value="${esc(s.codigo)}">${esc(s.nome)} (${formatMoney(s.valor_base)})</option>`).join('')}
+                </select>
+              </label>
               <label>Título do Projeto / Proposta *
-                <input type="text" name="titulo" required placeholder="Ex.: Plataforma Web Corporativa & App">
+                <input type="text" name="titulo" id="np-titulo" required placeholder="Ex.: Plataforma Web Corporativa & App">
               </label>
-              <label>Investimento Total (R$) *
-                <input type="number" step="0.01" min="0" name="valor_total" value="5000.00" required>
+              <label>Custo Base do Projeto (R$) *
+                <input type="number" step="0.01" min="0" name="valor_base" id="np-base" value="0.00" required>
               </label>
-              <label>Número de Parcelas (Faturas) *
-                <input type="number" min="1" max="24" name="parcelas" value="2" required>
+              <label>Urgência / Prioridade
+                <select name="urgencia" id="np-urgencia">
+                  <option value="normal" selected>Normal (0% adicional)</option>
+                  <option value="alta">Alta (+15% prioridade)</option>
+                  <option value="urgente">Urgente (+30% regime expresso)</option>
+                </select>
               </label>
-              <label>Condições de Pagamento
-                <input type="text" name="condicoes_pagamento" value="50% na aprovação + 50% na entrega">
+              <label>Desconto Comercial (R$)
+                <input type="number" step="0.01" min="0" name="desconto" id="np-desconto" value="0.00">
               </label>
-              <label>Prazo de Execução (dias) *
-                <input type="number" min="1" max="365" name="prazo_dias" value="30" required>
+              <label>Impostos / Tributos (%) *
+                <input type="number" step="0.01" min="0" max="100" name="imposto_percent" id="np-imposto" value="${Number(params.imposto_servico_percent ?? 6).toFixed(2)}">
               </label>
               <label>Validade da Proposta
                 <input type="date" name="validade_ate" value="${defaultVal}">
+              </label>
+            </div>
+            
+            <div id="np-live-summary" style="background:linear-gradient(135deg,#061224,#0A1D37); color:#fff; border:1px solid rgba(0,180,216,0.45); border-radius:12px; padding:14px 16px; font-size:12.5px; margin-top:10px;"></div>
+          </div>
+
+          <div class="modal-section-card">
+            <div class="modal-section-title"><span class="modal-section-step">2</span> Condições, Prazos &amp; Multas</div>
+            <div class="formgrid">
+              <label>Condições de Pagamento
+                <input type="text" name="condicoes_pagamento" id="np-condicoes" value="50% na aprovação + 50% na entrega">
+              </label>
+              <label>Número de Parcelas (Faturas) *
+                <input type="number" min="1" max="24" name="parcelas" id="np-parcelas" value="2" required>
+              </label>
+              <label>Prazo de Execução (dias) *
+                <input type="number" min="1" max="365" name="prazo_dias" id="np-prazo" value="30" required>
               </label>
               <label>Status de Envio
                 <select name="status">
@@ -364,18 +398,32 @@ export async function renderPropostasView(ctx) {
                   <option value="rascunho">Salvar como Rascunho Interno</option>
                 </select>
               </label>
+              <label>Multa por Atraso (%)
+                <input type="number" step="0.01" min="0" max="100" name="multa_atraso_percent" id="np-multa-atraso" value="${Number(params.multa_atraso_percent ?? 2).toFixed(2)}">
+              </label>
+              <label>Juros Mora (% ao mês)
+                <input type="number" step="0.01" min="0" max="100" name="juros_mensal_percent" id="np-juros" value="${Number(params.juros_mensal_percent ?? 1).toFixed(2)}">
+              </label>
+              <label>Multa Rescisória Contratual (%)
+                <input type="number" step="0.01" min="0" max="100" name="multa_rescisao_percent" id="np-multa-resc" value="${Number(params.multa_rescisao_percent ?? 10).toFixed(2)}">
+              </label>
             </div>
-            <label class="field-full">Escopo Detalhado &amp; Premissas Técnicas *
-              <textarea name="escopo" rows="4" required placeholder="Descreva as entregas, tecnologias, integrações e garantias inclusas na proposta..."></textarea>
-            </label>
           </div>
 
           <div class="modal-section-card">
-            <div class="modal-section-title"><span class="modal-section-step">2</span> Entregáveis / Marcos (Geram Tarefas no Planner)</div>
-            <label class="field-full">Lista de Etapas (uma por linha)
-              <textarea name="entregaveis_texto" rows="3" placeholder="Levantamento de Requisitos e Protótipo UI/UX&#10;Desenvolvimento Back-end e Banco de Dados&#10;Homologação com Cliente e Deploy em Produção">Levantamento de Requisitos e Arquitetura&#10;Desenvolvimento e Integração dos Módulos&#10;Homologação e Implantação em Produção</textarea>
+            <div class="modal-section-title"><span class="modal-section-step">3</span> Escopo Técnico &amp; Entregáveis</div>
+            <label class="field-full">Escopo Detalhado &amp; Premissas Técnicas *
+              <textarea name="escopo" id="np-escopo" rows="4" required placeholder="Descreva as entregas, tecnologias, integrações e garantias inclusas na proposta..."></textarea>
+            </label>
+            <label class="field-full">Lista de Etapas / Marcos (Geram Tarefas no Planner)
+              <textarea name="entregaveis_texto" id="np-entregaveis" rows="3" placeholder="Levantamento de Requisitos e Protótipo UI/UX&#10;Desenvolvimento Back-end e Banco de Dados&#10;Homologação com Cliente e Deploy em Produção">Levantamento de Requisitos e Arquitetura
+Desenvolvimento e Integração dos Módulos
+Homologação e Implantação em Produção</textarea>
             </label>
           </div>
+          
+          <!-- Hidden inputs to store the calculated final value -->
+          <input type="hidden" name="valor_total_calculado" id="np-valor-total-calc" value="0">
         </div>
         <div class="modal-footer">
           <button type="button" class="btn secondary" onclick="document.getElementById('holerite-dialog').close()">Cancelar</button>
@@ -383,6 +431,72 @@ export async function renderPropostasView(ctx) {
         </div>
       </form>
     `;
+
+    setTimeout(() => {
+      const servSel = document.getElementById('np-servico-sel');
+      const summaryEl = document.getElementById('np-live-summary');
+
+      const recalc = () => {
+        const base = parseFloat(document.getElementById('np-base')?.value) || 0;
+        const urg = document.getElementById('np-urgencia')?.value || 'normal';
+        const urgPct = urg === 'urgente' ? 30 : urg === 'alta' ? 15 : 0;
+        const urgVal = base * (urgPct / 100);
+        const desc = parseFloat(document.getElementById('np-desconto')?.value) || 0;
+        const sub = Math.max(0, base + urgVal - desc);
+        const impPct = parseFloat(document.getElementById('np-imposto')?.value) || 0;
+        const impVal = sub * (impPct / 100);
+        const total = sub + impVal;
+        
+        document.getElementById('np-valor-total-calc').value = total.toFixed(2);
+        
+        const parc = Math.max(1, parseInt(document.getElementById('np-parcelas')?.value || '1', 10));
+        const valParc = total / parc;
+        const mAtraso = parseFloat(document.getElementById('np-multa-atraso')?.value) || 0;
+        const juros = parseFloat(document.getElementById('np-juros')?.value) || 0;
+        const mResc = parseFloat(document.getElementById('np-multa-resc')?.value) || 0;
+
+        if (summaryEl) {
+          summaryEl.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+              <span style="font-size:11px; font-weight:800; color:#00B4D8; letter-spacing:0.06em;">DEMONSTRATIVO DO INVESTIMENTO</span>
+              <span style="font-size:18px; font-weight:900; color:#00B4D8;">Total: ${formatMoney(total)} (${parc}x de ${formatMoney(valParc)})</span>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; font-size:12px; color:#cbd5e1;">
+              <div>Custo Base: <b>${formatMoney(base)}</b></div>
+              <div>Urgência (+${urgPct}%): <b>${formatMoney(urgVal)}</b></div>
+              <div>Impostos (${impPct.toFixed(1)}%): <b>+${formatMoney(impVal)}</b></div>
+            </div>
+            <div style="margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.12); font-size:11.5px; color:#94a3b8;">
+              Multas automáticas inclusas no contrato: <b>${mAtraso.toFixed(1)}%</b> atraso + <b>${juros.toFixed(1)}% a.m.</b> juros • Rescisão contratual: <b>${mResc.toFixed(1)}%</b>
+            </div>
+          `;
+        }
+      };
+
+      servSel?.addEventListener('change', () => {
+        if (!servSel.value) return;
+        const found = catalogo.find((s) => s.codigo === servSel.value);
+        if (found) {
+          document.getElementById('np-base').value = Number(found.valor_base || 0).toFixed(2);
+          document.getElementById('np-prazo').value = found.prazo_dias || 15;
+          document.getElementById('np-parcelas').value = found.parcelas_padrao || 2;
+          document.getElementById('np-escopo').value = found.descricao || '';
+          document.getElementById('np-titulo').value = found.nome;
+          
+          if (found.entregaveis && found.entregaveis.length) {
+            document.getElementById('np-entregaveis').value = found.entregaveis.join('\n');
+          }
+        }
+        recalc();
+      });
+
+      ['np-base', 'np-urgencia', 'np-desconto', 'np-imposto', 'np-parcelas', 'np-multa-atraso', 'np-juros', 'np-multa-resc'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('input', recalc);
+        document.getElementById(id)?.addEventListener('change', recalc);
+      });
+
+      recalc();
+    }, 20);
 
     document.getElementById('new-proposta-form').onsubmit = async (e) => {
       e.preventDefault();
@@ -397,6 +511,21 @@ export async function renderPropostasView(ctx) {
         titulo,
         prazo_dias: Math.max(3, Math.round(((i + 1) / Math.max(1, lines.length)) * prazoTotal))
       }));
+      
+      const valor_total_calc = Number(raw.valor_total_calculado || 0);
+
+      // Constrói as cláusulas financeiras e anexa ao escopo
+      const impPct = parseFloat(raw.imposto_percent) || 0;
+      const mAtraso = parseFloat(raw.multa_atraso_percent) || 0;
+      const juros = parseFloat(raw.juros_mensal_percent) || 0;
+      const mResc = parseFloat(raw.multa_rescisao_percent) || 0;
+      
+      const clausulas_financeiras = `\n\nCLÁUSULAS DE MULTAS E ENCARGOS CONTRATUAIS
+• Multa por Atraso de Pagamento: ${mAtraso.toFixed(2)}% sobre o valor da parcela vencida.
+• Juros Moratórios: ${juros.toFixed(2)}% ao mês (pro-rata die) após o vencimento.
+• Multa por Rescisão Imotivada: ${mResc.toFixed(2)}% sobre o saldo contratual remanescente.`;
+
+      const escopoCompleto = raw.escopo.trim() + clausulas_financeiras;
 
       btn.disabled = true;
       btn.textContent = 'Emitindo...';
@@ -406,9 +535,9 @@ export async function renderPropostasView(ctx) {
           body: JSON.stringify({
             cliente_id: Number(raw.cliente_id),
             titulo: raw.titulo.trim(),
-            escopo: raw.escopo.trim(),
+            escopo: escopoCompleto,
             entregaveis_json: JSON.stringify(entregaveis),
-            valor_total: Number(raw.valor_total || 0),
+            valor_total: valor_total_calc,
             condicoes_pagamento: raw.condicoes_pagamento || null,
             parcelas: Number(raw.parcelas || 1),
             prazo_dias: prazoTotal,
