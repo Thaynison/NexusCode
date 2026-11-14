@@ -1,6 +1,10 @@
 import os
 from urllib.parse import quote_plus, urlparse, urlunparse, parse_qsl, urlencode
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv(*args, **kwargs):
+        return False
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 

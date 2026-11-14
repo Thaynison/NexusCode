@@ -33,11 +33,17 @@ class UsuarioBase(BaseModel):
     cpf: Optional[str] = None
     data_nascimento: Optional[date] = None
     telefone: Optional[str] = None
-    endereco: Optional[str] = None
+    cargo: Optional[str] = None
+    area_atuacao: Optional[str] = None
+    formacao: Optional[str] = None
+    habilidades: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    resumo_profissional: Optional[str] = None
     cep: Optional[str] = None
+    endereco: Optional[str] = None
+    bairro: Optional[str] = None
     cidade: Optional[str] = None
     estado: Optional[str] = None
-    cargo: Optional[str] = None
     termos_aceitos_em: Optional[datetime] = None
 
 
@@ -54,11 +60,17 @@ class UsuarioUpdate(BaseModel):
     cpf: Optional[str] = None
     data_nascimento: Optional[date] = None
     telefone: Optional[str] = None
-    endereco: Optional[str] = None
+    cargo: Optional[str] = None
+    area_atuacao: Optional[str] = None
+    formacao: Optional[str] = None
+    habilidades: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    resumo_profissional: Optional[str] = None
     cep: Optional[str] = None
+    endereco: Optional[str] = None
+    bairro: Optional[str] = None
     cidade: Optional[str] = None
     estado: Optional[str] = None
-    cargo: Optional[str] = None
     termos_aceitos_em: Optional[datetime] = None
 
 

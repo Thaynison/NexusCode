@@ -2,10 +2,14 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, date
 from typing import List, Optional
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv(*args, **kwargs):
+        return False
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func
+from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -40,23 +44,34 @@ def registrar_log(db: Session, usuario_nome: str, acao: str, detalhes: str):
 _db_ready = False
 
 
+def _sync_missing_columns():
+    """Adiciona automaticamente colunas novas em tabelas já existentes no banco."""
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    if not existing_tables:
+        return
+
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if table.name not in existing_tables:
+                continue
+            existing_cols = {col["name"] for col in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name not in existing_cols:
+                    col_type = column.type.compile(dialect=engine.dialect)
+                    conn.execute(
+                        text(f'ALTER TABLE "{table.name}" ADD COLUMN IF NOT EXISTS "{column.name}" {col_type}')
+                    )
+
+
 def ensure_db_initialized():
     global _db_ready
     if _db_ready:
         return
-    db = SessionLocal()
-    try:
-        # Caminho rápido: se a tabela já existe e possui usuário, evita 10 consultas de catálogo
-        has_user = db.query(Usuario.id).first()
-        if has_user:
-            _db_ready = True
-            return
-    except SQLAlchemyError:
-        db.rollback()
-    finally:
-        db.close()
 
     Base.metadata.create_all(bind=engine)
+    _sync_missing_columns()
+
     db = SessionLocal()
     try:
         if not db.query(Usuario.id).first():
@@ -196,20 +211,25 @@ def recuperar_senha(dados: ForgotPasswordRequest):
 @app.patch("/api/auth/me", response_model=UsuarioOut, tags=["Auth"])
 def atualizar_meu_perfil(dados: UsuarioUpdate, db: Session = Depends(get_db), usuario: Usuario = Depends(get_usuario_db)):
     payload = dados.model_dump(exclude_unset=True)
-    # Não permitir que o usuário altere o próprio perfil de acesso ou status via este endpoint
+    # Bloqueia alteração de privilégio ou status pelo próprio usuário
     payload.pop("perfil", None)
     payload.pop("ativo", None)
 
     if "senha" in payload:
-        usuario.senha_hash = gerar_hash_senha(payload.pop("senha"))
-    
+        nova_senha = payload.pop("senha")
+        if nova_senha:
+            usuario.senha_hash = gerar_hash_senha(nova_senha)
+
+    if "email" in payload and payload["email"] and payload["email"] != usuario.email:
+        if db.query(Usuario).filter(Usuario.email == payload["email"], Usuario.id != usuario.id).first():
+            raise HTTPException(status_code=400, detail="Este e-mail já está em uso por outra conta.")
+
     for campo, valor in payload.items():
         setattr(usuario, campo, valor)
 
-    if not usuario.termos_aceitos_em:
-        usuario.termos_aceitos_em = datetime.utcnow()
+    usuario.termos_aceitos_em = datetime.utcnow()
 
-    registrar_log(db, usuario.nome, "EDITAR_PERFIL", "O usuário atualizou seus próprios dados cadastrais.")
+    registrar_log(db, usuario.nome, "EDITAR_PERFIL", "Atualizou dados cadastrais, currículo e consentimento LGPD.")
     db.commit()
     db.refresh(usuario)
     return usuario

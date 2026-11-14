@@ -1234,44 +1234,132 @@ body.crm-app {
   color: #ffffff;
 }
 
-/* Profile Form & LGPD */
-.profile-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+/* ==================== PERFIL PROFISSIONAL, CURRÍCULO & LGPD ==================== */
+.profile-shell {
+  max-width: 920px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
   gap: 20px;
 }
+
+.profile-header-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.profile-section {
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.profile-section-title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-section-sub {
+  margin: 0 0 16px;
+  font-size: 12.5px;
+  color: var(--text-light);
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.profile-grid-3 {
+  display: grid;
+  grid-template-columns: 160px 1fr 1fr;
+  gap: 16px;
+}
+
 @media (max-width: 768px) {
-  .profile-grid {
+  .profile-grid,
+  .profile-grid-3 {
     grid-template-columns: 1fr;
   }
 }
-.lgpd-box {
+
+.nc-input {
+  width: 100%;
   background: var(--surface2);
-  border: 1px solid var(--primary);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 10px 12px;
   border-radius: 8px;
-  padding: 16px;
-  margin: 24px 0;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.nc-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.nc-input[readonly] {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+.lgpd-box {
+  background: rgba(37, 99, 235, 0.05);
+  border: 1px solid rgba(37, 99, 235, 0.32);
+  border-radius: 12px;
+  padding: 18px;
+  margin-top: 8px;
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 14px;
 }
+
 .lgpd-box svg {
   color: var(--primary);
   flex-shrink: 0;
   margin-top: 2px;
 }
+
 .lgpd-box p {
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   font-size: 12.5px;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--text);
 }
-.lgpd-box label {
+
+.lgpd-check-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 9px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   color: var(--text);
+}
+
+.lgpd-check-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--primary);
+  flex-shrink: 0;
+}
+
+.lgpd-meta {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--ok);
+  font-weight: 600;
 }

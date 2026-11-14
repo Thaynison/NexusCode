@@ -952,6 +952,13 @@
                         <!-- Honeypot anti-spam -->
                         <input type="text" id="website" name="website" style="display:none" tabindex="-1" autocomplete="off">
 
+                        <div class="flex items-start gap-2.5 text-xs text-gray-300 bg-white bg-opacity-5 border border-white border-opacity-10 rounded-xl p-3">
+                            <input type="checkbox" id="lgpd_quote_consent" required class="mt-0.5 accent-blue-500">
+                            <label for="lgpd_quote_consent" class="leading-relaxed cursor-pointer">
+                                Concordo com o tratamento dos meus dados pessoais pela <b>Nexus Code</b> exclusivamente para atendimento comercial e elaboração de proposta, em conformidade com a <button type="button" onclick="openLgpdModal()" class="underline text-blue-300 hover:text-white">Política de Privacidade (LGPD — Lei nº 13.709/2018)</button>.
+                            </label>
+                        </div>
+
                         <button type="submit" class="w-full bg-nexus-blue hover:bg-blue-600 text-white py-4 rounded-xl font-semibold text-lg transition-all duration-300 glow-effect hover-lift">
                             Enviar Solicitação
                         </button>
@@ -1022,7 +1029,7 @@
                         Nexus Code &copy; Todos os direitos reservados.
                     </div>
                     <div class="flex space-x-6 text-sm text-gray-400">
-                        <a href="#" class="hover:text-nexus-blue transition-colors duration-300">Política de Privacidade</a>
+                        <button type="button" onclick="openLgpdModal()" class="hover:text-nexus-blue transition-colors duration-300">Política de Privacidade (LGPD)</button>
                         <a href="#" class="hover:text-nexus-blue transition-colors duration-300">Termos de Uso</a>
                         <a href="#" class="hover:text-nexus-blue transition-colors duration-300">Cookies</a>
                     </div>
@@ -1816,6 +1823,34 @@
                 if (sel) sel.value = item.typeValue;
                 document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
             };
+        }
+
+        
+        function openLgpdModal() {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm z-[60] flex items-center justify-center p-4';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl max-w-xl w-full overflow-hidden shadow-2xl border border-gray-100 text-gray-800">
+                    <div class="bg-gradient-to-r from-nexus-dark to-nexus-blue text-white p-6 flex items-center justify-between">
+                        <div>
+                            <span class="inline-block bg-white bg-opacity-15 px-3 py-1 rounded-full text-xs font-semibold mb-1">Lei nº 13.709/2018</span>
+                            <h3 class="text-xl font-bold">Política de Privacidade &amp; LGPD</h3>
+                        </div>
+                        <button type="button" data-close-lgpd class="text-white hover:text-blue-200 text-2xl font-bold leading-none">&times;</button>
+                    </div>
+                    <div class="p-6 space-y-3 text-sm text-gray-600 leading-relaxed max-h-[70vh] overflow-y-auto">
+                        <p><b class="text-nexus-dark">1. Controlador e Finalidade:</b> A <b>Nexus Code</b> coleta e trata dados pessoais (nome, e-mail, telefone, CPF, endereço e informações curriculares) estritamente para atendimento comercial, execução de contratos, emissão de faturas e gestão de projetos.</p>
+                        <p><b class="text-nexus-dark">2. Segurança e Armazenamento:</b> Todas as comunicações utilizam criptografia TLS, senhas são armazenadas com hash criptográfico irreversível (Bcrypt) e o acesso administrativo é auditado por logs.</p>
+                        <p><b class="text-nexus-dark">3. Direitos do Titular (Art. 18 da LGPD):</b> Você pode consultar, corrigir, exportar em formato estruturado ou solicitar a eliminação dos seus dados pessoais a qualquer momento pelo painel do usuário ou pelo e-mail <b>contato@nexuscodebrasil.com.br</b>.</p>
+                    </div>
+                    <div class="px-6 py-4 bg-gray-50 border-t flex justify-end">
+                        <button type="button" data-close-lgpd class="bg-nexus-blue hover:bg-blue-600 text-white px-6 py-2.5 rounded-xl font-semibold text-sm">Entendi</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            modal.querySelectorAll('[data-close-lgpd]').forEach((b) => (b.onclick = () => modal.remove()));
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
         }
 
         // Add scroll effect to header

@@ -40,7 +40,11 @@ if (authForm) {
             <svg class="nc-input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
             <input id="auth-name" name="displayName" type="text" placeholder="Seu nome completo" required>
           </div>
-        </div>`
+        </div>
+        <label style="display:flex; align-items:flex-start; gap:8px; font-size:12px; color:#475569; margin-top:10px; cursor:pointer; line-height:1.45;">
+          <input type="checkbox" name="lgpdConsent" required style="margin-top:2px; accent-color:#2563eb;">
+          <span>Li e concordo com o tratamento dos meus dados pessoais conforme a <b>LGPD (Lei nº 13.709/2018)</b>.</span>
+        </label>`
       : '';
 
     $('#password-wrap').style.display = mode === 'forgot' ? 'none' : 'flex';
