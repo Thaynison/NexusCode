@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, Literal
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 
 
 class LoginRequest(BaseModel):
@@ -203,6 +203,16 @@ class TarefaBase(BaseModel):
     anexos_json: Optional[str] = None
     comentarios_json: Optional[str] = None
 
+    @field_validator("status", mode="before")
+    @classmethod
+    def _default_status(cls, v):
+        return v or "pendente"
+
+    @field_validator("prioridade", mode="before")
+    @classmethod
+    def _default_prioridade(cls, v):
+        return v if v in ("baixa", "media", "alta", "urgente") else "media"
+
 
 class TarefaCreate(TarefaBase):
     pass
@@ -279,6 +289,16 @@ class HoleriteBase(BaseModel):
     observacoes: Optional[str] = None
     anexo_nome: Optional[str] = None
     anexo_data: Optional[str] = None
+
+    @field_validator("salario_base", "proventos", "descontos", "valor_liquido", "fgts_valor", mode="before")
+    @classmethod
+    def _coerce_decimal(cls, v):
+        return Decimal("0.00") if v is None else v
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _default_hol_status(cls, v):
+        return v if v in ("pago", "programado", "pendente") else "pago"
 
 
 class HoleriteCreate(HoleriteBase):

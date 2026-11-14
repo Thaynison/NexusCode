@@ -47,7 +47,7 @@ _db_ready = False
 
 
 def _sync_missing_columns():
-    """Adiciona automaticamente colunas novas em tabelas já existentes no banco."""
+    """Adiciona automaticamente colunas novas em tabelas já existentes e preenche valores padrão."""
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())
     if not existing_tables:
@@ -61,9 +61,25 @@ def _sync_missing_columns():
             for column in table.columns:
                 if column.name not in existing_cols:
                     col_type = column.type.compile(dialect=engine.dialect)
+                    default_sql = ""
+                    if column.default is not None and column.default.is_scalar:
+                        val = column.default.arg
+                        if isinstance(val, str):
+                            escaped_val = val.replace("'", "''")
+                            default_sql = f" DEFAULT '{escaped_val}'"
+                        elif isinstance(val, bool):
+                            default_sql = f" DEFAULT {'TRUE' if val else 'FALSE'}"
+                        elif isinstance(val, (int, float)):
+                            default_sql = f" DEFAULT {val}"
                     conn.execute(
-                        text(f'ALTER TABLE "{table.name}" ADD COLUMN IF NOT EXISTS "{column.name}" {col_type}')
+                        text(f'ALTER TABLE "{table.name}" ADD COLUMN IF NOT EXISTS "{column.name}" {col_type}{default_sql}')
                     )
+
+        # Garante preenchimento de registros legados com NULL em colunas que possuem valor padrão
+        if "tarefas" in existing_tables:
+            conn.execute(text("UPDATE tarefas SET prioridade = 'media' WHERE prioridade IS NULL"))
+        if "usuarios" in existing_tables:
+            conn.execute(text("UPDATE usuarios SET salario_base = 0 WHERE salario_base IS NULL"))
 
 
 def ensure_db_initialized():

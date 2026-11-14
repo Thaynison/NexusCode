@@ -143,7 +143,7 @@ class Tarefa(Base):
         native_enum=False,
         nullable=False,
     )
-    prioridade = Column(String(20), default="media", nullable=False)
+    prioridade = Column(String(20), default="media", server_default="media", nullable=False)
     data_inicio = Column(Date, nullable=True)
     prazo = Column(Date, nullable=True)
     checklist_json = Column(Text, nullable=True)
