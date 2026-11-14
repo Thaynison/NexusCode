@@ -620,22 +620,12 @@ async function renderProfile() {
     : 'Pendente de confirmação de consentimento LGPD.';
 
   return `
-    <div class="toolbar">
-      <div>
-        <h1>Meu Perfil &amp; Currículo</h1>
-        <span class="muted">Gerencie seus dados pessoais, currículo profissional, endereço e preferências de privacidade (LGPD)</span>
-      </div>
-      <button type="button" class="btn secondary" id="export-lgpd-btn" title="Portabilidade de dados pessoais (Art. 18 da LGPD)">
-        Exportar Meus Dados (LGPD)
-      </button>
-    </div>
-
-    <div class="profile-shell">
+    <form id="profile-form" class="profile-shell">
       <div class="card profile-header-card">
         <div class="row-entity">
-          <div class="row-avatar" style="width:58px; height:58px; font-size:19px;">${initials(me.nome)}</div>
+          <div class="row-avatar" style="width:48px; height:48px; font-size:17px;">${initials(me.nome)}</div>
           <div>
-            <h3 style="margin:0 0 4px; font-size:20px;">${esc(me.nome)}</h3>
+            <h3 style="margin:0 0 3px; font-size:18px;">${esc(me.nome)}</h3>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <span class="muted">${esc(me.email)}</span>
               ${me.cargo ? `<span class="badge">${esc(me.cargo)}</span>` : ''}
@@ -648,18 +638,21 @@ async function renderProfile() {
         </div>
       </div>
 
-      <div class="card">
-        <form id="profile-form" style="display:flex; flex-direction:column; gap:20px;">
+      <div class="profile-columns">
+        <!-- Coluna Esquerda: Identificação, Endereço e Segurança -->
+        <div class="card profile-col-card">
           <div>
             <h4 class="profile-section-title">1. Identificação &amp; Dados Pessoais</h4>
             <p class="profile-section-sub">Informações cadastrais básicas do titular da conta.</p>
-            <div class="profile-grid">
+            <div class="profile-grid" style="margin-bottom:12px;">
               <label class="field-full">Nome Completo *
                 <input type="text" name="nome" value="${esc(me.nome)}" required class="nc-input">
               </label>
-              <label class="field-full">E-mail Corporativo / Login
+              <label class="field-full">E-mail de Acesso
                 <input type="email" value="${esc(me.email)}" readonly class="nc-input">
               </label>
+            </div>
+            <div class="profile-grid-personal">
               <label class="field-full">CPF
                 <input type="text" name="cpf" id="prof-cpf" value="${esc(me.cpf || '')}" maxlength="14" placeholder="000.000.000-00" class="nc-input">
               </label>
@@ -673,36 +666,9 @@ async function renderProfile() {
           </div>
 
           <div class="profile-section">
-            <h4 class="profile-section-title">2. Currículo &amp; Qualificação Profissional</h4>
-            <p class="profile-section-sub">Apresentação profissional, formação acadêmica, competências e links de portfólio.</p>
-            <div class="profile-grid">
-              <label class="field-full">Cargo / Título Profissional
-                <input type="text" name="cargo" value="${esc(me.cargo || '')}" placeholder="Ex.: Engenheiro de Software Full Stack" class="nc-input">
-              </label>
-              <label class="field-full">Área de Atuação / Especialidade
-                <input type="text" name="area_atuacao" value="${esc(me.area_atuacao || '')}" placeholder="Ex.: Arquitetura Cloud, Sistemas Corporativos" class="nc-input">
-              </label>
-              <label class="field-full">Formação Acadêmica
-                <input type="text" name="formacao" value="${esc(me.formacao || '')}" placeholder="Ex.: Bacharelado em Ciência da Computação" class="nc-input">
-              </label>
-              <label class="field-full">LinkedIn / Portfólio / GitHub
-                <input type="url" name="linkedin_url" value="${esc(me.linkedin_url || '')}" placeholder="https://linkedin.com/in/seu-perfil" class="nc-input">
-              </label>
-            </div>
-            <div style="margin-top:16px; display:flex; flex-direction:column; gap:16px;">
-              <label class="field-full">Principais Competências &amp; Tecnologias
-                <input type="text" name="habilidades" value="${esc(me.habilidades || '')}" placeholder="Ex.: Python, FastAPI, PostgreSQL, React, Gestão Ágil" class="nc-input">
-              </label>
-              <label class="field-full">Resumo Profissional &amp; Experiência
-                <textarea name="resumo_profissional" rows="4" placeholder="Descreva sua trajetória profissional, principais projetos conduzidos e certificações..." class="nc-input">${esc(me.resumo_profissional || '')}</textarea>
-              </label>
-            </div>
-          </div>
-
-          <div class="profile-section">
-            <h4 class="profile-section-title">3. Endereço</h4>
+            <h4 class="profile-section-title">2. Endereço</h4>
             <p class="profile-section-sub">Informe o CEP para preenchimento automático de logradouro, bairro, cidade e estado.</p>
-            <div class="profile-grid-3">
+            <div class="profile-grid-addr-top">
               <label class="field-full">CEP
                 <input type="text" name="cep" id="prof-cep" value="${esc(me.cep || '')}" maxlength="9" placeholder="00000-000" class="nc-input">
               </label>
@@ -713,7 +679,7 @@ async function renderProfile() {
                 <input type="text" name="bairro" id="prof-bairro" value="${esc(me.bairro || '')}" placeholder="Bairro, Sala/Apto" class="nc-input">
               </label>
             </div>
-            <div class="profile-grid" style="margin-top:16px;">
+            <div class="profile-grid-addr-bottom">
               <label class="field-full">Cidade
                 <input type="text" name="cidade" id="prof-cidade" value="${esc(me.cidade || '')}" placeholder="Ex.: Aracruz" class="nc-input">
               </label>
@@ -724,7 +690,7 @@ async function renderProfile() {
           </div>
 
           <div class="profile-section">
-            <h4 class="profile-section-title">4. Segurança &amp; Alteração de Senha</h4>
+            <h4 class="profile-section-title">3. Segurança &amp; Alteração de Senha</h4>
             <p class="profile-section-sub">Preencha apenas se desejar substituir sua senha de acesso atual.</p>
             <div class="profile-grid">
               <label class="field-full">Nova Senha (mínimo 6 caracteres)
@@ -735,28 +701,60 @@ async function renderProfile() {
               </label>
             </div>
           </div>
+        </div>
 
-          <div class="lgpd-box">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
-            <div>
-              <p>
-                <b>Proteção de Dados Pessoais &amp; Conformidade LGPD (Lei nº 13.709/2018)</b><br>
-                Os dados pessoais, cadastrais e curriculares informados nesta página são tratados pela <b>Nexus Code</b> exclusivamente para identificação contratual, gestão interna de equipe/clientes e execução dos serviços contratados, protegidos por criptografia e controle de acesso restrito. Você pode solicitar a revisão, portabilidade ou eliminação dos seus dados a qualquer momento (Art. 18 da LGPD).
-              </p>
-              <label class="lgpd-check-row">
-                <input type="checkbox" name="lgpd_consent" required ${me.termos_aceitos_em ? 'checked' : ''}>
-                <span>Declaro que as informações fornecidas são verdadeiras e autorizo o tratamento dos meus dados pessoais nos termos da Política de Privacidade e da LGPD.</span>
+        <!-- Coluna Direita: Currículo, LGPD e Salvar -->
+        <div class="card profile-col-card">
+          <div>
+            <h4 class="profile-section-title">4. Qualificação Profissional</h4>
+            <p class="profile-section-sub">Apresentação profissional, formação acadêmica, competências e links de portfólio.</p>
+            <div class="profile-grid">
+              <label class="field-full">Cargo / Título Profissional
+                <input type="text" name="cargo" value="${esc(me.cargo || '')}" placeholder="Ex.: Engenheiro de Software Full Stack" class="nc-input">
               </label>
-              <div class="lgpd-meta">${consentInfo}</div>
+              <label class="field-full">Área de Atuação / Especialidade
+                <input type="text" name="area_atuacao" value="${esc(me.area_atuacao || '')}" placeholder="Ex.: Arquitetura Cloud, Sistemas" class="nc-input">
+              </label>
+              <label class="field-full">Formação Acadêmica
+                <input type="text" name="formacao" value="${esc(me.formacao || '')}" placeholder="Ex.: Ciência da Computação" class="nc-input">
+              </label>
+              <label class="field-full">LinkedIn / Portfólio / GitHub
+                <input type="url" name="linkedin_url" value="${esc(me.linkedin_url || '')}" placeholder="https://linkedin.com/in/seu-perfil" class="nc-input">
+              </label>
+            </div>
+            <div style="margin-top:12px; display:flex; flex-direction:column; gap:12px;">
+              <label class="field-full">Principais Competências &amp; Tecnologias
+                <input type="text" name="habilidades" value="${esc(me.habilidades || '')}" placeholder="Ex.: Python, FastAPI, PostgreSQL, React, Gestão Ágil" class="nc-input">
+              </label>
+              <label class="field-full">Resumo Profissional &amp; Experiência
+                <textarea name="resumo_profissional" rows="3" placeholder="Descreva sua trajetória profissional, principais projetos conduzidos e certificações..." class="nc-input">${esc(me.resumo_profissional || '')}</textarea>
+              </label>
             </div>
           </div>
 
-          <div style="display:flex; justify-content:flex-end; gap:12px;">
-            <button type="submit" class="btn" id="save-profile-btn">Salvar Alterações do Perfil</button>
+          <div style="display:flex; flex-direction:column; gap:14px;">
+            <div class="lgpd-box">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+              <div>
+                <p>
+                  <b>Proteção de Dados Pessoais &amp; Conformidade LGPD (Lei nº 13.709/2018)</b><br>
+                  Os dados pessoais e profissionais informados nesta página são tratados pela <b>Nexus Code</b> exclusivamente para identificação contratual, gestão interna e execução dos serviços contratados, protegidos por criptografia e controle de acesso restrito.
+                </p>
+                <label class="lgpd-check-row">
+                  <input type="checkbox" name="lgpd_consent" required ${me.termos_aceitos_em ? 'checked' : ''}>
+                  <span>Declaro que as informações fornecidas são verdadeiras e autorizo o tratamento dos meus dados pessoais nos termos da Política de Privacidade e da LGPD.</span>
+                </label>
+                <div class="lgpd-meta">${consentInfo}</div>
+              </div>
+            </div>
+
+            <div class="profile-footer-actions">
+              <button type="submit" class="btn" id="save-profile-btn">Salvar Alterações do Perfil</button>
+            </div>
           </div>
-        </form>
+        </div>
       </div>
-    </div>
+    </form>
   `;
 }
 
@@ -764,7 +762,6 @@ window.bindProfileForm = () => {
   const form = document.getElementById('profile-form');
   if (!form) return;
 
-  // Máscaras de CPF, Telefone e CEP + Auto-preenchimento ViaCEP
   const cpfInput = document.getElementById('prof-cpf');
   cpfInput?.addEventListener('input', (e) => {
     let v = e.target.value.replace(/\D/g, '').slice(0, 11);
@@ -798,22 +795,6 @@ window.bindProfileForm = () => {
           if (addr.uf) document.getElementById('prof-estado').value = addr.uf;
         }
       } catch (_) {}
-    }
-  });
-
-  document.getElementById('export-lgpd-btn')?.addEventListener('click', async () => {
-    try {
-      const fresh = await apiRequest('/auth/me');
-      const blob = new Blob([JSON.stringify(fresh, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `dados_pessoais_lgpd_${fresh.id}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast('Arquivo de portabilidade LGPD exportado.', 'success');
-    } catch (err) {
-      showNoticeModal({ title: 'Falha ao exportar dados', message: err.message, variant: 'error' });
     }
   });
 
@@ -867,7 +848,7 @@ window.bindProfileForm = () => {
       $('#app-user-name').textContent = user.nome;
       $('#user-avatar-initials').textContent = initials(user.nome);
       invalidateCache();
-      showToast('Perfil profissional atualizado com sucesso.', 'success');
+      showToast('Perfil atualizado com sucesso.', 'success');
       render();
     } catch (err) {
       showNoticeModal({ title: 'Erro ao atualizar perfil', message: err.message, variant: 'error' });

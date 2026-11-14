@@ -68,25 +68,12 @@ body {
   font-weight: 800;
   color: #0f172a;
   letter-spacing: -0.02em;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 
 .nc-auth-logo b {
   color: #2563eb;
   font-weight: 500;
-}
-
-.nc-auth-pill {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: #2563eb;
-  background: #eff6ff;
-  border: 1px solid #dbeafe;
-  padding: 4px 10px;
-  border-radius: 999px;
-  margin-bottom: 12px;
 }
 
 .nc-auth-header h2 {
@@ -1236,11 +1223,11 @@ body.crm-app {
 
 /* ==================== PERFIL PROFISSIONAL, CURRÍCULO & LGPD ==================== */
 .profile-shell {
-  max-width: 920px;
   width: 100%;
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .profile-header-card {
@@ -1249,16 +1236,33 @@ body.crm-app {
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+  padding: 16px 22px;
+}
+
+.profile-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  flex: 1;
+  align-items: stretch;
+}
+
+.profile-col-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
 }
 
 .profile-section {
-  padding-top: 20px;
+  padding-top: 14px;
   border-top: 1px solid var(--border);
 }
 
 .profile-section-title {
-  margin: 0 0 4px;
-  font-size: 15px;
+  margin: 0 0 2px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text);
   display: flex;
@@ -1267,26 +1271,47 @@ body.crm-app {
 }
 
 .profile-section-sub {
-  margin: 0 0 16px;
-  font-size: 12.5px;
+  margin: 0 0 12px;
+  font-size: 12px;
   color: var(--text-light);
 }
 
 .profile-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
-.profile-grid-3 {
+.profile-grid-personal {
   display: grid;
-  grid-template-columns: 160px 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: 1fr 150px 1fr;
+  gap: 12px;
+}
+
+.profile-grid-addr-top {
+  display: grid;
+  grid-template-columns: 130px 1.4fr 1fr;
+  gap: 12px;
+}
+
+.profile-grid-addr-bottom {
+  display: grid;
+  grid-template-columns: 1fr 110px;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+@media (max-width: 1180px) {
+  .profile-columns {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {
   .profile-grid,
-  .profile-grid-3 {
+  .profile-grid-personal,
+  .profile-grid-addr-top,
+  .profile-grid-addr-bottom {
     grid-template-columns: 1fr;
   }
 }
@@ -1296,9 +1321,9 @@ body.crm-app {
   background: var(--surface2);
   color: var(--text);
   border: 1px solid var(--border);
-  padding: 10px 12px;
+  padding: 8px 11px;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 13.5px;
   font-family: inherit;
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
@@ -1318,12 +1343,11 @@ body.crm-app {
 .lgpd-box {
   background: rgba(37, 99, 235, 0.05);
   border: 1px solid rgba(37, 99, 235, 0.32);
-  border-radius: 12px;
-  padding: 18px;
-  margin-top: 8px;
+  border-radius: 10px;
+  padding: 14px 16px;
   display: flex;
   align-items: flex-start;
-  gap: 14px;
+  gap: 12px;
 }
 
 .lgpd-box svg {
@@ -1333,33 +1357,42 @@ body.crm-app {
 }
 
 .lgpd-box p {
-  margin: 0 0 10px;
-  font-size: 12.5px;
-  line-height: 1.55;
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
   color: var(--text);
 }
 
 .lgpd-check-row {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  font-size: 13px;
+  gap: 8px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
   color: var(--text);
 }
 
 .lgpd-check-row input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   margin-top: 2px;
   accent-color: var(--primary);
   flex-shrink: 0;
 }
 
 .lgpd-meta {
-  margin-top: 8px;
-  font-size: 11.5px;
+  margin-top: 6px;
+  font-size: 11px;
   color: var(--ok);
   font-weight: 600;
+}
+
+.profile-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
