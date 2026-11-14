@@ -10,6 +10,16 @@ CREATE TABLE IF NOT EXISTS usuarios (
     cpf VARCHAR(20) NULL,
     data_nascimento DATE NULL,
     data_contratacao DATE NULL,
+    data_fim_contrato DATE NULL,
+    tipo_contrato VARCHAR(40) NULL DEFAULT 'clt_fixo',
+    cbo_codigo VARCHAR(20) NULL,
+    cbo_descricao VARCHAR(180) NULL,
+    carga_horaria_diaria NUMERIC(4, 2) NULL DEFAULT 8.00,
+    horario_entrada VARCHAR(10) NULL DEFAULT '08:00',
+    horario_saida VARCHAR(10) NULL DEFAULT '17:00',
+    dependentes_irrf INTEGER NULL DEFAULT 0,
+    vale_transporte BOOLEAN NULL DEFAULT FALSE,
+    valor_vt_mensal NUMERIC(12, 2) NULL DEFAULT 0.00,
     salario_base NUMERIC(12, 2) NULL DEFAULT 0.00,
     telefone VARCHAR(30) NULL,
     cargo VARCHAR(120) NULL,
@@ -176,3 +186,26 @@ CREATE INDEX IF NOT EXISTS idx_tarefas_projeto ON tarefas(projeto_id);
 CREATE INDEX IF NOT EXISTS idx_faturas_cliente ON faturas(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_holerites_usuario ON holerites(usuario_id);
 CREATE INDEX IF NOT EXISTS idx_informes_usuario ON informes_rendimentos(usuario_id);
+
+CREATE TABLE IF NOT EXISTS registros_ponto (
+    id SERIAL PRIMARY KEY,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    data_ponto DATE NOT NULL,
+    entrada VARCHAR(10) NULL,
+    saida_almoco VARCHAR(10) NULL,
+    retorno_almoco VARCHAR(10) NULL,
+    saida VARCHAR(10) NULL,
+    minutos_trabalhados INTEGER NOT NULL DEFAULT 0,
+    minutos_extras_50 INTEGER NOT NULL DEFAULT 0,
+    minutos_extras_100 INTEGER NOT NULL DEFAULT 0,
+    minutos_atraso INTEGER NOT NULL DEFAULT 0,
+    eh_feriado_ou_domingo BOOLEAN NOT NULL DEFAULT FALSE,
+    tipo_dia VARCHAR(30) NOT NULL DEFAULT 'normal',
+    status_ajuste VARCHAR(20) NOT NULL DEFAULT 'aprovado',
+    justificativa_ajuste TEXT NULL,
+    ajuste_solicitado_json TEXT NULL,
+    ip_registro VARCHAR(60) NULL,
+    observacao TEXT NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_ponto_usuario_data ON registros_ponto(usuario_id, data_ponto);

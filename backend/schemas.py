@@ -33,9 +33,54 @@ class UsuarioBase(BaseModel):
     cpf: Optional[str] = None
     data_nascimento: Optional[date] = None
     data_contratacao: Optional[date] = None
+    data_fim_contrato: Optional[date] = None
+    tipo_contrato: Optional[str] = "clt_fixo"
+    cbo_codigo: Optional[str] = None
+    cbo_descricao: Optional[str] = None
+    carga_horaria_diaria: Optional[Decimal] = Decimal("8.00")
+    horario_entrada: Optional[str] = "08:00"
+    horario_saida: Optional[str] = "17:00"
+    dependentes_irrf: Optional[int] = 0
+    vale_transporte: Optional[bool] = False
+    valor_vt_mensal: Optional[Decimal] = Decimal("0.00")
     salario_base: Optional[Decimal] = Decimal("0.00")
     telefone: Optional[str] = None
     cargo: Optional[str] = None
+
+    @field_validator("tipo_contrato", mode="before")
+    @classmethod
+    def _default_tipo_contrato(cls, v):
+        return v or "clt_fixo"
+
+    @field_validator("carga_horaria_diaria", mode="before")
+    @classmethod
+    def _default_carga(cls, v):
+        return Decimal("8.00") if v is None else v
+
+    @field_validator("horario_entrada", mode="before")
+    @classmethod
+    def _default_h_ent(cls, v):
+        return v or "08:00"
+
+    @field_validator("horario_saida", mode="before")
+    @classmethod
+    def _default_h_sai(cls, v):
+        return v or "17:00"
+
+    @field_validator("dependentes_irrf", mode="before")
+    @classmethod
+    def _default_dep(cls, v):
+        return 0 if v is None else v
+
+    @field_validator("vale_transporte", mode="before")
+    @classmethod
+    def _default_vt_bool(cls, v):
+        return False if v is None else v
+
+    @field_validator("valor_vt_mensal", "salario_base", mode="before")
+    @classmethod
+    def _default_dec_usr(cls, v):
+        return Decimal("0.00") if v is None else v
     area_atuacao: Optional[str] = None
     formacao: Optional[str] = None
     habilidades: Optional[str] = None
@@ -63,6 +108,16 @@ class UsuarioUpdate(BaseModel):
     cpf: Optional[str] = None
     data_nascimento: Optional[date] = None
     data_contratacao: Optional[date] = None
+    data_fim_contrato: Optional[date] = None
+    tipo_contrato: Optional[str] = None
+    cbo_codigo: Optional[str] = None
+    cbo_descricao: Optional[str] = None
+    carga_horaria_diaria: Optional[Decimal] = None
+    horario_entrada: Optional[str] = None
+    horario_saida: Optional[str] = None
+    dependentes_irrf: Optional[int] = None
+    vale_transporte: Optional[bool] = None
+    valor_vt_mensal: Optional[Decimal] = None
     salario_base: Optional[Decimal] = None
     telefone: Optional[str] = None
     cargo: Optional[str] = None
@@ -379,3 +434,57 @@ class LogAuditoriaOut(BaseModel):
     detalhes: str
     criado_em: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class PontoBatidaRequest(BaseModel):
+    tipo_batida: Literal["entrada", "saida_almoco", "retorno_almoco", "saida"]
+    hora_manual: Optional[str] = None
+    observacao: Optional[str] = None
+
+
+class PontoAjusteCreate(BaseModel):
+    data_ponto: date
+    entrada: Optional[str] = None
+    saida_almoco: Optional[str] = None
+    retorno_almoco: Optional[str] = None
+    saida: Optional[str] = None
+    tipo_dia: Literal["normal", "feriado_domingo", "folga", "atestado", "falta_justificada"] = "normal"
+    justificativa: str = Field(..., min_length=3, max_length=1000)
+
+
+class PontoAjusteDecisao(BaseModel):
+    decisao: Literal["aprovado", "rejeitado"]
+    observacao_gestor: Optional[str] = None
+
+
+class RegistroPontoOut(BaseModel):
+    id: int
+    usuario_id: int
+    data_ponto: date
+    entrada: Optional[str] = None
+    saida_almoco: Optional[str] = None
+    retorno_almoco: Optional[str] = None
+    saida: Optional[str] = None
+    minutos_trabalhados: int = 0
+    minutos_extras_50: int = 0
+    minutos_extras_100: int = 0
+    minutos_atraso: int = 0
+    eh_feriado_ou_domingo: bool = False
+    tipo_dia: str = "normal"
+    status_ajuste: str = "aprovado"
+    justificativa_ajuste: Optional[str] = None
+    ajuste_solicitado_json: Optional[str] = None
+    ip_registro: Optional[str] = None
+    observacao: Optional[str] = None
+    criado_em: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GerarHoleriteAutoRequest(BaseModel):
+    usuario_id: Optional[int] = None
+    gerar_todos: bool = False
+    competencia: str = Field(..., max_length=20)
+    tipo: str = Field(default="Salário Mensal", max_length=50)
+    data_pagamento: Optional[date] = None
+    status: Literal["pago", "programado", "pendente"] = "pago"
+    observacoes: Optional[str] = None

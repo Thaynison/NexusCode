@@ -7,7 +7,10 @@ try:
 except ImportError:
     def load_dotenv(*args, **kwargs):
         return False
-from fastapi import FastAPI, Depends, HTTPException
+import calendar
+import json
+from datetime import timezone, timedelta
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -20,7 +23,7 @@ import smtplib
 
 from models import (
     Usuario, Cliente, SolicitacaoOrcamento, Projeto,
-    Tarefa, Interacao, Fatura, Holerite, InformeRendimento, ModuloRegistro, LogAuditoria
+    Tarefa, Interacao, Fatura, Holerite, InformeRendimento, RegistroPonto, ModuloRegistro, LogAuditoria
 )
 from schemas import (
     LoginRequest, RegisterRequest, ForgotPasswordRequest, TokenResponse,
@@ -33,7 +36,14 @@ from schemas import (
     FaturaCreate, FaturaUpdate, FaturaOut,
     HoleriteCreate, HoleriteUpdate, HoleriteOut,
     InformeRendimentoCreate, InformeRendimentoOut,
+    PontoBatidaRequest, PontoAjusteCreate, PontoAjusteDecisao, RegistroPontoOut,
+    GerarHoleriteAutoRequest,
     ModuloRegistroCreate, ModuloRegistroOut, LogAuditoriaOut,
+)
+from payroll_engine import (
+    buscar_cbos,
+    calcular_jornada_diaria,
+    calcular_holerite_automatico,
 )
 from auth import (
     gerar_hash_senha, verificar_senha, criar_token_acesso,
@@ -110,6 +120,13 @@ def _sync_missing_columns():
             conn.execute(text("UPDATE tarefas SET prioridade = 'media' WHERE prioridade IS NULL"))
         if "usuarios" in existing_tables:
             conn.execute(text("UPDATE usuarios SET salario_base = 0 WHERE salario_base IS NULL"))
+            conn.execute(text("UPDATE usuarios SET tipo_contrato = 'clt_fixo' WHERE tipo_contrato IS NULL"))
+            conn.execute(text("UPDATE usuarios SET carga_horaria_diaria = 8.00 WHERE carga_horaria_diaria IS NULL"))
+            conn.execute(text("UPDATE usuarios SET horario_entrada = '08:00' WHERE horario_entrada IS NULL"))
+            conn.execute(text("UPDATE usuarios SET horario_saida = '17:00' WHERE horario_saida IS NULL"))
+            conn.execute(text("UPDATE usuarios SET dependentes_irrf = 0 WHERE dependentes_irrf IS NULL"))
+            conn.execute(text("UPDATE usuarios SET vale_transporte = FALSE WHERE vale_transporte IS NULL"))
+            conn.execute(text("UPDATE usuarios SET valor_vt_mensal = 0 WHERE valor_vt_mensal IS NULL"))
 
 
 def ensure_db_initialized():
@@ -495,12 +512,15 @@ def bootstrap_painel(
         .scalar()
     )
 
+    ponto_pendentes = db.query(func.count(RegistroPonto.id)).filter(RegistroPonto.status_ajuste == "pendente_ajuste").scalar() or 0
+
     kpi = {
         "total_clientes": len(clientes),
         "leads_abertos": leads_abertos,
         "solicitacoes_novas": solicitacoes_novas,
         "projetos_ativos": projetos_ativos,
         "tarefas_pendentes": tarefas_pendentes,
+        "ponto_pendentes": ponto_pendentes,
         "receita_paga": float(receita_paga),
         "receita_pendente": float(receita_pendente),
     }
@@ -589,6 +609,7 @@ def criar_usuario(
 ):
     if db.query(Usuario).filter(Usuario.email == dados.email).first():
         raise HTTPException(status_code=400, detail="E-mail já cadastrado.")
+    cargo_final = dados.cargo or dados.cbo_descricao
     novo = Usuario(
         nome=dados.nome,
         email=dados.email,
@@ -596,9 +617,19 @@ def criar_usuario(
         perfil=dados.perfil,
         ativo=dados.ativo,
         cpf=dados.cpf,
-        cargo=dados.cargo,
+        cargo=cargo_final,
+        cbo_codigo=dados.cbo_codigo,
+        cbo_descricao=dados.cbo_descricao,
+        tipo_contrato=dados.tipo_contrato or "clt_fixo",
         data_nascimento=dados.data_nascimento,
         data_contratacao=dados.data_contratacao,
+        data_fim_contrato=dados.data_fim_contrato,
+        carga_horaria_diaria=dados.carga_horaria_diaria if dados.carga_horaria_diaria is not None else 8.00,
+        horario_entrada=dados.horario_entrada or "08:00",
+        horario_saida=dados.horario_saida or "17:00",
+        dependentes_irrf=dados.dependentes_irrf or 0,
+        vale_transporte=bool(dados.vale_transporte),
+        valor_vt_mensal=dados.valor_vt_mensal or 0,
         salario_base=dados.salario_base or 0,
         telefone=dados.telefone,
     )
@@ -1057,6 +1088,353 @@ def remover_informe_rendimento(
     registrar_log(db, admin.nome, "EXCLUIR_INFORME_IR", f"Removeu Informe de Rendimentos #{informe_id}")
     db.delete(item)
     db.commit()
+
+
+
+
+# ==================== CBO, GESTÃO DE PONTO & CÁLCULO AUTOMÁTICO DE FOLHA ====================
+def _agora_brasilia() -> datetime:
+    tz_br = timezone(timedelta(hours=-3))
+    return datetime.now(tz_br)
+
+
+@app.get("/api/cbo/buscar", tags=["RH & Ponto"])
+def api_buscar_cbo(
+    q: Optional[str] = "",
+    _: Usuario = Depends(exigir_equipe),
+):
+    return buscar_cbos(q or "")
+
+
+@app.get("/api/ponto", response_model=List[RegistroPontoOut], tags=["RH & Ponto"])
+def listar_registros_ponto(
+    competencia: Optional[str] = None,
+    usuario_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(exigir_equipe),
+):
+    query = db.query(RegistroPonto)
+    if usuario.perfil != "admin":
+        query = query.filter(RegistroPonto.usuario_id == usuario.id)
+    elif usuario_id:
+        query = query.filter(RegistroPonto.usuario_id == usuario_id)
+
+    if competencia and "/" in competencia:
+        try:
+            mes_str, ano_str = competencia.strip().split("/")
+            mes, ano = int(mes_str), int(ano_str)
+            _, ult_dia = calendar.monthrange(ano, mes)
+            query = query.filter(
+                RegistroPonto.data_ponto >= date(ano, mes, 1),
+                RegistroPonto.data_ponto <= date(ano, mes, ult_dia),
+            )
+        except ValueError:
+            pass
+
+    return query.order_by(RegistroPonto.data_ponto.desc(), RegistroPonto.id.desc()).all()
+
+
+@app.post("/api/ponto/bater", response_model=RegistroPontoOut, tags=["RH & Ponto"])
+def registrar_batida_ponto(
+    dados: PontoBatidaRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_db),
+):
+    if usuario.perfil == "cliente":
+        raise HTTPException(status_code=403, detail="Acesso restrito a colaboradores e administradores.")
+
+    agora = _agora_brasilia()
+    hoje = agora.date()
+    hora_atual = dados.hora_manual.strip() if dados.hora_manual else agora.strftime("%H:%M")
+
+    reg = (
+        db.query(RegistroPonto)
+        .filter(RegistroPonto.usuario_id == usuario.id, RegistroPonto.data_ponto == hoje)
+        .first()
+    )
+    if not reg:
+        reg = RegistroPonto(
+            usuario_id=usuario.id,
+            data_ponto=hoje,
+            tipo_dia="normal",
+            status_ajuste="aprovado",
+        )
+        db.add(reg)
+
+    campo = dados.tipo_batida
+    if getattr(reg, campo):
+        raise HTTPException(
+            status_code=400,
+            detail=f"A marcação '{campo.replace('_', ' ')}' já foi registrada hoje às {getattr(reg, campo)}. Utilize 'Solicitar Ajuste' caso precise corrigir.",
+        )
+
+    setattr(reg, campo, hora_atual)
+    if dados.observacao:
+        reg.observacao = dados.observacao.strip()
+    reg.ip_registro = request.client.host if request.client else "web"
+
+    calc = calcular_jornada_diaria(
+        data_ponto=reg.data_ponto,
+        entrada=reg.entrada,
+        saida_almoco=reg.saida_almoco,
+        retorno_almoco=reg.retorno_almoco,
+        saida=reg.saida,
+        carga_diaria_horas=float(usuario.carga_horaria_diaria or 8.0),
+        tipo_dia=reg.tipo_dia,
+    )
+    reg.minutos_trabalhados = calc["minutos_trabalhados"]
+    reg.minutos_extras_50 = calc["minutos_extras_50"]
+    reg.minutos_extras_100 = calc["minutos_extras_100"]
+    reg.minutos_atraso = calc["minutos_atraso"]
+    reg.eh_feriado_ou_domingo = calc["eh_feriado_ou_domingo"]
+
+    registrar_log(db, usuario.nome, "BATER_PONTO", f"Registrou {campo} às {hora_atual} ({hoje.isoformat()})")
+    db.commit()
+    db.refresh(reg)
+    return reg
+
+
+@app.post("/api/ponto/ajustes", response_model=RegistroPontoOut, tags=["RH & Ponto"])
+def solicitar_ajuste_ponto(
+    dados: PontoAjusteCreate,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_usuario_db),
+):
+    if usuario.perfil == "cliente":
+        raise HTTPException(status_code=403, detail="Acesso restrito à equipe.")
+
+    reg = (
+        db.query(RegistroPonto)
+        .filter(RegistroPonto.usuario_id == usuario.id, RegistroPonto.data_ponto == dados.data_ponto)
+        .first()
+    )
+    if not reg:
+        reg = RegistroPonto(
+            usuario_id=usuario.id,
+            data_ponto=dados.data_ponto,
+            tipo_dia=dados.tipo_dia,
+        )
+        db.add(reg)
+
+    ajuste_payload = {
+        "entrada": dados.entrada or None,
+        "saida_almoco": dados.saida_almoco or None,
+        "retorno_almoco": dados.retorno_almoco or None,
+        "saida": dados.saida or None,
+        "tipo_dia": dados.tipo_dia,
+    }
+
+    if usuario.perfil == "admin":
+        reg.entrada = ajuste_payload["entrada"]
+        reg.saida_almoco = ajuste_payload["saida_almoco"]
+        reg.retorno_almoco = ajuste_payload["retorno_almoco"]
+        reg.saida = ajuste_payload["saida"]
+        reg.tipo_dia = ajuste_payload["tipo_dia"]
+        reg.status_ajuste = "aprovado"
+        reg.justificativa_ajuste = dados.justificativa.strip()
+        reg.ajuste_solicitado_json = None
+        calc = calcular_jornada_diaria(
+            data_ponto=reg.data_ponto,
+            entrada=reg.entrada,
+            saida_almoco=reg.saida_almoco,
+            retorno_almoco=reg.retorno_almoco,
+            saida=reg.saida,
+            carga_diaria_horas=float(usuario.carga_horaria_diaria or 8.0),
+            tipo_dia=reg.tipo_dia,
+        )
+        reg.minutos_trabalhados = calc["minutos_trabalhados"]
+        reg.minutos_extras_50 = calc["minutos_extras_50"]
+        reg.minutos_extras_100 = calc["minutos_extras_100"]
+        reg.minutos_atraso = calc["minutos_atraso"]
+        reg.eh_feriado_ou_domingo = calc["eh_feriado_ou_domingo"]
+    else:
+        reg.status_ajuste = "pendente_ajuste"
+        reg.justificativa_ajuste = dados.justificativa.strip()
+        reg.ajuste_solicitado_json = json.dumps(ajuste_payload, ensure_ascii=False)
+
+    registrar_log(db, usuario.nome, "AJUSTE_PONTO", f"Solicitou ajuste de ponto em {dados.data_ponto.isoformat()}")
+    db.commit()
+    db.refresh(reg)
+    return reg
+
+
+@app.patch("/api/ponto/ajustes/{ponto_id}", response_model=RegistroPontoOut, tags=["RH & Ponto"])
+def decidir_ajuste_ponto(
+    ponto_id: int,
+    dados: PontoAjusteDecisao,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(exigir_admin),
+):
+    reg = db.query(RegistroPonto).filter(RegistroPonto.id == ponto_id).first()
+    if not reg:
+        raise HTTPException(status_code=404, detail="Registro de ponto não encontrado.")
+
+    colaborador = db.query(Usuario).filter(Usuario.id == reg.usuario_id).first()
+    carga = float(colaborador.carga_horaria_diaria or 8.0) if colaborador else 8.0
+
+    if dados.decisao == "aprovado":
+        if reg.ajuste_solicitado_json:
+            try:
+                aj = json.loads(reg.ajuste_solicitado_json)
+                reg.entrada = aj.get("entrada")
+                reg.saida_almoco = aj.get("saida_almoco")
+                reg.retorno_almoco = aj.get("retorno_almoco")
+                reg.saida = aj.get("saida")
+                reg.tipo_dia = aj.get("tipo_dia") or reg.tipo_dia
+            except Exception:
+                pass
+        reg.status_ajuste = "aprovado"
+        reg.ajuste_solicitado_json = None
+        if dados.observacao_gestor:
+            reg.observacao = dados.observacao_gestor.strip()
+
+        calc = calcular_jornada_diaria(
+            data_ponto=reg.data_ponto,
+            entrada=reg.entrada,
+            saida_almoco=reg.saida_almoco,
+            retorno_almoco=reg.retorno_almoco,
+            saida=reg.saida,
+            carga_diaria_horas=carga,
+            tipo_dia=reg.tipo_dia,
+        )
+        reg.minutos_trabalhados = calc["minutos_trabalhados"]
+        reg.minutos_extras_50 = calc["minutos_extras_50"]
+        reg.minutos_extras_100 = calc["minutos_extras_100"]
+        reg.minutos_atraso = calc["minutos_atraso"]
+        reg.eh_feriado_ou_domingo = calc["eh_feriado_ou_domingo"]
+    else:
+        reg.status_ajuste = "rejeitado"
+        reg.ajuste_solicitado_json = None
+        if dados.observacao_gestor:
+            reg.observacao = dados.observacao_gestor.strip()
+
+    registrar_log(
+        db,
+        admin.nome,
+        "DECISAO_AJUSTE_PONTO",
+        f"Marcou ajuste #{ponto_id} como {dados.decisao}",
+    )
+    db.commit()
+    db.refresh(reg)
+    return reg
+
+
+@app.get("/api/folha/calcular", tags=["Holerite"])
+def pre_calcular_folha_colaborador(
+    usuario_id: int,
+    competencia: str,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(exigir_admin),
+):
+    colaborador = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    if not colaborador:
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
+
+    try:
+        mes_str, ano_str = competencia.strip().split("/")
+        mes, ano = int(mes_str), int(ano_str)
+        _, ult_dia = calendar.monthrange(ano, mes)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Competência inválida. Use o formato MM/AAAA.")
+
+    pontos = (
+        db.query(RegistroPonto)
+        .filter(
+            RegistroPonto.usuario_id == usuario_id,
+            RegistroPonto.data_ponto >= date(ano, mes, 1),
+            RegistroPonto.data_ponto <= date(ano, mes, ult_dia),
+        )
+        .all()
+    )
+
+    return calcular_holerite_automatico(colaborador, pontos, competencia)
+
+
+@app.post("/api/holerites/gerar-automatico", tags=["Holerite"])
+def gerar_holerite_automatico_endpoint(
+    dados: GerarHoleriteAutoRequest,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(exigir_admin),
+):
+    try:
+        mes_str, ano_str = dados.competencia.strip().split("/")
+        mes, ano = int(mes_str), int(ano_str)
+        _, ult_dia = calendar.monthrange(ano, mes)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Competência inválida. Utilize o formato MM/AAAA.")
+
+    if dados.gerar_todos:
+        colaboradores = (
+            db.query(Usuario)
+            .filter(Usuario.ativo == True, Usuario.perfil != "cliente")
+            .order_by(Usuario.nome)
+            .all()
+        )
+    else:
+        if not dados.usuario_id:
+            raise HTTPException(status_code=400, detail="Selecione um colaborador ou marque 'Gerar para toda a equipe'.")
+        colab = db.query(Usuario).filter(Usuario.id == dados.usuario_id).first()
+        if not colab:
+            raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
+        colaboradores = [colab]
+
+    gerados = []
+    dt_pag = dados.data_pagamento or date.today()
+
+    for colab in colaboradores:
+        pontos = (
+            db.query(RegistroPonto)
+            .filter(
+                RegistroPonto.usuario_id == colab.id,
+                RegistroPonto.data_ponto >= date(ano, mes, 1),
+                RegistroPonto.data_ponto <= date(ano, mes, ult_dia),
+            )
+            .all()
+        )
+        res = calcular_holerite_automatico(colab, pontos, dados.competencia.strip())
+
+        obs_auto = (
+            f"Cálculo automático via Gestão de Ponto ({res['dias_registrados_ponto']} dia(s), "
+            f"Trabalhadas: {res['horas_trabalhadas_fmt']}, HE 50%: {res['horas_extras_50_fmt']}, "
+            f"HE 100%: {res['horas_extras_100_fmt']})."
+        )
+        if dados.observacoes:
+            obs_auto = f"{dados.observacoes.strip()} | {obs_auto}"
+
+        item = Holerite(
+            usuario_id=colab.id,
+            competencia=dados.competencia.strip(),
+            tipo=dados.tipo,
+            salario_base=res["salario_base"],
+            proventos=res["proventos"],
+            descricao_proventos=res["descricao_proventos"],
+            descontos=res["descontos"],
+            descricao_descontos=res["descricao_descontos"],
+            valor_liquido=res["valor_liquido"],
+            fgts_valor=res["fgts_valor"],
+            data_pagamento=dt_pag,
+            status=dados.status,
+            observacoes=obs_auto,
+            publicado_por=admin.nome,
+        )
+        db.add(item)
+        gerados.append(item)
+
+    registrar_log(
+        db,
+        admin.nome,
+        "GERAR_FOLHA_AUTOMATICA",
+        f"Gerou {len(gerados)} holerite(s) automático(s) da competência {dados.competencia}",
+    )
+    db.commit()
+    for g in gerados:
+        db.refresh(g)
+
+    return {
+        "gerados": len(gerados),
+        "holerites": [HoleriteOut.model_validate(g) for g in gerados],
+    }
 
 
 # ==================== MÓDULOS COMPLEMENTARES & AUDITORIA ====================

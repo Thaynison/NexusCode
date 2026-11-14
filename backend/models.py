@@ -24,6 +24,16 @@ class Usuario(Base):
     cpf = Column(String(20), nullable=True)
     data_nascimento = Column(Date, nullable=True)
     data_contratacao = Column(Date, nullable=True)
+    data_fim_contrato = Column(Date, nullable=True)
+    tipo_contrato = Column(String(40), default="clt_fixo", server_default="clt_fixo", nullable=True)
+    cbo_codigo = Column(String(20), nullable=True)
+    cbo_descricao = Column(String(180), nullable=True)
+    carga_horaria_diaria = Column(Numeric(4, 2), default=8.00, server_default="8.00", nullable=True)
+    horario_entrada = Column(String(10), default="08:00", server_default="08:00", nullable=True)
+    horario_saida = Column(String(10), default="17:00", server_default="17:00", nullable=True)
+    dependentes_irrf = Column(Integer, default=0, server_default="0", nullable=True)
+    vale_transporte = Column(Boolean, default=False, nullable=True)
+    valor_vt_mensal = Column(Numeric(12, 2), default=0.00, server_default="0.00", nullable=True)
     salario_base = Column(Numeric(12, 2), default=0.00, nullable=True)
     telefone = Column(String(30), nullable=True)
     cargo = Column(String(120), nullable=True)
@@ -45,6 +55,7 @@ class Usuario(Base):
     tarefas_responsavel = relationship("Tarefa", back_populates="responsavel")
     holerites = relationship("Holerite", back_populates="usuario", cascade="all, delete-orphan")
     informes_rendimentos = relationship("InformeRendimento", back_populates="usuario", cascade="all, delete-orphan")
+    registros_ponto = relationship("RegistroPonto", back_populates="usuario", cascade="all, delete-orphan")
 
 
 class Cliente(Base):
@@ -264,3 +275,29 @@ class LogAuditoria(Base):
     acao = Column(String(80), nullable=False)
     detalhes = Column(String(255), nullable=False)
     criado_em = Column(DateTime, default=datetime.utcnow)
+
+
+class RegistroPonto(Base):
+    __tablename__ = "registros_ponto"
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    data_ponto = Column(Date, nullable=False, index=True)
+    entrada = Column(String(10), nullable=True)
+    saida_almoco = Column(String(10), nullable=True)
+    retorno_almoco = Column(String(10), nullable=True)
+    saida = Column(String(10), nullable=True)
+    minutos_trabalhados = Column(Integer, default=0, nullable=False)
+    minutos_extras_50 = Column(Integer, default=0, nullable=False)
+    minutos_extras_100 = Column(Integer, default=0, nullable=False)
+    minutos_atraso = Column(Integer, default=0, nullable=False)
+    eh_feriado_ou_domingo = Column(Boolean, default=False, nullable=False)
+    tipo_dia = Column(String(30), default="normal", nullable=False)
+    status_ajuste = Column(String(20), default="aprovado", nullable=False)
+    justificativa_ajuste = Column(Text, nullable=True)
+    ajuste_solicitado_json = Column(Text, nullable=True)
+    ip_registro = Column(String(60), nullable=True)
+    observacao = Column(Text, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+    usuario = relationship("Usuario", back_populates="registros_ponto")
