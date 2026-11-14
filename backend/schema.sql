@@ -1,4 +1,4 @@
--- Schema PostgreSQL (Neon) - Nexus Code Gestão Empresarial
+-- Schema PostgreSQL (Neon) - Nexus Code ERP, CRM & Portal do Cliente
 
 CREATE TABLE IF NOT EXISTS usuarios (
     id SERIAL PRIMARY KEY,
@@ -78,6 +78,13 @@ CREATE TABLE IF NOT EXISTS projetos (
     prioridade VARCHAR(20) NOT NULL DEFAULT 'media' CHECK (prioridade IN ('baixa', 'media', 'alta', 'urgente')),
     progresso INTEGER NOT NULL DEFAULT 0,
     valor_total NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    horas_estimadas NUMERIC(8, 2) NULL DEFAULT 0.00,
+    url_homologacao VARCHAR(255) NULL,
+    url_producao VARCHAR(255) NULL,
+    repositorio_url VARCHAR(255) NULL,
+    aprovacao_cliente_status VARCHAR(30) NULL DEFAULT 'pendente',
+    aprovacao_cliente_obs TEXT NULL,
+    aprovado_em TIMESTAMP NULL,
     data_inicio DATE NULL,
     data_entrega DATE NULL,
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -154,6 +161,10 @@ CREATE TABLE IF NOT EXISTS faturas (
     descricao VARCHAR(200) NOT NULL,
     valor NUMERIC(12, 2) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'pago', 'atrasado', 'cancelado')),
+    forma_pagamento VARCHAR(40) NULL DEFAULT 'PIX',
+    comprovante_nome VARCHAR(255) NULL,
+    comprovante_data TEXT NULL,
+    observacoes TEXT NULL,
     vencimento DATE NOT NULL,
     pago_em TIMESTAMP NULL
 );
@@ -178,15 +189,6 @@ CREATE TABLE IF NOT EXISTS logs_auditoria (
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_clientes_email ON clientes(email);
-CREATE INDEX IF NOT EXISTS idx_solicitacoes_status ON solicitacoes_orcamento(status);
-CREATE INDEX IF NOT EXISTS idx_solicitacoes_email ON solicitacoes_orcamento(email);
-CREATE INDEX IF NOT EXISTS idx_projetos_cliente ON projetos(cliente_id);
-CREATE INDEX IF NOT EXISTS idx_tarefas_projeto ON tarefas(projeto_id);
-CREATE INDEX IF NOT EXISTS idx_faturas_cliente ON faturas(cliente_id);
-CREATE INDEX IF NOT EXISTS idx_holerites_usuario ON holerites(usuario_id);
-CREATE INDEX IF NOT EXISTS idx_informes_usuario ON informes_rendimentos(usuario_id);
-
 CREATE TABLE IF NOT EXISTS registros_ponto (
     id SERIAL PRIMARY KEY,
     usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
@@ -208,4 +210,153 @@ CREATE TABLE IF NOT EXISTS registros_ponto (
     observacao TEXT NULL,
     criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS configuracoes_empresa (
+    id SERIAL PRIMARY KEY,
+    razao_social VARCHAR(180) NOT NULL DEFAULT 'Nexus Code Brasil Tecnologia Ltda',
+    nome_fantasia VARCHAR(150) NOT NULL DEFAULT 'Nexus Code Brasil',
+    cnpj VARCHAR(25) NULL,
+    inscricao_estadual VARCHAR(40) NULL,
+    email_financeiro VARCHAR(150) NULL,
+    telefone VARCHAR(40) NULL,
+    endereco VARCHAR(255) NULL,
+    cidade VARCHAR(100) NULL,
+    estado VARCHAR(2) NULL,
+    cep VARCHAR(20) NULL,
+    banco_nome VARCHAR(100) NULL,
+    agencia VARCHAR(20) NULL,
+    conta VARCHAR(30) NULL,
+    chave_pix VARCHAR(150) NULL,
+    titular_pix VARCHAR(150) NULL,
+    multa_atraso_percent NUMERIC(5, 2) NULL DEFAULT 2.00,
+    juros_mensal_percent NUMERIC(5, 2) NULL DEFAULT 1.00,
+    permissoes_json TEXT NULL,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS propostas_comerciais (
+    id SERIAL PRIMARY KEY,
+    codigo VARCHAR(30) NOT NULL UNIQUE,
+    cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    solicitacao_id INTEGER NULL REFERENCES solicitacoes_orcamento(id) ON DELETE SET NULL,
+    criado_por_id INTEGER NULL REFERENCES usuarios(id) ON DELETE SET NULL,
+    titulo VARCHAR(180) NOT NULL,
+    escopo TEXT NOT NULL,
+    entregaveis_json TEXT NULL,
+    valor_total NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    condicoes_pagamento VARCHAR(200) NULL,
+    parcelas INTEGER NOT NULL DEFAULT 1,
+    prazo_dias INTEGER NOT NULL DEFAULT 30,
+    validade_ate DATE NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'enviada',
+    feedback_cliente TEXT NULL,
+    aprovado_por_cliente VARCHAR(120) NULL,
+    aprovado_em TIMESTAMP NULL,
+    projeto_gerado_id INTEGER NULL REFERENCES projetos(id) ON DELETE SET NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS despesas (
+    id SERIAL PRIMARY KEY,
+    descricao VARCHAR(200) NOT NULL,
+    categoria VARCHAR(50) NOT NULL DEFAULT 'infraestrutura',
+    fornecedor VARCHAR(150) NULL,
+    projeto_id INTEGER NULL REFERENCES projetos(id) ON DELETE SET NULL,
+    valor NUMERIC(12, 2) NOT NULL,
+    vencimento DATE NOT NULL,
+    status VARCHAR(25) NOT NULL DEFAULT 'pendente',
+    recorrente BOOLEAN NOT NULL DEFAULT FALSE,
+    pago_em TIMESTAMP NULL,
+    observacoes TEXT NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS contratos_recorrentes (
+    id SERIAL PRIMARY KEY,
+    cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    projeto_id INTEGER NULL REFERENCES projetos(id) ON DELETE SET NULL,
+    titulo VARCHAR(180) NOT NULL,
+    valor_mensal NUMERIC(12, 2) NOT NULL,
+    dia_vencimento INTEGER NOT NULL DEFAULT 10,
+    data_inicio DATE NOT NULL,
+    data_fim DATE NULL,
+    status VARCHAR(25) NOT NULL DEFAULT 'ativo',
+    descricao TEXT NULL,
+    ultima_geracao VARCHAR(15) NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS apontamentos_horas (
+    id SERIAL PRIMARY KEY,
+    projeto_id INTEGER NOT NULL REFERENCES projetos(id) ON DELETE CASCADE,
+    tarefa_id INTEGER NULL REFERENCES tarefas(id) ON DELETE SET NULL,
+    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    data_trabalho DATE NOT NULL,
+    horas NUMERIC(6, 2) NOT NULL,
+    descricao VARCHAR(255) NOT NULL,
+    faturavel BOOLEAN NOT NULL DEFAULT TRUE,
+    custo_hora_snapshot NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS chamados_suporte (
+    id SERIAL PRIMARY KEY,
+    protocolo VARCHAR(30) NOT NULL UNIQUE,
+    cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    projeto_id INTEGER NULL REFERENCES projetos(id) ON DELETE SET NULL,
+    aberto_por_id INTEGER NULL REFERENCES usuarios(id) ON DELETE SET NULL,
+    responsavel_id INTEGER NULL REFERENCES usuarios(id) ON DELETE SET NULL,
+    titulo VARCHAR(180) NOT NULL,
+    categoria VARCHAR(40) NOT NULL DEFAULT 'suporte_tecnico',
+    prioridade VARCHAR(20) NOT NULL DEFAULT 'media',
+    status VARCHAR(30) NOT NULL DEFAULT 'aberto',
+    sla_horas INTEGER NOT NULL DEFAULT 24,
+    descricao TEXT NOT NULL,
+    mensagens_json TEXT NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ativos_infra (
+    id SERIAL PRIMARY KEY,
+    cliente_id INTEGER NULL REFERENCES clientes(id) ON DELETE SET NULL,
+    projeto_id INTEGER NULL REFERENCES projetos(id) ON DELETE SET NULL,
+    tipo VARCHAR(40) NOT NULL DEFAULT 'dominio',
+    nome VARCHAR(180) NOT NULL,
+    provedor VARCHAR(120) NULL,
+    url_acesso VARCHAR(255) NULL,
+    usuario_acesso VARCHAR(150) NULL,
+    segredo_acesso VARCHAR(255) NULL,
+    valor_renovacao NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    data_vencimento DATE NULL,
+    status VARCHAR(25) NOT NULL DEFAULT 'ativo',
+    observacoes TEXT NULL,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS notificacoes (
+    id SERIAL PRIMARY KEY,
+    usuario_id INTEGER NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    perfil_destino VARCHAR(30) NULL,
+    titulo VARCHAR(160) NOT NULL,
+    mensagem VARCHAR(300) NOT NULL,
+    link_pagina VARCHAR(50) NOT NULL DEFAULT 'dashboard',
+    lida BOOLEAN NOT NULL DEFAULT FALSE,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_clientes_email ON clientes(email);
+CREATE INDEX IF NOT EXISTS idx_solicitacoes_status ON solicitacoes_orcamento(status);
+CREATE INDEX IF NOT EXISTS idx_solicitacoes_email ON solicitacoes_orcamento(email);
+CREATE INDEX IF NOT EXISTS idx_projetos_cliente ON projetos(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_tarefas_projeto ON tarefas(projeto_id);
+CREATE INDEX IF NOT EXISTS idx_faturas_cliente ON faturas(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_holerites_usuario ON holerites(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_informes_usuario ON informes_rendimentos(usuario_id);
 CREATE INDEX IF NOT EXISTS idx_ponto_usuario_data ON registros_ponto(usuario_id, data_ponto);
+CREATE INDEX IF NOT EXISTS idx_propostas_cliente ON propostas_comerciais(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_despesas_vencimento ON despesas(vencimento);
+CREATE INDEX IF NOT EXISTS idx_contratos_cliente ON contratos_recorrentes(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_timesheet_projeto ON apontamentos_horas(projeto_id);
+CREATE INDEX IF NOT EXISTS idx_chamados_cliente ON chamados_suporte(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_notificacoes_usuario ON notificacoes(usuario_id);

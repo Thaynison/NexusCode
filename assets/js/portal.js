@@ -1,5 +1,5 @@
 import { apiRequest, clearSession, getToken } from './config.js';
-import { showToast, showNoticeModal } from './ui.js';
+import { showToast, showNoticeModal, showConfirmModal } from './ui.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -7,12 +7,57 @@ const view = $('#view');
 const shell = $('#app-shell');
 const side = $('#app-side');
 const backdrop = $('#sidebar-backdrop');
+const portalDialog = $('#portal-dialog');
+const portalModalContainer = $('#portal-modal-container');
 
 let user = null;
+let currentPage = 'overview';
+let portalData = {
+  cliente: null,
+  projetos: [],
+  tarefas: [],
+  faturas: [],
+  propostas: [],
+  orcamentos: [],
+  chamados: [],
+  notificacoes: [],
+  pagamento_info: {}
+};
+
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const formatMoney = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const initials = (name) => String(name || 'NC').trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('');
-const formatDateTime = (v) => { if (!v) return '-'; const d = new Date(v); return isNaN(d) ? v : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }); };
+const initials = (name) => String(name || 'CL').trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('');
+const formatDate = (v) => {
+  if (!v) return '-';
+  const s = String(v).slice(0, 10);
+  const d = new Date(s + 'T00:00:00');
+  return isNaN(d) ? v : d.toLocaleDateString('pt-BR');
+};
+const formatDateTime = (v) => {
+  if (!v) return '-';
+  const d = new Date(v);
+  return isNaN(d) ? v : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+};
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Falha ao ler o arquivo selecionado.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function safeJsonArray(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 $('#app-menu')?.addEventListener('click', () => {
   if (window.innerWidth <= 900) {
@@ -26,21 +71,836 @@ backdrop?.addEventListener('click', () => { side.classList.remove('open'); backd
 $('#theme')?.addEventListener('click', () => shell.classList.toggle('app-dark'));
 $('#logout')?.addEventListener('click', () => { clearSession(); window.location.href = '../index.html'; });
 
+async function loadPortalData() {
+  portalData = await apiRequest('/portal/bootstrap');
+  updateBadgesAndNotifications();
+  return portalData;
+}
+
+function updateBadgesAndNotifications() {
+  const pendProps = (portalData.propostas || []).filter((p) => p.status === 'enviada').length;
+  const propBadge = $('#portal-prop-badge');
+  if (propBadge) {
+    propBadge.textContent = pendProps;
+    propBadge.style.display = pendProps > 0 ? 'inline-block' : 'none';
+  }
+
+  const openTickets = (portalData.chamados || []).filter((c) => ['aberto', 'em_analise', 'aguardando_cliente'].includes(c.status)).length;
+  const ticketBadge = $('#portal-ticket-badge');
+  if (ticketBadge) {
+    ticketBadge.textContent = openTickets;
+    ticketBadge.style.display = openTickets > 0 ? 'inline-block' : 'none';
+  }
+
+  const unreadNotifs = (portalData.notificacoes || []).filter((n) => !n.lida);
+  const dot = $('#portal-notif-count');
+  if (dot) {
+    dot.textContent = unreadNotifs.length;
+    dot.style.display = unreadNotifs.length > 0 ? 'flex' : 'none';
+  }
+}
+
+$('#portal-notif-btn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const pop = $('#portal-notif-popover');
+  if (!pop) return;
+  const isVisible = pop.style.display === 'block';
+  if (isVisible) {
+    pop.style.display = 'none';
+    return;
+  }
+  const notifs = portalData.notificacoes || [];
+  pop.innerHTML = `
+    <div class="notif-popover-head">
+      <b style="font-size:13.5px;">Notificações (${notifs.filter((n) => !n.lida).length} não lidas)</b>
+      ${notifs.some((n) => !n.lida) ? `<button type="button" class="btn secondary" style="padding:4px 8px; font-size:11px;" id="portal-read-all-notifs">Marcar lidas</button>` : ''}
+    </div>
+    ${notifs.length ? notifs.map((n) => `
+      <div class="notif-item ${n.lida ? '' : 'unread'}" data-pnotif-id="${n.id}" data-pnotif-link="${esc(n.link_pagina || 'overview')}">
+        <div style="font-weight:700; font-size:13px; margin-bottom:2px;">${esc(n.titulo)}</div>
+        <div class="muted" style="font-size:12px; line-height:1.4;">${esc(n.mensagem)}</div>
+        <div style="font-size:10.5px; color:var(--muted); margin-top:4px;">${formatDateTime(n.criado_em)}</div>
+      </div>
+    `).join('') : '<div style="padding:20px; text-align:center;" class="muted">Nenhuma notificação recente.</div>'}
+  `;
+  pop.style.display = 'block';
+
+  $('#portal-read-all-notifs')?.addEventListener('click', async () => {
+    await apiRequest('/notificacoes/ler-todas', { method: 'POST' });
+    await loadPortalData();
+    pop.style.display = 'none';
+  });
+
+  pop.querySelectorAll('[data-pnotif-id]').forEach((el) => {
+    el.onclick = async () => {
+      const id = el.dataset.pnotifId;
+      const link = el.dataset.pnotifLink;
+      await apiRequest(`/notificacoes/${id}/lida`, { method: 'PATCH' }).catch(() => {});
+      pop.style.display = 'none';
+      await render(link);
+    };
+  });
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.notif-wrap')) {
+    const pop = $('#portal-notif-popover');
+    if (pop) pop.style.display = 'none';
+  }
+});
+
+// ==================== MODAIS DO PORTAL DO CLIENTE ====================
+window.portalOpenNewProjectRequestModal = () => {
+  portalModalContainer.innerHTML = `
+    <form id="portal-new-project-form">
+      <div class="modal-header">
+        <div class="modal-header-main">
+          <div class="modal-header-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </div>
+          <div>
+            <h2>Solicitar Novo Projeto ou Melhoria</h2>
+            <p class="modal-subtitle">Envie o escopo desejado diretamente para nossa engenharia comercial</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="document.getElementById('portal-dialog').close()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-section-card">
+          <div class="formgrid">
+            <label>Tipo de Demanda *
+              <select name="tipo_projeto" required>
+                <option value="Desenvolvimento Web / Sistema">Desenvolvimento Web / Sistema</option>
+                <option value="Novo Módulo / Evolução de Projeto">Novo Módulo / Evolução de Projeto</option>
+                <option value="Aplicativo Mobile (iOS / Android)">Aplicativo Mobile (iOS / Android)</option>
+                <option value="Integração de APIs / Automação">Integração de APIs / Automação</option>
+                <option value="Consultoria / Infraestrutura Cloud">Consultoria / Infraestrutura Cloud</option>
+              </select>
+            </label>
+            <label>Prioridade / Urgência *
+              <select name="urgencia">
+                <option value="normal">Normal (Planejada)</option>
+                <option value="alta">Alta (Prioritária)</option>
+                <option value="urgente">Urgente (Crítica)</option>
+              </select>
+            </label>
+            <label>Título do Projeto / Demanda *
+              <input type="text" name="titulo" required placeholder="Ex.: Módulo de Relatórios Financeiros">
+            </label>
+            <label>Orçamento Estimado (Opcional)
+              <input type="text" name="orcamento_estimado" placeholder="Ex.: R$ 5.000 a R$ 10.000">
+            </label>
+          </div>
+          <label class="field-full">Descrição Detalhada dos Objetivos e Requisitos *
+            <textarea name="mensagem" rows="4" required placeholder="Descreva as funcionalidades esperadas, integrações necessárias e prazos desejados..."></textarea>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn secondary" onclick="document.getElementById('portal-dialog').close()">Cancelar</button>
+        <button type="submit" class="btn" id="portal-req-proj-btn">Enviar Solicitação</button>
+      </div>
+    </form>
+  `;
+
+  $('#portal-new-project-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = $('#portal-req-proj-btn');
+    const raw = Object.fromEntries(new FormData(e.target));
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+    try {
+      await apiRequest('/portal/solicitar-projeto', {
+        method: 'POST',
+        body: JSON.stringify({
+          tipo_projeto: raw.tipo_projeto,
+          titulo: raw.titulo.trim(),
+          urgencia: raw.urgencia,
+          orcamento_estimado: raw.orcamento_estimado || null,
+          mensagem: raw.mensagem.trim()
+        })
+      });
+      portalDialog.close();
+      showToast('Solicitação de novo projeto enviada com sucesso!', 'success');
+      render('quotes');
+    } catch (err) {
+      showNoticeModal({ title: 'Erro ao enviar solicitação', message: err.message, variant: 'error' });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Enviar Solicitação';
+    }
+  };
+
+  portalDialog.showModal();
+};
+
+window.portalViewProposalModal = (propId) => {
+  const prop = (portalData.propostas || []).find((p) => p.id === propId);
+  if (!prop) return;
+  const entregaveis = safeJsonArray(prop.entregaveis_json);
+  const canDecide = ['enviada', 'ajuste_solicitado'].includes(prop.status);
+
+  portalModalContainer.innerHTML = `
+    <div class="modal-header">
+      <div class="modal-header-main">
+        <div class="modal-header-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="m9 15 2 2 4-4"></path></svg>
+        </div>
+        <div>
+          <h2>Proposta ${esc(prop.codigo)} — ${esc(prop.titulo)}</h2>
+          <p class="modal-subtitle">Validade: ${formatDate(prop.validade_ate)} • Prazo estimado: ${prop.prazo_dias} dias</p>
+        </div>
+      </div>
+      <button type="button" class="modal-close-btn" onclick="document.getElementById('portal-dialog').close()">&times;</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="grid" style="grid-template-columns:repeat(3, 1fr); gap:12px;">
+        <div class="card" style="padding:14px;">
+          <span class="muted" style="font-size:11.5px;">Investimento Total</span>
+          <div style="font-size:20px; font-weight:800; color:var(--primary); margin-top:4px;">${formatMoney(prop.valor_total)}</div>
+        </div>
+        <div class="card" style="padding:14px;">
+          <span class="muted" style="font-size:11.5px;">Parcelamento</span>
+          <div style="font-size:16px; font-weight:700; margin-top:4px;">${prop.parcelas}x (${esc(prop.condicoes_pagamento || 'À combinar')})</div>
+        </div>
+        <div class="card" style="padding:14px;">
+          <span class="muted" style="font-size:11.5px;">Status Atual</span>
+          <div style="margin-top:6px;"><span class="badge ${esc(prop.status === 'aprovada' ? 'ativo' : 'pendente')}">${esc(prop.status).replace('_', ' ')}</span></div>
+        </div>
+      </div>
+
+      <div class="modal-section-card">
+        <div class="modal-section-title">Escopo Técnico &amp; Condições</div>
+        <div style="white-space:pre-wrap; font-size:13.5px; line-height:1.55;">${esc(prop.escopo)}</div>
+      </div>
+
+      ${entregaveis.length ? `
+        <div class="modal-section-card">
+          <div class="modal-section-title">Cronograma de Entregáveis</div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            ${entregaveis.map((e, i) => `
+              <div style="display:flex; justify-content:space-between; padding:8px 12px; background:var(--surface); border:1px solid var(--border); border-radius:8px; font-size:13px;">
+                <span><b>Etapa ${i + 1}:</b> ${esc(e.titulo || e)}</span>
+                <span class="muted">${e.prazo_dias ? `Dia ${e.prazo_dias}` : ''}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      ${canDecide ? `
+        <div class="modal-section-card">
+          <div class="modal-section-title">Aprovação Digital da Proposta</div>
+          <p class="muted" style="margin:0; font-size:12.5px;">Ao clicar em <b>Aprovar Proposta</b>, o projeto e o cronograma de entregas serão ativados automaticamente pela nossa equipe.</p>
+          <label class="field-full">Observações ou Solicitação de Ajuste (Opcional)
+            <textarea id="portal-prop-feedback" rows="2" placeholder="Caso deseje ajustar alguma cláusula ou prazo, descreva aqui..."></textarea>
+          </label>
+        </div>
+      ` : `
+        <div class="quote-reply-box" style="margin:0;">
+          <b>Status: ${esc(prop.status).toUpperCase()}</b>
+          ${prop.aprovado_por_cliente ? `<div style="font-size:12.5px; margin-top:4px;">Aprovado por ${esc(prop.aprovado_por_cliente)} em ${formatDateTime(prop.aprovado_em)}.</div>` : ''}
+          ${prop.feedback_cliente ? `<div style="font-size:12.5px; margin-top:4px;">Parecer: ${esc(prop.feedback_cliente)}</div>` : ''}
+        </div>
+      `}
+    </div>
+
+    <div class="modal-footer" style="justify-content:space-between;">
+      <button type="button" class="btn secondary" onclick="document.getElementById('portal-dialog').close()">Fechar</button>
+      ${canDecide ? `
+        <div style="display:flex; gap:10px;">
+          <button type="button" class="btn secondary" id="portal-prop-rev-btn">Solicitar Revisão</button>
+          <button type="button" class="btn" id="portal-prop-approve-btn">Aprovar Proposta Digitalmente</button>
+        </div>
+      ` : ''}
+    </div>
+  `;
+
+  if (canDecide) {
+    $('#portal-prop-rev-btn').onclick = async () => {
+      const fb = $('#portal-prop-feedback').value.trim();
+      if (!fb) {
+        showToast('Informe no campo de observações o que deseja revisar na proposta.', 'error');
+        return;
+      }
+      await apiRequest(`/portal/propostas/${prop.id}/decidir`, {
+        method: 'POST',
+        body: JSON.stringify({ decisao: 'ajuste_solicitado', feedback: fb })
+      });
+      portalDialog.close();
+      showToast('Solicitação de revisão enviada para a equipe comercial.', 'info');
+      render('proposals');
+    };
+
+    $('#portal-prop-approve-btn').onclick = async () => {
+      const fb = $('#portal-prop-feedback').value.trim();
+      const btn = $('#portal-prop-approve-btn');
+      btn.disabled = true;
+      btn.textContent = 'Ativando Projeto...';
+      try {
+        await apiRequest(`/portal/propostas/${prop.id}/decidir`, {
+          method: 'POST',
+          body: JSON.stringify({ decisao: 'aprovada', feedback: fb || 'Aprovado via Portal do Cliente' })
+        });
+        portalDialog.close();
+        showToast('Proposta aprovada! Seu projeto foi ativado automaticamente.', 'success');
+        render('projects');
+      } catch (err) {
+        showNoticeModal({ title: 'Erro ao aprovar proposta', message: err.message, variant: 'error' });
+        btn.disabled = false;
+        btn.textContent = 'Aprovar Proposta Digitalmente';
+      }
+    };
+  }
+
+  portalDialog.showModal();
+};
+
+window.portalViewProjectModal = (projId) => {
+  const proj = (portalData.projetos || []).find((p) => p.id === projId);
+  if (!proj) return;
+  const tasks = (portalData.tarefas || []).filter((t) => t.projeto_id === proj.id);
+  const doneCount = tasks.filter((t) => t.status === 'concluida').length;
+
+  portalModalContainer.innerHTML = `
+    <div class="modal-header">
+      <div class="modal-header-main">
+        <div class="modal-header-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>
+        </div>
+        <div>
+          <h2>${esc(proj.titulo)}</h2>
+          <p class="modal-subtitle">Início: ${formatDate(proj.data_inicio)} • Previsão de Entrega: ${formatDate(proj.data_entrega)}</p>
+        </div>
+      </div>
+      <button type="button" class="modal-close-btn" onclick="document.getElementById('portal-dialog').close()">&times;</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="modal-section-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <div>
+            <span class="badge ${esc(proj.status)}">${esc(proj.status).replace('_', ' ')}</span>
+            <span class="badge" style="margin-left:6px;">Homologação: ${esc(proj.aprovacao_cliente_status || 'pendente').replace('_', ' ')}</span>
+          </div>
+          <div style="font-weight:800; color:var(--primary);">Progresso Geral: ${proj.progresso}%</div>
+        </div>
+        <div style="height:8px; background:var(--surface); border-radius:999px; overflow:hidden; border:1px solid var(--border);">
+          <div style="width:${proj.progresso}%; height:100%; background:#00B4D8;"></div>
+        </div>
+        ${proj.descricao ? `<p style="margin:0; font-size:13.5px; line-height:1.5;">${esc(proj.descricao)}</p>` : ''}
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          ${proj.url_homologacao ? `<a href="${esc(proj.url_homologacao)}" target="_blank" rel="noopener" class="btn secondary" style="text-decoration:none; font-size:12.5px;">Abrir Ambiente de Homologação</a>` : ''}
+          ${proj.url_producao ? `<a href="${esc(proj.url_producao)}" target="_blank" rel="noopener" class="btn" style="text-decoration:none; font-size:12.5px;">Acessar Sistema em Produção</a>` : ''}
+        </div>
+      </div>
+
+      <div class="modal-section-card">
+        <div class="modal-section-title">Etapas &amp; Entregas do Cronograma (${doneCount}/${tasks.length} concluídas)</div>
+        ${tasks.length ? `
+          <div style="display:flex; flex-direction:column; gap:8px; max-height:220px; overflow-y:auto;">
+            ${tasks.map((t) => `
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 12px; background:var(--surface); border:1px solid var(--border); border-radius:8px; font-size:13px;">
+                <div>
+                  <span style="font-weight:600; ${t.status === 'concluida' ? 'text-decoration:line-through; color:var(--muted);' : ''}">${esc(t.titulo)}</span>
+                  ${t.prazo ? `<div class="muted" style="font-size:11px;">Prazo: ${formatDate(t.prazo)}</div>` : ''}
+                </div>
+                <span class="badge ${esc(t.status)}">${esc(t.status)}</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<p class="muted" style="margin:0; font-size:13px;">As etapas detalhadas estão sendo estruturadas pela equipe técnica.</p>'}
+      </div>
+
+      <div class="modal-section-card">
+        <div class="modal-section-title">Homologação &amp; Aceite de Entrega</div>
+        <p class="muted" style="margin:0; font-size:12.5px;">Valide o andamento ou registre observações para a equipe técnica da Nexus Code.</p>
+        <textarea id="portal-homolog-obs" rows="2" placeholder="Comentários de homologação ou solicitação de ajustes...">${esc(proj.aprovacao_cliente_obs || '')}</textarea>
+      </div>
+    </div>
+
+    <div class="modal-footer" style="justify-content:space-between;">
+      <button type="button" class="btn secondary" onclick="document.getElementById('portal-dialog').close()">Fechar</button>
+      <div style="display:flex; gap:10px;">
+        <button type="button" class="btn secondary" id="portal-homolog-adj-btn">Solicitar Ajustes</button>
+        <button type="button" class="btn" id="portal-homolog-ok-btn">Aprovar &amp; Homologar Entrega</button>
+      </div>
+    </div>
+  `;
+
+  const submitHomolog = async (decisao) => {
+    const obs = $('#portal-homolog-obs').value.trim();
+    try {
+      await apiRequest(`/portal/projetos/${proj.id}/homologar`, {
+        method: 'POST',
+        body: JSON.stringify({ decisao, observacao: obs || null })
+      });
+      portalDialog.close();
+      showToast(decisao === 'aprovado' ? 'Entrega homologada com sucesso!' : 'Solicitação de ajuste registrada.', 'success');
+      render('projects');
+    } catch (err) {
+      showNoticeModal({ title: 'Erro ao registrar parecer', message: err.message, variant: 'error' });
+    }
+  };
+
+  $('#portal-homolog-adj-btn').onclick = () => submitHomolog('ajuste_solicitado');
+  $('#portal-homolog-ok-btn').onclick = () => submitHomolog('aprovado');
+  portalDialog.showModal();
+};
+
+window.portalOpenNewTicketModal = () => {
+  const projs = portalData.projetos || [];
+  portalModalContainer.innerHTML = `
+    <form id="portal-new-ticket-form">
+      <div class="modal-header">
+        <div class="modal-header-main">
+          <div class="modal-header-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
+          </div>
+          <div>
+            <h2>Abrir Chamado de Suporte</h2>
+            <p class="modal-subtitle">Atendimento técnico rastreado por protocolo e SLA</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="document.getElementById('portal-dialog').close()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-section-card">
+          <div class="formgrid">
+            <label>Assunto / Título *
+              <input type="text" name="titulo" required placeholder="Ex.: Dúvida na emissão de relatório">
+            </label>
+            <label>Projeto Relacionado
+              <select name="projeto_id">
+                <option value="">-- Geral / Não vinculado --</option>
+                ${projs.map((p) => `<option value="${p.id}">${esc(p.titulo)}</option>`).join('')}
+              </select>
+            </label>
+            <label>Categoria
+              <select name="categoria">
+                <option value="suporte_tecnico">Suporte Técnico / Dúvida</option>
+                <option value="bug_correcao">Correção / Erro no Sistema</option>
+                <option value="nova_funcionalidade">Solicitação de Melhoria</option>
+                <option value="duvida_financeira">Financeiro / Faturamento</option>
+              </select>
+            </label>
+            <label>Prioridade
+              <select name="prioridade">
+                <option value="baixa">Baixa (SLA 48h)</option>
+                <option value="media" selected>Média (SLA 24h)</option>
+                <option value="alta">Alta (SLA 8h)</option>
+                <option value="critica">Crítica (SLA 4h)</option>
+              </select>
+            </label>
+          </div>
+          <label class="field-full">Descrição do Chamado *
+            <textarea name="descricao" rows="4" required placeholder="Detalhe o ocorrido, passos para reproduzir ou sua solicitação..."></textarea>
+          </label>
+          <label class="field-full">Anexar Print ou Documento (Opcional, máx. 2,5 MB)
+            <input type="file" id="portal-ticket-file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx">
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn secondary" onclick="document.getElementById('portal-dialog').close()">Cancelar</button>
+        <button type="submit" class="btn" id="portal-ticket-save-btn">Registrar Chamado</button>
+      </div>
+    </form>
+  `;
+
+  $('#portal-new-ticket-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = $('#portal-ticket-save-btn');
+    const raw = Object.fromEntries(new FormData(e.target));
+    const fileInp = $('#portal-ticket-file');
+
+    btn.disabled = true;
+    btn.textContent = 'Abrindo Chamado...';
+    try {
+      let anexo_nome = null;
+      let anexo_data = null;
+      if (fileInp?.files?.[0]) {
+        const f = fileInp.files[0];
+        if (f.size > 2.5 * 1024 * 1024) throw new Error('O anexo deve ter no máximo 2,5 MB.');
+        anexo_nome = f.name;
+        anexo_data = await readFileAsDataUrl(f);
+      }
+      await apiRequest('/portal/chamados', {
+        method: 'POST',
+        body: JSON.stringify({
+          projeto_id: raw.projeto_id ? Number(raw.projeto_id) : null,
+          titulo: raw.titulo.trim(),
+          categoria: raw.categoria,
+          prioridade: raw.prioridade,
+          descricao: raw.descricao.trim(),
+          anexo_nome,
+          anexo_data
+        })
+      });
+      portalDialog.close();
+      showToast('Chamado aberto com sucesso!', 'success');
+      render('tickets');
+    } catch (err) {
+      showNoticeModal({ title: 'Erro ao abrir chamado', message: err.message, variant: 'error' });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Registrar Chamado';
+    }
+  };
+
+  portalDialog.showModal();
+};
+
+window.portalOpenTicketThread = (ticketId) => {
+  const ch = (portalData.chamados || []).find((c) => c.id === ticketId);
+  if (!ch) return;
+  const msgs = safeJsonArray(ch.mensagens_json);
+
+  portalModalContainer.innerHTML = `
+    <div class="modal-header">
+      <div class="modal-header-main">
+        <div class="modal-header-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        </div>
+        <div>
+          <h2>${esc(ch.protocolo)} — ${esc(ch.titulo)}</h2>
+          <p class="modal-subtitle">Status: ${esc(ch.status).replace('_', ' ').toUpperCase()} • Prioridade: ${esc(ch.prioridade).toUpperCase()} • SLA: ${ch.sla_horas}h</p>
+        </div>
+      </div>
+      <button type="button" class="modal-close-btn" onclick="document.getElementById('portal-dialog').close()">&times;</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="ticket-thread" id="portal-ticket-thread-box">
+        ${msgs.map((m) => `
+          <div class="ticket-msg ${m.perfil === 'cliente' ? 'client' : 'staff'}">
+            <div style="display:flex; justify-content:space-between; gap:12px; font-size:11px; color:var(--text-light); margin-bottom:4px;">
+              <b>${esc(m.autor)} (${m.perfil === 'cliente' ? 'Você' : 'Equipe Nexus Code'})</b>
+              <span>${esc(m.criado_em || '')}</span>
+            </div>
+            <div style="font-size:13.5px; line-height:1.5; white-space:pre-wrap;">${esc(m.texto)}</div>
+            ${m.anexo_data ? `<div style="margin-top:6px;"><a href="${m.anexo_data}" download="${esc(m.anexo_nome || 'anexo')}" class="btn secondary" style="padding:4px 8px; font-size:11px; text-decoration:none;">Baixar ${esc(m.anexo_nome || 'Anexo')}</a></div>` : ''}
+          </div>
+        `).join('') || '<p class="muted">Nenhuma mensagem registrada.</p>'}
+      </div>
+
+      ${ch.status !== 'fechado' ? `
+        <form id="portal-ticket-reply-form" style="display:flex; flex-direction:column; gap:10px;">
+          <textarea id="portal-ticket-msg-txt" rows="3" required placeholder="Escreva sua resposta ou envie informações adicionais para a equipe técnica..."></textarea>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+            <input type="file" id="portal-ticket-reply-file" accept=".pdf,.png,.jpg,.jpeg" style="max-width:260px;">
+            <button type="submit" class="btn" id="portal-ticket-send-btn">Enviar Mensagem</button>
+          </div>
+        </form>
+      ` : '<div class="muted" style="font-size:13px;">Este chamado foi encerrado. Caso precise, abra um novo ticket.</div>'}
+    </div>
+  `;
+
+  const box = $('#portal-ticket-thread-box');
+  if (box) box.scrollTop = box.scrollHeight;
+
+  $('#portal-ticket-reply-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('#portal-ticket-send-btn');
+    const txt = $('#portal-ticket-msg-txt').value.trim();
+    const fileInp = $('#portal-ticket-reply-file');
+    if (!txt) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+    try {
+      let anexo_nome = null;
+      let anexo_data = null;
+      if (fileInp?.files?.[0]) {
+        const f = fileInp.files[0];
+        if (f.size > 2.5 * 1024 * 1024) throw new Error('O arquivo deve ter no máximo 2,5 MB.');
+        anexo_nome = f.name;
+        anexo_data = await readFileAsDataUrl(f);
+      }
+      await apiRequest(`/portal/chamados/${ch.id}/mensagens`, {
+        method: 'POST',
+        body: JSON.stringify({ texto: txt, anexo_nome, anexo_data })
+      });
+      await loadPortalData();
+      window.portalOpenTicketThread(ch.id);
+      showToast('Mensagem enviada!', 'success');
+    } catch (err) {
+      showNoticeModal({ title: 'Erro ao enviar mensagem', message: err.message, variant: 'error' });
+      btn.disabled = false;
+      btn.textContent = 'Enviar Mensagem';
+    }
+  });
+
+  portalDialog.showModal();
+};
+
+window.portalOpenInvoiceReceiptModal = (fatId) => {
+  const fat = (portalData.faturas || []).find((f) => f.id === fatId);
+  if (!fat) return;
+  const pix = portalData.pagamento_info || {};
+
+  portalModalContainer.innerHTML = `
+    <form id="portal-receipt-form">
+      <div class="modal-header">
+        <div class="modal-header-main">
+          <div class="modal-header-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="20" height="14" x="2" y="5" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+          </div>
+          <div>
+            <h2>Pagamento &amp; Comprovante — ${esc(fat.descricao)}</h2>
+            <p class="modal-subtitle">Valor: ${formatMoney(fat.valor)} • Vencimento: ${formatDate(fat.vencimento)}</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="document.getElementById('portal-dialog').close()">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="pix-box">
+          <div>
+            <div style="font-size:11.5px; font-weight:700; text-transform:uppercase; color:var(--primary);">Dados para Pagamento via PIX</div>
+            <div style="font-size:15px; font-weight:800; margin:3px 0;">${esc(pix.chave_pix || 'contato@nexuscodebrasil.com.br')}</div>
+            <div class="muted" style="font-size:12px;">${esc(pix.titular_pix || 'Nexus Code Brasil')} • ${esc(pix.banco || '')}</div>
+          </div>
+          <button type="button" class="btn secondary" id="copy-pix-modal-btn">Copiar Chave PIX</button>
+        </div>
+
+        <div class="modal-section-card">
+          <div class="modal-section-title">Enviar Comprovante de Pagamento</div>
+          <label class="field-full">Selecione o Arquivo (PDF, PNG ou JPG, máx. 2,5 MB) *
+            <input type="file" id="portal-receipt-file" accept=".pdf,.png,.jpg,.jpeg" required>
+          </label>
+          <label class="field-full">Observações (Opcional)
+            <input type="text" name="observacoes" value="${esc(fat.observacoes || '')}" placeholder="Ex.: Pago via PIX em ${new Date().toLocaleDateString('pt-BR')}">
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn secondary" onclick="document.getElementById('portal-dialog').close()">Cancelar</button>
+        <button type="submit" class="btn" id="portal-receipt-save-btn">Enviar Comprovante</button>
+      </div>
+    </form>
+  `;
+
+  $('#copy-pix-modal-btn').onclick = () => {
+    navigator.clipboard?.writeText(pix.chave_pix || '');
+    showToast('Chave PIX copiada para a área de transferência!', 'success');
+  };
+
+  $('#portal-receipt-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = $('#portal-receipt-save-btn');
+    const fileInp = $('#portal-receipt-file');
+    const obs = new FormData(e.target).get('observacoes');
+    if (!fileInp?.files?.[0]) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+    try {
+      const f = fileInp.files[0];
+      if (f.size > 2.5 * 1024 * 1024) throw new Error('O comprovante deve ter no máximo 2,5 MB.');
+      const dataUrl = await readFileAsDataUrl(f);
+      await apiRequest(`/portal/faturas/${fat.id}/comprovante`, {
+        method: 'POST',
+        body: JSON.stringify({
+          comprovante_nome: f.name,
+          comprovante_data: dataUrl,
+          observacoes: obs || null
+        })
+      });
+      portalDialog.close();
+      showToast('Comprovante enviado! Nossa equipe financeira fará a baixa.', 'success');
+      render('invoices');
+    } catch (err) {
+      showNoticeModal({ title: 'Erro ao enviar comprovante', message: err.message, variant: 'error' });
+      btn.disabled = false;
+      btn.textContent = 'Enviar Comprovante';
+    }
+  };
+
+  portalDialog.showModal();
+};
+
+// ==================== RENDERIZAÇÃO DAS TELAS DO PORTAL ====================
 async function render(page) {
+  currentPage = page;
   $$('[data-page]').forEach((b) => b.classList.toggle('active', b.dataset.page === page));
-  if (page === 'quotes') {
-    const items = await apiRequest('/portal/orcamentos');
+  side?.classList.remove('open');
+  backdrop?.classList.remove('open');
+
+  await loadPortalData();
+
+  if (page === 'overview') {
+    const projs = portalData.projetos || [];
+    const props = portalData.propostas || [];
+    const fats = portalData.faturas || [];
+    const tickets = portalData.chamados || [];
+    const activeProjs = projs.filter((p) => !['concluido', 'cancelado'].includes(p.status));
+    const openProps = props.filter((p) => ['enviada', 'ajuste_solicitado'].includes(p.status));
+    const openFats = fats.filter((f) => ['pendente', 'atrasado'].includes(f.status));
+    const openTickets = tickets.filter((t) => ['aberto', 'em_analise', 'aguardando_cliente'].includes(t.status));
+
+    view.innerHTML = `
+      <div class="portal-hero">
+        <div>
+          <span style="font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#00B4D8;">Portal Corporativo do Cliente</span>
+          <h1 style="margin:4px 0 6px; font-size:24px;">Bem-vindo, ${esc(user?.nome)}</h1>
+          <p style="margin:0; font-size:13.5px; color:#cbd5e1;">Acompanhe seus projetos em tempo real, aprove propostas, gerencie faturas e fale diretamente com nossa engenharia.</p>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button type="button" class="btn secondary" onclick="window.portalOpenNewTicketModal()">+ Abrir Chamado</button>
+          <button type="button" class="btn" style="background:#00B4D8; color:#0A1D37; font-weight:800;" onclick="window.portalOpenNewProjectRequestModal()">+ Solicitar Novo Projeto</button>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-bottom:20px;">
+        <div class="card metric" style="cursor:pointer;" onclick="window.portalGo('projects')">
+          <span class="title">Projetos em Andamento</span>
+          <strong>${activeProjs.length}</strong>
+          <span class="pill-info">${projs.length} projeto(s) no total</span>
+        </div>
+        <div class="card metric" style="cursor:pointer;" onclick="window.portalGo('proposals')">
+          <span class="title">Propostas Pendentes</span>
+          <strong>${openProps.length}</strong>
+          <span class="pill-info">${props.length} proposta(s) recebida(s)</span>
+        </div>
+        <div class="card metric" style="cursor:pointer;" onclick="window.portalGo('invoices')">
+          <span class="title">Faturas em Aberto</span>
+          <strong>${formatMoney(openFats.reduce((a, f) => a + Number(f.valor || 0), 0))}</strong>
+          <span class="pill-info">${openFats.length} cobrança(s) pendente(s)</span>
+        </div>
+        <div class="card metric" style="cursor:pointer;" onclick="window.portalGo('tickets')">
+          <span class="title">Chamados de Suporte</span>
+          <strong>${openTickets.length}</strong>
+          <span class="pill-info">${tickets.length} ticket(s) registrado(s)</span>
+        </div>
+      </div>
+
+      <div class="dashboard-panels">
+        <div class="card">
+          <div class="toolbar" style="margin-bottom:10px;">
+            <h3 style="margin:0; font-size:16px;">Meus Projetos</h3>
+            <button class="btn secondary" style="padding:5px 10px; font-size:12px;" onclick="window.portalGo('projects')">Ver detalhes</button>
+          </div>
+          ${projs.slice(0, 4).map((p) => `
+            <div class="app-ticket" style="cursor:pointer;" onclick="window.portalViewProjectModal(${p.id})">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px;">
+                <b>${esc(p.titulo)}</b>
+                <span class="badge ${esc(p.status)}">${esc(p.status).replace('_', ' ')}</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div style="flex:1; height:6px; background:var(--surface2); border-radius:4px; overflow:hidden; border:1px solid var(--border);">
+                  <div style="width:${p.progresso}%; height:100%; background:#00B4D8;"></div>
+                </div>
+                <span style="font-size:12px; font-weight:700;">${p.progresso}%</span>
+              </div>
+            </div>
+          `).join('') || '<p class="muted">Nenhum projeto ativo no momento. Clique em "+ Solicitar Novo Projeto" para iniciar.</p>'}
+        </div>
+
+        <div class="card">
+          <div class="toolbar" style="margin-bottom:10px;">
+            <h3 style="margin:0; font-size:16px;">Propostas &amp; Aprovações</h3>
+            <button class="btn secondary" style="padding:5px 10px; font-size:12px;" onclick="window.portalGo('proposals')">Ver todas</button>
+          </div>
+          ${props.slice(0, 4).map((pr) => `
+            <div class="app-ticket" style="display:flex; justify-content:space-between; align-items:center; gap:12px; cursor:pointer;" onclick="window.portalViewProposalModal(${pr.id})">
+              <div>
+                <b>${esc(pr.codigo)} — ${esc(pr.titulo)}</b>
+                <div class="muted" style="font-size:12px;">Valor: ${formatMoney(pr.valor_total)} • Prazo: ${pr.prazo_dias} dias</div>
+              </div>
+              <span class="badge ${esc(pr.status === 'aprovada' ? 'ativo' : 'pendente')}">${esc(pr.status).replace('_', ' ')}</span>
+            </div>
+          `).join('') || '<p class="muted">Nenhuma proposta comercial pendente.</p>'}
+        </div>
+      </div>
+    `;
+  } else if (page === 'proposals') {
+    const items = portalData.propostas || [];
     view.innerHTML = `
       <div class="toolbar">
-        <div><h1>Minhas Solicitações</h1><span class="muted">Histórico de solicitações enviadas e retornos da equipe comercial</span></div>
-        <a href="../index.html#contact" class="btn" style="text-decoration:none;">+ Nova Solicitação</a>
+        <div>
+          <h1>Propostas Comerciais &amp; Contratos</h1>
+          <span class="muted">Analise escopos, cronogramas e aprove propostas digitalmente</span>
+        </div>
+        <button type="button" class="btn" onclick="window.portalOpenNewProjectRequestModal()">+ Solicitar Nova Proposta</button>
+      </div>
+      <div class="card table-wrap">
+        <table class="table">
+          <thead><tr><th>Código</th><th>Título</th><th>Investimento</th><th>Condições</th><th>Validade</th><th>Status</th><th>Ações</th></tr></thead>
+          <tbody>
+            ${items.map((p) => `
+              <tr>
+                <td><b>${esc(p.codigo)}</b></td>
+                <td><b>${esc(p.titulo)}</b><div class="muted" style="font-size:12px;">Prazo: ${p.prazo_dias} dias</div></td>
+                <td style="font-weight:800; color:var(--primary);">${formatMoney(p.valor_total)}</td>
+                <td>${p.parcelas}x • ${esc(p.condicoes_pagamento || '-')}</td>
+                <td>${formatDate(p.validade_ate)}</td>
+                <td><span class="badge ${esc(p.status === 'aprovada' ? 'ativo' : 'pendente')}">${esc(p.status).replace('_', ' ')}</span></td>
+                <td>
+                  <button type="button" class="btn" style="padding:6px 12px; font-size:12px;" onclick="window.portalViewProposalModal(${p.id})">
+                    ${['enviada', 'ajuste_solicitado'].includes(p.status) ? 'Analisar & Aprovar' : 'Visualizar'}
+                  </button>
+                </td>
+              </tr>
+            `).join('') || '<tr><td colspan="7" style="text-align:center; padding:32px;" class="muted">Nenhuma proposta comercial emitida para sua conta até o momento.</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } else if (page === 'projects') {
+    const items = portalData.projetos || [];
+    view.innerHTML = `
+      <div class="toolbar">
+        <div><h1>Meus Projetos</h1><span class="muted">Acompanhamento de etapas, links de homologação e aceite de entregas</span></div>
+        <button type="button" class="btn" onclick="window.portalOpenNewProjectRequestModal()">+ Solicitar Novo Projeto</button>
+      </div>
+      <div class="card table-wrap">
+        <table class="table">
+          <thead><tr><th>Projeto</th><th>Status</th><th>Progresso</th><th>Homologação</th><th>Entrega Prevista</th><th>Ações</th></tr></thead>
+          <tbody>
+            ${items.map((p) => `
+              <tr>
+                <td>
+                  <b>${esc(p.titulo)}</b>
+                  <div style="display:flex; gap:8px; margin-top:4px;">
+                    ${p.url_homologacao ? `<a href="${esc(p.url_homologacao)}" target="_blank" rel="noopener" style="font-size:11.5px; color:var(--primary);">Link Homologação ↗</a>` : ''}
+                    ${p.url_producao ? `<a href="${esc(p.url_producao)}" target="_blank" rel="noopener" style="font-size:11.5px; color:var(--ok);">Link Produção ↗</a>` : ''}
+                  </div>
+                </td>
+                <td><span class="badge ${esc(p.status)}">${esc(p.status).replace('_', ' ')}</span></td>
+                <td style="min-width:130px;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div style="flex:1; height:6px; background:var(--surface2); border-radius:4px; overflow:hidden; border:1px solid var(--border);">
+                      <div style="width:${p.progresso}%; height:100%; background:var(--primary);"></div>
+                    </div>
+                    <span style="font-size:12px; font-weight:700;">${p.progresso}%</span>
+                  </div>
+                </td>
+                <td><span class="badge ${p.aprovacao_cliente_status === 'aprovado' ? 'ativo' : 'pendente'}">${esc(p.aprovacao_cliente_status || 'pendente').replace('_', ' ')}</span></td>
+                <td>${formatDate(p.data_entrega)}</td>
+                <td>
+                  <button type="button" class="btn secondary" style="padding:6px 12px; font-size:12px;" onclick="window.portalViewProjectModal(${p.id})">Etapas &amp; Homologar</button>
+                </td>
+              </tr>
+            `).join('') || '<tr><td colspan="6" style="text-align:center; padding:32px;" class="muted">Nenhum projeto ativo vinculado a esta conta.</td></tr>'}
+          </tbody>
+        </table>
+      </div>`;
+  } else if (page === 'quotes') {
+    const items = portalData.orcamentos || [];
+    view.innerHTML = `
+      <div class="toolbar">
+        <div><h1>Solicitações &amp; Novos Projetos</h1><span class="muted">Solicite novos sistemas ou melhorias e acompanhe o retorno comercial</span></div>
+        <button type="button" class="btn" onclick="window.portalOpenNewProjectRequestModal()">+ Nova Solicitação de Projeto</button>
       </div>
       ${items.map((q) => `
         <div class="card" style="margin-bottom:16px;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px;">
             <div>
               <b>${esc(q.tipo_projeto || 'Orçamento')}</b>
-              <span class="muted" style="font-size:12px;"> • Enviado em ${new Date(q.criado_em).toLocaleDateString('pt-BR')}</span>
+              <span class="muted" style="font-size:12px;"> • Enviado em ${formatDateTime(q.criado_em)}</span>
             </div>
             <span class="badge ${esc(q.status)}">${esc(q.status).replace('_', ' ')}</span>
           </div>
@@ -54,27 +914,80 @@ async function render(page) {
             </div>
           ` : '<p class="muted" style="margin:0; font-size:13px;">Em análise pela equipe comercial.</p>'}
         </div>
-      `).join('') || '<div class="card"><p class="muted">Nenhuma solicitação registrada para esta conta.</p></div>'}`;
-  } else if (page === 'projects') {
-    const items = await apiRequest('/projetos');
+      `).join('') || '<div class="card"><p class="muted">Nenhuma solicitação registrada para esta conta. Clique em "+ Nova Solicitação de Projeto" acima.</p></div>'}`;
+  } else if (page === 'tickets') {
+    const items = portalData.chamados || [];
     view.innerHTML = `
-      <div class="toolbar"><div><h1>Meus Projetos</h1><span class="muted">Acompanhamento de escopo, cronograma e status das entregas</span></div></div>
+      <div class="toolbar">
+        <div><h1>Suporte &amp; Chamados</h1><span class="muted">Atendimento técnico direto com protocolo, SLA e histórico de mensagens</span></div>
+        <button type="button" class="btn" onclick="window.portalOpenNewTicketModal()">+ Abrir Novo Chamado</button>
+      </div>
       <div class="card table-wrap">
         <table class="table">
-          <thead><tr><th>Projeto</th><th>Status</th><th>Progresso</th><th>Valor</th></tr></thead>
-          <tbody>${items.map((p) => `<tr><td><b>${esc(p.titulo)}</b></td><td><span class="badge ${esc(p.status)}">${esc(p.status).replace('_', ' ')}</span></td><td>${p.progresso}%</td><td>${formatMoney(p.valor_total)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Nenhum projeto ativo vinculado a esta conta.</td></tr>'}</tbody>
+          <thead><tr><th>Protocolo</th><th>Assunto</th><th>Categoria</th><th>Prioridade</th><th>Status</th><th>Atualizado em</th><th>Ações</th></tr></thead>
+          <tbody>
+            ${items.map((c) => `
+              <tr>
+                <td><b>${esc(c.protocolo)}</b></td>
+                <td><b>${esc(c.titulo)}</b></td>
+                <td>${esc(c.categoria).replace('_', ' ')}</td>
+                <td><span class="prio-badge prio-${esc(c.prioridade)}">${esc(c.prioridade)}</span></td>
+                <td><span class="badge ${c.status === 'resolvido' || c.status === 'fechado' ? 'ativo' : 'pendente'}">${esc(c.status).replace('_', ' ')}</span></td>
+                <td>${formatDateTime(c.atualizado_em || c.criado_em)}</td>
+                <td>
+                  <button type="button" class="btn secondary" style="padding:6px 12px; font-size:12px;" onclick="window.portalOpenTicketThread(${c.id})">Abrir Conversa</button>
+                </td>
+              </tr>
+            `).join('') || '<tr><td colspan="7" style="text-align:center; padding:32px;" class="muted">Nenhum chamado de suporte registrado.</td></tr>'}
+          </tbody>
         </table>
-      </div>`;
+      </div>
+    `;
   } else if (page === 'invoices') {
-    const items = await apiRequest('/faturas');
+    const items = portalData.faturas || [];
+    const pix = portalData.pagamento_info || {};
     view.innerHTML = `
-      <div class="toolbar"><div><h1>Minhas Faturas</h1><span class="muted">Demonstrativo financeiro, faturas e vencimentos</span></div></div>
+      <div class="toolbar"><div><h1>Minhas Faturas &amp; Pagamentos</h1><span class="muted">Demonstrativo financeiro, dados PIX e envio de comprovantes</span></div></div>
+
+      <div class="pix-box" style="margin-bottom:18px;">
+        <div>
+          <div style="font-size:11.5px; font-weight:700; text-transform:uppercase; color:var(--primary);">Chave PIX Oficial para Pagamentos</div>
+          <div style="font-size:16px; font-weight:800; margin:3px 0;">${esc(pix.chave_pix || 'contato@nexuscodebrasil.com.br')}</div>
+          <div class="muted" style="font-size:12px;">Favorecido: ${esc(pix.titular_pix || 'Nexus Code Brasil')} • CNPJ: ${esc(pix.cnpj || '-')} • ${esc(pix.banco || '')}</div>
+        </div>
+        <button type="button" class="btn" id="copy-pix-main-btn">Copiar Chave PIX</button>
+      </div>
+
       <div class="card table-wrap">
         <table class="table">
-          <thead><tr><th>Descrição</th><th>Valor</th><th>Status</th><th>Vencimento</th></tr></thead>
-          <tbody>${items.map((f) => `<tr><td><b>${esc(f.descricao)}</b></td><td>${formatMoney(f.valor)}</td><td><span class="badge ${esc(f.status)}">${esc(f.status)}</span></td><td>${esc(f.vencimento)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Nenhuma fatura emitida para esta conta.</td></tr>'}</tbody>
+          <thead><tr><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Comprovante</th><th>Ações</th></tr></thead>
+          <tbody>
+            ${items.map((f) => `
+              <tr>
+                <td><b>${esc(f.descricao)}</b></td>
+                <td style="font-weight:800;">${formatMoney(f.valor)}</td>
+                <td>${formatDate(f.vencimento)}</td>
+                <td><span class="badge ${esc(f.status)}">${esc(f.status)}</span></td>
+                <td>
+                  ${f.comprovante_data
+                    ? `<a href="${f.comprovante_data}" download="${esc(f.comprovante_nome || 'comprovante')}" style="color:var(--ok); font-weight:600; font-size:12.5px;">✓ ${esc(f.comprovante_nome || 'Enviado')}</a>`
+                    : '<span class="muted" style="font-size:12px;">Não anexado</span>'}
+                </td>
+                <td>
+                  ${f.status !== 'pago'
+                    ? `<button type="button" class="btn secondary" style="padding:6px 12px; font-size:12px;" onclick="window.portalOpenInvoiceReceiptModal(${f.id})">Pagar / Anexar Comprovante</button>`
+                    : '<span style="color:var(--ok); font-weight:700; font-size:12px;">Quitado</span>'}
+                </td>
+              </tr>
+            `).join('') || '<tr><td colspan="6" style="text-align:center; padding:32px;" class="muted">Nenhuma fatura emitida para esta conta.</td></tr>'}
+          </tbody>
         </table>
       </div>`;
+
+    $('#copy-pix-main-btn')?.addEventListener('click', () => {
+      navigator.clipboard?.writeText(pix.chave_pix || '');
+      showToast('Chave PIX copiada!', 'success');
+    });
   } else if (page === 'profile') {
     const me = await apiRequest('/auth/me');
     const consentInfo = me.termos_aceitos_em
@@ -194,7 +1107,7 @@ async function render(page) {
                 <div>
                   <p>
                     <b>Proteção de Dados Pessoais &amp; Conformidade LGPD (Lei nº 13.709/2018)</b><br>
-                    Os dados pessoais e profissionais informados são protegidos por criptografia e utilizados exclusivamente pela <b>Nexus Code</b> para atendimento, faturamento e execução dos projetos contratados, sem compartilhamento indevido com terceiros.
+                    Os dados pessoais e profissionais informados são protegidos por criptografia e utilizados exclusivamente pela <b>Nexus Code</b> para atendimento, faturamento e execução dos projetos contratados.
                   </p>
                   <label class="lgpd-check-row">
                     <input type="checkbox" name="lgpd_consent" required ${me.termos_aceitos_em ? 'checked' : ''}>
@@ -313,6 +1226,7 @@ async function render(page) {
   }
 }
 
+window.portalGo = (target) => render(target);
 $$('[data-page]').forEach((b) => (b.onclick = () => render(b.dataset.page)));
 
 if (!getToken()) {
@@ -322,8 +1236,8 @@ if (!getToken()) {
     .then((u) => {
       user = u;
       $('#portal-user').textContent = u.nome;
-      $('#portal-initials').textContent = u.nome.slice(0, 2).toUpperCase();
-      render('quotes');
+      $('#portal-initials').textContent = initials(u.nome);
+      render('overview');
     })
     .catch(() => { clearSession(); window.location.href = '../login.html'; });
 }

@@ -81,6 +81,7 @@ class UsuarioBase(BaseModel):
     @classmethod
     def _default_dec_usr(cls, v):
         return Decimal("0.00") if v is None else v
+
     area_atuacao: Optional[str] = None
     formacao: Optional[str] = None
     habilidades: Optional[str] = None
@@ -185,6 +186,14 @@ class SolicitacaoPublicCreate(BaseModel):
     website: Optional[str] = None
 
 
+class SolicitacaoPortalCreate(BaseModel):
+    tipo_projeto: str = Field(default="Desenvolvimento Web", max_length=80)
+    titulo: str = Field(..., min_length=3, max_length=160)
+    urgencia: Literal["normal", "alta", "urgente"] = "normal"
+    orcamento_estimado: Optional[str] = Field(default=None, max_length=80)
+    mensagem: str = Field(..., min_length=5, max_length=4000)
+
+
 class SolicitacaoResponder(BaseModel):
     resposta: str = Field(..., min_length=2, max_length=4000)
     status: Literal["novo", "em_atendimento", "respondido", "convertido", "arquivado"] = "respondido"
@@ -221,8 +230,24 @@ class ProjetoBase(BaseModel):
     prioridade: Literal["baixa", "media", "alta", "urgente"] = "media"
     progresso: int = Field(default=0, ge=0, le=100)
     valor_total: Decimal = Decimal("0.00")
+    horas_estimadas: Optional[Decimal] = Decimal("0.00")
+    url_homologacao: Optional[str] = None
+    url_producao: Optional[str] = None
+    repositorio_url: Optional[str] = None
+    aprovacao_cliente_status: Optional[str] = "pendente"
+    aprovacao_cliente_obs: Optional[str] = None
     data_inicio: Optional[date] = None
     data_entrega: Optional[date] = None
+
+    @field_validator("horas_estimadas", mode="before")
+    @classmethod
+    def _default_horas_est(cls, v):
+        return Decimal("0.00") if v is None else v
+
+    @field_validator("aprovacao_cliente_status", mode="before")
+    @classmethod
+    def _default_aprov_status(cls, v):
+        return v or "pendente"
 
 
 class ProjetoCreate(ProjetoBase):
@@ -237,12 +262,24 @@ class ProjetoUpdate(BaseModel):
     prioridade: Optional[Literal["baixa", "media", "alta", "urgente"]] = None
     progresso: Optional[int] = Field(default=None, ge=0, le=100)
     valor_total: Optional[Decimal] = None
+    horas_estimadas: Optional[Decimal] = None
+    url_homologacao: Optional[str] = None
+    url_producao: Optional[str] = None
+    repositorio_url: Optional[str] = None
+    aprovacao_cliente_status: Optional[str] = None
+    aprovacao_cliente_obs: Optional[str] = None
     data_inicio: Optional[date] = None
     data_entrega: Optional[date] = None
 
 
+class ProjetoHomologacaoCliente(BaseModel):
+    decisao: Literal["aprovado", "ajuste_solicitado"]
+    observacao: Optional[str] = None
+
+
 class ProjetoOut(ProjetoBase):
     id: int
+    aprovado_em: Optional[datetime] = None
     criado_em: datetime
     model_config = ConfigDict(from_attributes=True)
 
@@ -315,17 +352,29 @@ class FaturaCreate(BaseModel):
     descricao: str
     valor: Decimal
     status: Literal["pendente", "pago", "atrasado", "cancelado"] = "pendente"
+    forma_pagamento: Optional[str] = "PIX"
+    observacoes: Optional[str] = None
     vencimento: date
 
 
 class FaturaUpdate(BaseModel):
     status: Optional[Literal["pendente", "pago", "atrasado", "cancelado"]] = None
+    forma_pagamento: Optional[str] = None
+    observacoes: Optional[str] = None
     vencimento: Optional[date] = None
     pago_em: Optional[datetime] = None
 
 
+class FaturaComprovanteUpload(BaseModel):
+    comprovante_nome: str = Field(..., max_length=255)
+    comprovante_data: str
+    observacoes: Optional[str] = None
+
+
 class FaturaOut(FaturaCreate):
     id: int
+    comprovante_nome: Optional[str] = None
+    comprovante_data: Optional[str] = None
     pago_em: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
@@ -488,3 +537,263 @@ class GerarHoleriteAutoRequest(BaseModel):
     data_pagamento: Optional[date] = None
     status: Literal["pago", "programado", "pendente"] = "pago"
     observacoes: Optional[str] = None
+
+
+# ==================== SCHEMAS DOS NOVOS MÓDULOS ENTERPRISE & PORTAL ====================
+class ConfiguracaoEmpresaUpdate(BaseModel):
+    razao_social: Optional[str] = None
+    nome_fantasia: Optional[str] = None
+    cnpj: Optional[str] = None
+    inscricao_estadual: Optional[str] = None
+    email_financeiro: Optional[str] = None
+    telefone: Optional[str] = None
+    endereco: Optional[str] = None
+    cidade: Optional[str] = None
+    estado: Optional[str] = None
+    cep: Optional[str] = None
+    banco_nome: Optional[str] = None
+    agencia: Optional[str] = None
+    conta: Optional[str] = None
+    chave_pix: Optional[str] = None
+    titular_pix: Optional[str] = None
+    multa_atraso_percent: Optional[Decimal] = None
+    juros_mensal_percent: Optional[Decimal] = None
+    permissoes_json: Optional[str] = None
+
+
+class ConfiguracaoEmpresaOut(ConfiguracaoEmpresaUpdate):
+    id: int
+    atualizado_em: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PropostaCreate(BaseModel):
+    cliente_id: int
+    solicitacao_id: Optional[int] = None
+    titulo: str = Field(..., max_length=180)
+    escopo: str
+    entregaveis_json: Optional[str] = None
+    valor_total: Decimal = Decimal("0.00")
+    condicoes_pagamento: Optional[str] = "50% na aprovação + 50% na entrega"
+    parcelas: int = Field(default=1, ge=1, le=36)
+    prazo_dias: int = Field(default=30, ge=1, le=730)
+    validade_ate: Optional[date] = None
+    status: Literal["rascunho", "enviada", "aprovada", "ajuste_solicitado", "recusada"] = "enviada"
+
+
+class PropostaUpdate(BaseModel):
+    titulo: Optional[str] = None
+    escopo: Optional[str] = None
+    entregaveis_json: Optional[str] = None
+    valor_total: Optional[Decimal] = None
+    condicoes_pagamento: Optional[str] = None
+    parcelas: Optional[int] = Field(default=None, ge=1, le=36)
+    prazo_dias: Optional[int] = Field(default=None, ge=1, le=730)
+    validade_ate: Optional[date] = None
+    status: Optional[Literal["rascunho", "enviada", "aprovada", "ajuste_solicitado", "recusada"]] = None
+    feedback_cliente: Optional[str] = None
+
+
+class PropostaDecisaoCliente(BaseModel):
+    decisao: Literal["aprovada", "ajuste_solicitado", "recusada"]
+    feedback: Optional[str] = None
+
+
+class PropostaOut(BaseModel):
+    id: int
+    codigo: str
+    cliente_id: int
+    solicitacao_id: Optional[int] = None
+    criado_por_id: Optional[int] = None
+    titulo: str
+    escopo: str
+    entregaveis_json: Optional[str] = None
+    valor_total: Decimal
+    condicoes_pagamento: Optional[str] = None
+    parcelas: int
+    prazo_dias: int
+    validade_ate: Optional[date] = None
+    status: str
+    feedback_cliente: Optional[str] = None
+    aprovado_por_cliente: Optional[str] = None
+    aprovado_em: Optional[datetime] = None
+    projeto_gerado_id: Optional[int] = None
+    criado_em: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DespesaCreate(BaseModel):
+    descricao: str = Field(..., max_length=200)
+    categoria: Literal["infraestrutura", "folha_rh", "impostos", "software_saas", "marketing", "fornecedores", "outros"] = "infraestrutura"
+    fornecedor: Optional[str] = None
+    projeto_id: Optional[int] = None
+    valor: Decimal
+    vencimento: date
+    status: Literal["pendente", "pago", "atrasado", "cancelado"] = "pendente"
+    recorrente: bool = False
+    observacoes: Optional[str] = None
+
+
+class DespesaUpdate(BaseModel):
+    descricao: Optional[str] = None
+    categoria: Optional[Literal["infraestrutura", "folha_rh", "impostos", "software_saas", "marketing", "fornecedores", "outros"]] = None
+    fornecedor: Optional[str] = None
+    projeto_id: Optional[int] = None
+    valor: Optional[Decimal] = None
+    vencimento: Optional[date] = None
+    status: Optional[Literal["pendente", "pago", "atrasado", "cancelado"]] = None
+    recorrente: Optional[bool] = None
+    observacoes: Optional[str] = None
+
+
+class DespesaOut(DespesaCreate):
+    id: int
+    pago_em: Optional[datetime] = None
+    criado_em: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContratoRecorrenteCreate(BaseModel):
+    cliente_id: int
+    projeto_id: Optional[int] = None
+    titulo: str = Field(..., max_length=180)
+    valor_mensal: Decimal
+    dia_vencimento: int = Field(default=10, ge=1, le=28)
+    data_inicio: date
+    data_fim: Optional[date] = None
+    status: Literal["ativo", "pausado", "encerrado"] = "ativo"
+    descricao: Optional[str] = None
+
+
+class ContratoRecorrenteUpdate(BaseModel):
+    titulo: Optional[str] = None
+    valor_mensal: Optional[Decimal] = None
+    dia_vencimento: Optional[int] = Field(default=None, ge=1, le=28)
+    data_fim: Optional[date] = None
+    status: Optional[Literal["ativo", "pausado", "encerrado"]] = None
+    descricao: Optional[str] = None
+
+
+class ContratoRecorrenteOut(ContratoRecorrenteCreate):
+    id: int
+    ultima_geracao: Optional[str] = None
+    criado_em: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ApontamentoHoraCreate(BaseModel):
+    projeto_id: int
+    tarefa_id: Optional[int] = None
+    usuario_id: Optional[int] = None
+    data_trabalho: date
+    horas: Decimal = Field(..., gt=0, le=24)
+    descricao: str = Field(..., min_length=2, max_length=255)
+    faturavel: bool = True
+
+
+class ApontamentoHoraOut(BaseModel):
+    id: int
+    projeto_id: int
+    tarefa_id: Optional[int] = None
+    usuario_id: int
+    data_trabalho: date
+    horas: Decimal
+    descricao: str
+    faturavel: bool
+    custo_hora_snapshot: Decimal
+    criado_em: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChamadoCreate(BaseModel):
+    cliente_id: Optional[int] = None
+    projeto_id: Optional[int] = None
+    responsavel_id: Optional[int] = None
+    titulo: str = Field(..., min_length=3, max_length=180)
+    categoria: Literal["suporte_tecnico", "nova_funcionalidade", "bug_correcao", "duvida_financeira", "infraestrutura"] = "suporte_tecnico"
+    prioridade: Literal["baixa", "media", "alta", "critica"] = "media"
+    sla_horas: int = Field(default=24, ge=1, le=720)
+    descricao: str = Field(..., min_length=3, max_length=4000)
+    anexo_nome: Optional[str] = None
+    anexo_data: Optional[str] = None
+
+
+class ChamadoMensagemCreate(BaseModel):
+    texto: str = Field(..., min_length=1, max_length=4000)
+    anexo_nome: Optional[str] = None
+    anexo_data: Optional[str] = None
+    novo_status: Optional[Literal["aberto", "em_analise", "aguardando_cliente", "resolvido", "fechado"]] = None
+
+
+class ChamadoUpdate(BaseModel):
+    responsavel_id: Optional[int] = None
+    prioridade: Optional[Literal["baixa", "media", "alta", "critica"]] = None
+    status: Optional[Literal["aberto", "em_analise", "aguardando_cliente", "resolvido", "fechado"]] = None
+    sla_horas: Optional[int] = None
+
+
+class ChamadoOut(BaseModel):
+    id: int
+    protocolo: str
+    cliente_id: int
+    projeto_id: Optional[int] = None
+    aberto_por_id: Optional[int] = None
+    responsavel_id: Optional[int] = None
+    titulo: str
+    categoria: str
+    prioridade: str
+    status: str
+    sla_horas: int
+    descricao: str
+    mensagens_json: Optional[str] = None
+    criado_em: datetime
+    atualizado_em: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AtivoInfraCreate(BaseModel):
+    cliente_id: Optional[int] = None
+    projeto_id: Optional[int] = None
+    tipo: Literal["dominio", "hospedagem_cloud", "licenca_software", "equipamento", "credencial_acesso"] = "dominio"
+    nome: str = Field(..., max_length=180)
+    provedor: Optional[str] = None
+    url_acesso: Optional[str] = None
+    usuario_acesso: Optional[str] = None
+    segredo_acesso: Optional[str] = None
+    valor_renovacao: Decimal = Decimal("0.00")
+    data_vencimento: Optional[date] = None
+    status: Literal["ativo", "vencendo", "expirado", "inativo"] = "ativo"
+    observacoes: Optional[str] = None
+
+
+class AtivoInfraUpdate(BaseModel):
+    cliente_id: Optional[int] = None
+    projeto_id: Optional[int] = None
+    tipo: Optional[Literal["dominio", "hospedagem_cloud", "licenca_software", "equipamento", "credencial_acesso"]] = None
+    nome: Optional[str] = None
+    provedor: Optional[str] = None
+    url_acesso: Optional[str] = None
+    usuario_acesso: Optional[str] = None
+    segredo_acesso: Optional[str] = None
+    valor_renovacao: Optional[Decimal] = None
+    data_vencimento: Optional[date] = None
+    status: Optional[Literal["ativo", "vencendo", "expirado", "inativo"]] = None
+    observacoes: Optional[str] = None
+
+
+class AtivoInfraOut(AtivoInfraCreate):
+    id: int
+    criado_em: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NotificacaoOut(BaseModel):
+    id: int
+    usuario_id: Optional[int] = None
+    perfil_destino: Optional[str] = None
+    titulo: str
+    mensagem: str
+    link_pagina: str
+    lida: bool
+    criado_em: datetime
+    model_config = ConfigDict(from_attributes=True)

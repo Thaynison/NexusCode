@@ -1,5 +1,15 @@
 import { apiRequest, clearSession, getToken } from './config.js';
 import { showConfirmModal, showNoticeModal, showToast } from './ui.js';
+import {
+  renderTimesheetView,
+  renderPropostasView,
+  renderChamadosView,
+  renderDreView,
+  renderDespesasView,
+  renderContratosView,
+  renderAtivosView,
+  renderEmpresaView
+} from './erp_modules.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -32,6 +42,14 @@ let cache = {
   projetos: [],
   orcamentos: [],
   tarefas: [],
+  propostas: [],
+  despesas: [],
+  contratos: [],
+  apontamentos: [],
+  chamados: [],
+  ativos: [],
+  notificacoes: [],
+  empresa_config: null,
   holerites: [],
   informes: [],
   loadedAt: 0
@@ -55,11 +73,20 @@ async function loadBootstrap(force = false) {
     projetos: data.projetos || [],
     orcamentos: data.orcamentos || [],
     tarefas: data.tarefas || [],
+    propostas: data.propostas || [],
+    despesas: data.despesas || [],
+    contratos: data.contratos || [],
+    apontamentos: data.apontamentos || [],
+    chamados: data.chamados || [],
+    ativos: data.ativos || [],
+    notificacoes: data.notificacoes || [],
+    empresa_config: data.empresa_config || null,
     holerites: data.holerites || [],
     informes: data.informes || [],
     loadedAt: Date.now()
   };
   updateQuotesBadge();
+  applyRolePermissions();
   return cache;
 }
 
@@ -251,7 +278,112 @@ function updateQuotesBadge() {
     pontoBadge.textContent = pPonto;
     pontoBadge.style.display = pPonto > 0 ? 'inline-block' : 'none';
   }
+  const chamadosBadge = $('#chamados-nav-badge');
+  if (chamadosBadge) {
+    const chOpen = (cache.chamados || []).filter((c) => ['aberto', 'em_analise', 'aguardando_cliente'].includes(c.status)).length;
+    chamadosBadge.textContent = chOpen;
+    chamadosBadge.style.display = chOpen > 0 ? 'inline-block' : 'none';
+  }
+  const notifCount = $('#app-notif-count');
+  if (notifCount) {
+    const unread = (cache.notificacoes || []).filter((n) => !n.lida).length;
+    notifCount.textContent = unread;
+    notifCount.style.display = unread > 0 ? 'flex' : 'none';
+  }
 }
+
+function applyRolePermissions() {
+  if (!user || user.perfil === 'admin') return;
+  let colabPerms = null;
+  if (cache.empresa_config?.permissoes_json) {
+    try {
+      const parsed = JSON.parse(cache.empresa_config.permissoes_json);
+      colabPerms = parsed?.colaborador || null;
+    } catch (_) {}
+  }
+  if (!colabPerms) return;
+  const pageToPerm = {
+    projects: 'projetos',
+    tasks: 'tarefas',
+    kanban: 'tarefas',
+    timesheet: 'timesheet',
+    quotes: 'orcamentos',
+    propostas: 'propostas',
+    customers: 'clientes',
+    leads: 'clientes',
+    pipeline: 'clientes',
+    chamados: 'chamados',
+    dre: 'financeiro_dre',
+    invoices: 'faturas',
+    despesas: 'despesas',
+    contratos: 'contratos',
+    timeclock: 'ponto',
+    holerite: 'holerite',
+    ativos: 'ativos',
+    users: 'usuarios',
+    empresa: 'empresa',
+    audit: 'auditoria'
+  };
+  $$('[data-app-page]').forEach((btn) => {
+    const p = btn.dataset.appPage;
+    const permKey = pageToPerm[p];
+    if (permKey && colabPerms[permKey] === false) {
+      btn.style.display = 'none';
+    } else {
+      btn.style.display = 'flex';
+    }
+  });
+}
+
+$('#app-notif-btn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const pop = $('#app-notif-popover');
+  if (!pop) return;
+  if (pop.style.display === 'block') {
+    pop.style.display = 'none';
+    return;
+  }
+  const notifs = cache.notificacoes || [];
+  pop.innerHTML = `
+    <div class="notif-popover-head">
+      <b style="font-size:13.5px;">Notificações (${notifs.filter((n) => !n.lida).length} não lidas)</b>
+      ${notifs.some((n) => !n.lida) ? `<button type="button" class="btn secondary" style="padding:4px 8px; font-size:11px;" id="app-read-all-notifs">Marcar lidas</button>` : ''}
+    </div>
+    ${notifs.length ? notifs.map((n) => `
+      <div class="notif-item ${n.lida ? '' : 'unread'}" data-anotif-id="${n.id}" data-anotif-link="${esc(n.link_pagina || 'dashboard')}">
+        <div style="font-weight:700; font-size:13px; margin-bottom:2px;">${esc(n.titulo)}</div>
+        <div class="muted" style="font-size:12px; line-height:1.4;">${esc(n.mensagem)}</div>
+        <div style="font-size:10.5px; color:var(--muted); margin-top:4px;">${formatDateTime(n.criado_em)}</div>
+      </div>
+    `).join('') : '<div style="padding:20px; text-align:center;" class="muted">Nenhuma notificação recente.</div>'}
+  `;
+  pop.style.display = 'block';
+
+  $('#app-read-all-notifs')?.addEventListener('click', async () => {
+    await apiRequest('/notificacoes/ler-todas', { method: 'POST' });
+    invalidateCache();
+    await loadBootstrap(true);
+    pop.style.display = 'none';
+  });
+
+  pop.querySelectorAll('[data-anotif-id]').forEach((el) => {
+    el.onclick = async () => {
+      const id = el.dataset.anotifId;
+      const link = el.dataset.anotifLink;
+      await apiRequest(`/notificacoes/${id}/lida`, { method: 'PATCH' }).catch(() => {});
+      invalidateCache();
+      pop.style.display = 'none';
+      window.nexusGo(link || 'dashboard');
+    };
+  });
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.notif-wrap')) {
+    const pop = $('#app-notif-popover');
+    if (pop) pop.style.display = 'none';
+  }
+});
 
 function matchSearch(texts) {
   if (!searchTerm || !searchTerm.trim()) return true;
@@ -311,6 +443,26 @@ function renderGlobalSearchBanner() {
         title: u.nome,
         sub: `${u.cargo || u.perfil} • ${u.email}`,
         action: `window.nexusGo('users')`
+      });
+    }
+  });
+  (cache.propostas || []).forEach((pr) => {
+    if (matchSearch([pr.codigo, pr.titulo, pr.escopo, pr.status])) {
+      hits.push({
+        type: 'Proposta Comercial',
+        title: `${pr.codigo} — ${pr.titulo}`,
+        sub: `Valor: ${formatMoney(pr.valor_total)} • Status: ${pr.status}`,
+        action: `window.nexusGo('propostas')`
+      });
+    }
+  });
+  (cache.chamados || []).forEach((ch) => {
+    if (matchSearch([ch.protocolo, ch.titulo, ch.descricao, ch.status])) {
+      hits.push({
+        type: 'Chamado Suporte',
+        title: `${ch.protocolo} — ${ch.titulo}`,
+        sub: `Prioridade: ${ch.prioridade} • Status: ${ch.status}`,
+        action: `window.nexusGo('chamados')`
       });
     }
   });
@@ -448,13 +600,29 @@ async function renderDashboard() {
           <strong>${kpi.projetos_ativos}</strong>
           <span class="pill-info">Em execução e homologação</span>
         </div>
-        <div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('invoices')">
+        <div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('dre')">
           <div class="metric-head">
-            <span class="title">Receita Paga</span>
+            <span class="title">Receita Paga / Lucro</span>
             <span class="metric-icon">${ICONS.dollar}</span>
           </div>
           <strong>${formatMoney(kpi.receita_paga)}</strong>
-          <span class="pill-info">A receber: ${formatMoney(kpi.receita_pendente)}</span>
+          <span class="pill-info">Lucro: ${formatMoney(kpi.lucro_realizado ?? kpi.receita_paga)} • MRR: ${formatMoney(kpi.mrr_ativo ?? 0)}</span>
+        </div>
+        <div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('propostas')">
+          <div class="metric-head">
+            <span class="title">Propostas Abertas</span>
+            <span class="metric-icon">${ICONS.fileText}</span>
+          </div>
+          <strong>${kpi.propostas_abertas ?? 0}</strong>
+          <span class="pill-info">Aguardando aprovação do cliente</span>
+        </div>
+        <div class="card metric" style="cursor:pointer;" onclick="window.nexusGo('chamados')">
+          <div class="metric-head">
+            <span class="title">Chamados Suporte</span>
+            <span class="metric-icon">${ICONS.clock}</span>
+          </div>
+          <strong>${kpi.chamados_abertos ?? 0}</strong>
+          <span class="pill-info">${kpi.horas_totais ?? 0}h apontadas no Timesheet</span>
         </div>
       </div>
 
@@ -3060,7 +3228,14 @@ async function openRecordModal(editObj = null) {
           <label>Valor Total (R$)<input name="valor_total" type="number" step="0.01" value="${editObj?.valor_total ?? 0}"></label>
           <label>Data Início<input name="data_inicio" type="date" value="${editObj?.data_inicio || ''}"></label>
           <label>Data Entrega<input name="data_entrega" type="date" value="${editObj?.data_entrega || ''}"></label>
+          <label>Horas Estimadas (h)<input name="horas_estimadas" type="number" step="0.5" min="0" value="${editObj?.horas_estimadas ?? 0}"></label>
+          <label>Status Homologação Cliente<select name="aprovacao_cliente_status">
+            ${['pendente', 'aguardando_homologacao', 'aprovado', 'ajuste_solicitado'].map((st) => `<option value="${st}" ${(editObj?.aprovacao_cliente_status || 'pendente') === st ? 'selected' : ''}>${st.replace('_', ' ')}</option>`).join('')}
+          </select></label>
+          <label>URL de Homologação (Portal Cliente)<input name="url_homologacao" type="url" placeholder="https://staging..." value="${esc(editObj?.url_homologacao || '')}"></label>
+          <label>URL de Produção<input name="url_producao" type="url" placeholder="https://..." value="${esc(editObj?.url_producao || '')}"></label>
         </div>
+        <label class="field-full">Repositório Git / Observações Técnicas<input name="repositorio_url" placeholder="https://github.com/..." value="${esc(editObj?.repositorio_url || '')}"></label>
         <label class="field-full">Descrição Detalhada<textarea name="descricao" rows="3">${esc(editObj?.descricao || '')}</textarea></label>
       </div>`;
   } else if (['customers', 'leads', 'pipeline'].includes(page)) {
@@ -3296,6 +3471,11 @@ recordForm.onsubmit = async (e) => {
           status: raw.status,
           progresso: Number(raw.progresso || 0),
           valor_total: Number(raw.valor_total || 0),
+          horas_estimadas: Number(raw.horas_estimadas || 0),
+          aprovacao_cliente_status: raw.aprovacao_cliente_status || 'pendente',
+          url_homologacao: raw.url_homologacao || null,
+          url_producao: raw.url_producao || null,
+          repositorio_url: raw.repositorio_url || null,
           data_inicio: raw.data_inicio || null,
           data_entrega: raw.data_entrega || null,
           descricao: raw.descricao || null
@@ -3390,6 +3570,14 @@ async function render(useCache = false) {
     else if (page === 'tasks') view.innerHTML = await renderTasks(useCache);
     else if (page === 'kanban') view.innerHTML = await renderKanban(false, useCache);
     else if (page === 'invoices') view.innerHTML = await renderInvoices(useCache);
+    else if (page === 'timesheet') { await preloadRefs(useCache); view.innerHTML = await renderTimesheetView({ cache, user, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS }); }
+    else if (page === 'propostas') { await preloadRefs(useCache); view.innerHTML = await renderPropostasView({ cache, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS }); }
+    else if (page === 'chamados') { await preloadRefs(useCache); view.innerHTML = await renderChamadosView({ cache, user, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS }); }
+    else if (page === 'dre') { view.innerHTML = await renderDreView({ ICONS }); }
+    else if (page === 'despesas') { await preloadRefs(useCache); view.innerHTML = await renderDespesasView({ cache, user, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS }); }
+    else if (page === 'contratos') { await preloadRefs(useCache); view.innerHTML = await renderContratosView({ cache, user, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS }); }
+    else if (page === 'ativos') { await preloadRefs(useCache); view.innerHTML = await renderAtivosView({ cache, user, matchSearch, invalidateCache, render, holeriteDialog, holeriteContainer, ICONS }); }
+    else if (page === 'empresa') { await preloadRefs(useCache); view.innerHTML = await renderEmpresaView({ cache, user, invalidateCache, render }); }
     else if (page === 'timeclock') view.innerHTML = await renderTimeClock();
     else if (page === 'holerite') view.innerHTML = await renderHolerite(useCache);
     else if (page === 'audit') view.innerHTML = await renderAudit(useCache);

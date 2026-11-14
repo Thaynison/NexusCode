@@ -131,6 +131,13 @@ class Projeto(Base):
     )
     progresso = Column(Integer, default=0, nullable=False)
     valor_total = Column(Numeric(12, 2), default=0.00, nullable=False)
+    horas_estimadas = Column(Numeric(8, 2), default=0.00, server_default="0.00", nullable=True)
+    url_homologacao = Column(String(255), nullable=True)
+    url_producao = Column(String(255), nullable=True)
+    repositorio_url = Column(String(255), nullable=True)
+    aprovacao_cliente_status = Column(String(30), default="pendente", server_default="pendente", nullable=True)
+    aprovacao_cliente_obs = Column(Text, nullable=True)
+    aprovado_em = Column(DateTime, nullable=True)
     data_inicio = Column(Date, nullable=True)
     data_entrega = Column(Date, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
@@ -200,6 +207,10 @@ class Fatura(Base):
         native_enum=False,
         nullable=False,
     )
+    forma_pagamento = Column(String(40), default="PIX", server_default="PIX", nullable=True)
+    comprovante_nome = Column(String(255), nullable=True)
+    comprovante_data = Column(Text, nullable=True)
+    observacoes = Column(Text, nullable=True)
     vencimento = Column(Date, nullable=False)
     pago_em = Column(DateTime, nullable=True)
 
@@ -301,3 +312,154 @@ class RegistroPonto(Base):
     criado_em = Column(DateTime, default=datetime.utcnow)
 
     usuario = relationship("Usuario", back_populates="registros_ponto")
+
+
+# ==================== NOVOS MÓDULOS ENTERPRISE & PORTAL DO CLIENTE ====================
+class ConfiguracaoEmpresa(Base):
+    __tablename__ = "configuracoes_empresa"
+
+    id = Column(Integer, primary_key=True, index=True)
+    razao_social = Column(String(180), default="Nexus Code Brasil Tecnologia Ltda", nullable=False)
+    nome_fantasia = Column(String(150), default="Nexus Code Brasil", nullable=False)
+    cnpj = Column(String(25), default="00.000.000/0001-00", nullable=True)
+    inscricao_estadual = Column(String(40), nullable=True)
+    email_financeiro = Column(String(150), default="contato@nexuscodebrasil.com.br", nullable=True)
+    telefone = Column(String(40), default="(27) 99999-9999", nullable=True)
+    endereco = Column(String(255), default="Aracruz - ES", nullable=True)
+    cidade = Column(String(100), default="Aracruz", nullable=True)
+    estado = Column(String(2), default="ES", nullable=True)
+    cep = Column(String(20), nullable=True)
+    banco_nome = Column(String(100), default="Banco Inter / Nubank PJ", nullable=True)
+    agencia = Column(String(20), nullable=True)
+    conta = Column(String(30), nullable=True)
+    chave_pix = Column(String(150), default="contato@nexuscodebrasil.com.br", nullable=True)
+    titular_pix = Column(String(150), default="Nexus Code Brasil Tecnologia Ltda", nullable=True)
+    multa_atraso_percent = Column(Numeric(5, 2), default=2.00, nullable=True)
+    juros_mensal_percent = Column(Numeric(5, 2), default=1.00, nullable=True)
+    permissoes_json = Column(Text, nullable=True)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PropostaComercial(Base):
+    __tablename__ = "propostas_comerciais"
+
+    id = Column(Integer, primary_key=True, index=True)
+    codigo = Column(String(30), unique=True, index=True, nullable=False)
+    cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
+    solicitacao_id = Column(Integer, ForeignKey("solicitacoes_orcamento.id", ondelete="SET NULL"), nullable=True)
+    criado_por_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
+    titulo = Column(String(180), nullable=False)
+    escopo = Column(Text, nullable=False)
+    entregaveis_json = Column(Text, nullable=True)
+    valor_total = Column(Numeric(12, 2), default=0.00, nullable=False)
+    condicoes_pagamento = Column(String(200), default="50% na aprovação + 50% na entrega", nullable=True)
+    parcelas = Column(Integer, default=1, nullable=False)
+    prazo_dias = Column(Integer, default=30, nullable=False)
+    validade_ate = Column(Date, nullable=True)
+    status = Column(String(30), default="enviada", nullable=False)  # rascunho, enviada, aprovada, ajuste_solicitado, recusada
+    feedback_cliente = Column(Text, nullable=True)
+    aprovado_por_cliente = Column(String(120), nullable=True)
+    aprovado_em = Column(DateTime, nullable=True)
+    projeto_gerado_id = Column(Integer, ForeignKey("projetos.id", ondelete="SET NULL"), nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+
+class Despesa(Base):
+    __tablename__ = "despesas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    descricao = Column(String(200), nullable=False)
+    categoria = Column(String(50), default="infraestrutura", nullable=False)  # infraestrutura, folha_rh, impostos, software_saas, marketing, fornecedores, outros
+    fornecedor = Column(String(150), nullable=True)
+    projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="SET NULL"), nullable=True)
+    valor = Column(Numeric(12, 2), nullable=False)
+    vencimento = Column(Date, nullable=False)
+    status = Column(String(25), default="pendente", nullable=False)  # pendente, pago, atrasado, cancelado
+    recorrente = Column(Boolean, default=False, nullable=False)
+    pago_em = Column(DateTime, nullable=True)
+    observacoes = Column(Text, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+
+class ContratoRecorrente(Base):
+    __tablename__ = "contratos_recorrentes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
+    projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="SET NULL"), nullable=True)
+    titulo = Column(String(180), nullable=False)
+    valor_mensal = Column(Numeric(12, 2), nullable=False)
+    dia_vencimento = Column(Integer, default=10, nullable=False)
+    data_inicio = Column(Date, nullable=False)
+    data_fim = Column(Date, nullable=True)
+    status = Column(String(25), default="ativo", nullable=False)  # ativo, pausado, encerrado
+    descricao = Column(Text, nullable=True)
+    ultima_geracao = Column(String(15), nullable=True)  # MM/AAAA
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+
+class ApontamentoHora(Base):
+    __tablename__ = "apontamentos_horas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="CASCADE"), nullable=False, index=True)
+    tarefa_id = Column(Integer, ForeignKey("tarefas.id", ondelete="SET NULL"), nullable=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True)
+    data_trabalho = Column(Date, nullable=False)
+    horas = Column(Numeric(6, 2), nullable=False)
+    descricao = Column(String(255), nullable=False)
+    faturavel = Column(Boolean, default=True, nullable=False)
+    custo_hora_snapshot = Column(Numeric(10, 2), default=0.00, nullable=False)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+
+class ChamadoSuporte(Base):
+    __tablename__ = "chamados_suporte"
+
+    id = Column(Integer, primary_key=True, index=True)
+    protocolo = Column(String(30), unique=True, index=True, nullable=False)
+    cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False, index=True)
+    projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="SET NULL"), nullable=True)
+    aberto_por_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
+    responsavel_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
+    titulo = Column(String(180), nullable=False)
+    categoria = Column(String(40), default="suporte_tecnico", nullable=False)
+    prioridade = Column(String(20), default="media", nullable=False)
+    status = Column(String(30), default="aberto", nullable=False)  # aberto, em_analise, aguardando_cliente, resolvido, fechado
+    sla_horas = Column(Integer, default=24, nullable=False)
+    descricao = Column(Text, nullable=False)
+    mensagens_json = Column(Text, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AtivoInfra(Base):
+    __tablename__ = "ativos_infra"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="SET NULL"), nullable=True)
+    projeto_id = Column(Integer, ForeignKey("projetos.id", ondelete="SET NULL"), nullable=True)
+    tipo = Column(String(40), default="dominio", nullable=False)  # dominio, hospedagem_cloud, licenca_software, equipamento, credencial_acesso
+    nome = Column(String(180), nullable=False)
+    provedor = Column(String(120), nullable=True)
+    url_acesso = Column(String(255), nullable=True)
+    usuario_acesso = Column(String(150), nullable=True)
+    segredo_acesso = Column(String(255), nullable=True)
+    valor_renovacao = Column(Numeric(12, 2), default=0.00, nullable=False)
+    data_vencimento = Column(Date, nullable=True)
+    status = Column(String(25), default="ativo", nullable=False)  # ativo, vencendo, expirado, inativo
+    observacoes = Column(Text, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+
+class Notificacao(Base):
+    __tablename__ = "notificacoes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=True, index=True)
+    perfil_destino = Column(String(30), nullable=True)  # 'equipe', 'admin', 'cliente'
+    titulo = Column(String(160), nullable=False)
+    mensagem = Column(String(300), nullable=False)
+    link_pagina = Column(String(50), default="dashboard", nullable=False)
+    lida = Column(Boolean, default=False, nullable=False)
+    criado_em = Column(DateTime, default=datetime.utcnow)

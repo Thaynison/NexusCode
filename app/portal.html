@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Portal do Cliente | Nexus Code</title>
+  <title>Portal do Cliente | Nexus Code Brasil</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="../assets/brand/favicon.svg">
   <link rel="alternate icon" type="image/png" href="../img/nexus.png">
@@ -18,15 +18,33 @@
         <span style="letter-spacing:0.02em; font-weight:800;">NEXUS<b style="color:#00B4D8; font-weight:700;">CODE</b></span>
       </div>
       <nav class="nav">
-        <div class="nav-group">Área do Cliente</div>
-        <button data-page="quotes" class="active">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-          <span class="nav-label">Minhas Solicitações</span>
+        <div class="nav-group">Visão Geral</div>
+        <button data-page="overview" class="active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"></rect><rect width="7" height="5" x="14" y="3" rx="1"></rect><rect width="7" height="9" x="14" y="12" rx="1"></rect><rect width="7" height="5" x="3" y="16" rx="1"></rect></svg>
+          <span class="nav-label">Painel do Cliente</span>
+        </button>
+
+        <div class="nav-group">Projetos &amp; Comercial</div>
+        <button data-page="proposals">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="m9 15 2 2 4-4"></path></svg>
+          <span class="nav-label">Propostas &amp; Contratos</span>
+          <span class="nav-badge" id="portal-prop-badge" style="display:none;">0</span>
         </button>
         <button data-page="projects">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>
           <span class="nav-label">Meus Projetos</span>
         </button>
+        <button data-page="quotes">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          <span class="nav-label">Solicitações &amp; Novos Projetos</span>
+        </button>
+        <button data-page="tickets">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
+          <span class="nav-label">Suporte &amp; Chamados</span>
+          <span class="nav-badge" id="portal-ticket-badge" style="display:none;">0</span>
+        </button>
+
+        <div class="nav-group">Financeiro &amp; Conta</div>
         <button data-page="invoices">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
           <span class="nav-label">Minhas Faturas</span>
@@ -52,7 +70,15 @@
           <b id="portal-title" style="font-size:16px;">Portal do Cliente</b>
         </div>
         <div class="top-actions">
-          <div class="user-chip">
+          <div class="notif-wrap" style="position:relative;">
+            <button id="portal-notif-btn" class="btn secondary icon-only" title="Notificações" aria-label="Notificações">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+              <span id="portal-notif-count" class="notif-dot" style="display:none;">0</span>
+            </button>
+            <div id="portal-notif-popover" class="notif-popover" style="display:none;"></div>
+          </div>
+
+          <div class="user-chip" style="cursor:pointer;" onclick="window.portalGo('profile')">
             <div class="user-avatar" id="portal-initials">CL</div>
             <span id="portal-user">Cliente</span>
           </div>
@@ -64,6 +90,12 @@
       <section class="content" id="view"></section>
     </main>
   </div>
+
+  <!-- Modal Interativo do Portal do Cliente -->
+  <dialog id="portal-dialog" class="dialog planner-dialog">
+    <div id="portal-modal-container" class="modal"></div>
+  </dialog>
+
   <script type="module" src="../assets/js/portal.js"></script>
 </body>
 </html>
